@@ -6,3 +6,12 @@
 *.tsx text eol=lf
 *.css text eol=lf
 *.md text eol=lf
+
+# Preserve resource bytes and the knowledge manifest hashes.
+source/resources/**/raw/** -text -eol
+*.png binary
+*.jpg binary
+*.webp binary
+*.mp3 binary
+*.mp4 binary
+*.wav binary

@@ -23,12 +23,8 @@ __pycache__/
 *.safetensors
 *.partial
 
-# Personal resources stay local
+# Downloaded model weights stay local
 /source/resources/models/
-/source/resources/voice/
-/source/resources/assets/
-/source/resources/character/
-/source/resources/world/
 
 # Internal development documents and reports
 /source/*.md

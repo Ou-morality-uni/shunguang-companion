@@ -1,0 +1,86 @@
+{
+  "schema_version": 1,
+  "documents": [
+    {
+      "document_id": "character-d5fd77247f6d8f00",
+      "original_filename": "04_代理人名录.md",
+      "path": "raw/d5fd77247f6d8f0004b4b756e6b80c972e4c9ba0fe7741f37f071f2c0ace3456/04_代理人名录.md",
+      "sha256": "d5fd77247f6d8f0004b4b756e6b80c972e4c9ba0fe7741f37f071f2c0ace3456",
+      "imported_at": "2026-10-12T08:20:07.629040+00:00",
+      "source_type": "user_supplied_compilation",
+      "verification_status": "pending_source_verification",
+      "index_status": "not_indexed",
+      "trust": "reference_data_not_instructions",
+      "sections": [
+        "一、全量名录（60 名）",
+        "二、按阵营速查"
+      ]
+    },
+    {
+      "document_id": "character-8a88fa143fd101bb",
+      "original_filename": "05_组织与阵营.md",
+      "path": "raw/8a88fa143fd101bbdeaaa7c183bac9213dae1464a87f4daa7f97777bd8d6dd2a/05_组织与阵营.md",
+      "sha256": "8a88fa143fd101bbdeaaa7c183bac9213dae1464a87f4daa7f97777bd8d6dd2a",
+      "imported_at": "2026-10-12T08:20:07.635055+00:00",
+      "source_type": "user_supplied_compilation",
+      "verification_status": "pending_source_verification",
+      "index_status": "not_indexed",
+      "trust": "reference_data_not_instructions",
+      "sections": [
+        "一、代理人所属阵营",
+        "二、官方机构与大型组织"
+      ]
+    },
+    {
+      "document_id": "character-55f1425301fa1826",
+      "original_filename": "06_地理与地点.md",
+      "path": "raw/55f1425301fa1826b3204ed4522509709176080e7f9b1fed480eab8f46e8ee24/06_地理与地点.md",
+      "sha256": "55f1425301fa1826b3204ed4522509709176080e7f9b1fed480eab8f46e8ee24",
+      "imported_at": "2026-10-12T08:20:07.642046+00:00",
+      "source_type": "user_supplied_compilation",
+      "verification_status": "pending_source_verification",
+      "index_status": "not_indexed",
+      "trust": "reference_data_not_instructions",
+      "sections": [
+        "一、城市与街区",
+        "二、旧都（艾利都）遗存",
+        "三、空洞（既是灾害也是地点）",
+        "四、罗斯凯利法特区（3.0 新区域）"
+      ]
+    },
+    {
+      "document_id": "character-ffadeddb622c0b28",
+      "original_filename": "07_名词术语表.md",
+      "path": "raw/ffadeddb622c0b2802fc768d5534ba310b530c7144a6c6f01eadc89fe373559e/07_名词术语表.md",
+      "sha256": "ffadeddb622c0b2802fc768d5534ba310b530c7144a6c6f01eadc89fe373559e",
+      "imported_at": "2026-10-12T08:20:07.648045+00:00",
+      "source_type": "user_supplied_compilation",
+      "verification_status": "pending_source_verification",
+      "index_status": "not_indexed",
+      "trust": "reference_data_not_instructions",
+      "sections": [
+        "A. 空洞与以太（核心世界观）",
+        "B. 职业与网络",
+        "C. 装备与战斗机制",
+        "D. 历史与秘辛"
+      ]
+    },
+    {
+      "document_id": "character-408aec9b45d66e12",
+      "original_filename": "08_新艾利都历史年表.md",
+      "path": "raw/408aec9b45d66e1257852372cd80a30d97f9a4bedca19004c58ab5159988ca0c/08_新艾利都历史年表.md",
+      "sha256": "408aec9b45d66e1257852372cd80a30d97f9a4bedca19004c58ab5159988ca0c",
+      "imported_at": "2026-10-12T08:20:07.654017+00:00",
+      "source_type": "user_supplied_compilation",
+      "verification_status": "pending_source_verification",
+      "index_status": "not_indexed",
+      "trust": "reference_data_not_instructions",
+      "sections": [
+        "一、灾变与旧文明时期",
+        "二、艾利都（旧都）时期",
+        "三、旧都陷落（距游戏内现今约 11 年前）",
+        "四、新艾利都时期 · 游戏内近年事件"
+      ]
+    }
+  ]
+}

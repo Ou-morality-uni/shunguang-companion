@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "character": "叶瞬光",
+  "default_chat_avatar": {
+    "path": "avatar.png",
+    "persona": "red",
+    "description": "红色人格，温柔治愈；棕发红瞳、红白发饰的 Q 版聊天头像",
+    "status": "default",
+    "designated_by": "user",
+    "created_date": "2026-10-12"
+  },
+  "stickers": {
+    "path": "stickers/",
+    "count": 20,
+    "red_persona_count": 12,
+    "white_persona_count": 8
+  }
+}

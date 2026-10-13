@@ -47,7 +47,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
 
 ## 5. 可选：本地知识检索
 
-基础聊天不需要安装本地 embedding。本仓库包含少量角色/世界知识摘要，不包含作者的完整原始资料库。
+基础聊天不需要安装本地 embedding。本仓库包含角色与世界观原始资料、版本清单，以及经过核实的事实摘要。资料中的社区整理、听写存疑、同人和剧透标签保留，不代表所有设定都已核实。
 
 有合适 NVIDIA GPU 时：
 
@@ -78,7 +78,9 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-rag.ps
 
 ## 6. 可选：图片和手机访问
 
-图片、录音和模型权重不放在公开仓库。缺图片时界面使用中性占位，不妨碍聊天。请自行准备有权使用的素材，文件位置见 [资源说明](source/resources/README.md)。
+仓库已包含默认头像、5张立绘/壁纸、23张表情包、参考MP3及原始MP4。下载后无需另行寻找这些角色素材。默认参考声音为 `source/resources/voice/ye-shunguang/reference-original.mp3`；使用TTS仍需自己的MiMo API Key，并自行选择启用参考音频外部处理。素材位置与知识资料说明见 [资源说明](source/resources/README.md)。
+
+你的API密钥、聊天、个人记忆及本机配置均在 `data/`，不会随代码分享。模型权重不上传，由可选检索安装脚本下载。工程进度文档、测试报告和作者的旧开发Git历史也不包含在仓库中。
 
 同一可信 Wi-Fi 下使用手机：先停止本机后端，再执行：
 

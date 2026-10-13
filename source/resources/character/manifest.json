@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "documents": [
+    {
+      "document_id": "character-bd9473f9a11f75d1",
+      "original_filename": "叶瞬光_完整角色资料.md",
+      "path": "raw/bd9473f9a11f75d1df4f116270f5bfc48045f7ebb7490c97b893071df6d735f3/叶瞬光_完整角色资料.md",
+      "sha256": "bd9473f9a11f75d1df4f116270f5bfc48045f7ebb7490c97b893071df6d735f3",
+      "imported_at": "2026-10-11T14:24:48.993396+00:00",
+      "source_type": "user_supplied_compilation",
+      "verification_status": "pending_source_verification",
+      "index_status": "not_indexed",
+      "trust": "reference_data_not_instructions",
+      "sections": [
+        "1. 角色档案",
+        "2. 性格与语言习惯",
+        "3. 代表性台词",
+        "4. 世界观（与角色交流直接相关）",
+        "5. 角色关系（附证据；保留未知/分歧/版本变化）",
+        "6. 剧情边界",
+        "7. 战斗能力",
+        "8. 登场与活动",
+        "9. 角色行为规则（角色扮演/Agent 扮演建议）"
+      ]
+    },
+    {
+      "document_id": "character-0697bb98325f0a04",
+      "original_filename": "02_叶瞬光_代表性台词.md",
+      "path": "raw/0697bb98325f0a048611c023cf5bec1886ac65383fd5b23d11d5bca2f63f923f/02_叶瞬光_代表性台词.md",
+      "sha256": "0697bb98325f0a048611c023cf5bec1886ac65383fd5b23d11d5bca2f63f923f",
+      "imported_at": "2026-10-12T08:20:07.622969+00:00",
+      "source_type": "user_supplied_compilation",
+      "verification_status": "pending_source_verification",
+      "index_status": "not_indexed",
+      "trust": "reference_data_not_instructions",
+      "sections": [
+        "一、官方介绍 / 问候 / 自我介绍",
+        "二、意象影画文本",
+        "三、官方贺图 · 日常向",
+        "四、战斗语音（玩家听写稿 · 存疑）"
+      ]
+    },
+    {
+      "document_id": "character-a0d30c138e35fb37",
+      "original_filename": "叶瞬光_完整角色资料.md",
+      "path": "raw/a0d30c138e35fb37cbdbae603ff312d1f519e55717850fca414d9a53afa9d66f/叶瞬光_完整角色资料.md",
+      "sha256": "a0d30c138e35fb37cbdbae603ff312d1f519e55717850fca414d9a53afa9d66f",
+      "imported_at": "2026-10-12T08:20:07.657025+00:00",
+      "source_type": "user_supplied_compilation",
+      "verification_status": "pending_source_verification",
+      "index_status": "not_indexed",
+      "trust": "reference_data_not_instructions",
+      "sections": [
+        "1. 角色档案",
+        "2. 性格与语言习惯",
+        "3. 个人日常与生活小事",
+        "4. 与法厄同的互动（专章）",
+        "5. 代表性台词",
+        "6. 世界观（与角色交流直接相关）",
+        "7. 角色关系（附证据；保留未知 / 分歧 / 版本变化）",
+        "8. 剧情边界",
+        "9. 战斗能力",
+        "10. 登场与活动",
+        "11. 角色行为规则（角色扮演 / Agent 扮演建议）"
+      ]
+    }
+  ]
+}
