@@ -1,0 +1,41 @@
+# Local secrets and private user data
+/data/
+.env
+.env.*
+*.pem
+*.key
+*.pfx
+*.sqlite
+*.sqlite3
+*.db
+*.log
+
+# Installed dependencies, builds and caches
+.venv/
+.venv-rag/
+node_modules/
+dist/
+__pycache__/
+.pytest_cache/
+*.pyc
+*.bin
+*.gguf
+*.safetensors
+*.partial
+
+# Personal resources stay local
+/source/resources/models/
+/source/resources/voice/
+/source/resources/assets/
+/source/resources/character/
+/source/resources/world/
+
+# Internal development documents and reports
+/source/*.md
+/delivery/
+/output/
+/artifacts/
+.codex/
+.agents/
+.idea/
+.vscode/

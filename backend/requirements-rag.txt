@@ -1,0 +1,6 @@
+# Optional isolated runtime. Install torch from the official CUDA index first.
+transformers==4.57.6
+qdrant-client==1.19.1
+sentencepiece==0.2.1
+numpy==2.2.6
+pytest==8.4.2
