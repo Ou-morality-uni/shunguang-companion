@@ -1,0 +1,159 @@
+{
+  "schema_version": 1,
+  "imported_at": "2026-10-12T08:20:12.207324+00:00",
+  "operation": "copy_originals_preserved",
+  "entries": [
+    {
+      "category": "character",
+      "path": "character/raw/0697bb98325f0a048611c023cf5bec1886ac65383fd5b23d11d5bca2f63f923f/02_叶瞬光_代表性台词.md",
+      "bytes": 3522,
+      "sha256": "0697bb98325f0a048611c023cf5bec1886ac65383fd5b23d11d5bca2f63f923f",
+      "status": "archived_not_indexed",
+      "verification_status": "pending_source_verification",
+      "trust": "reference_data_not_instructions",
+      "original_filename": "02_叶瞬光_代表性台词.md"
+    },
+    {
+      "category": "world",
+      "path": "world/raw/d5fd77247f6d8f0004b4b756e6b80c972e4c9ba0fe7741f37f071f2c0ace3456/04_代理人名录.md",
+      "bytes": 8626,
+      "sha256": "d5fd77247f6d8f0004b4b756e6b80c972e4c9ba0fe7741f37f071f2c0ace3456",
+      "status": "archived_not_indexed",
+      "verification_status": "pending_source_verification",
+      "trust": "reference_data_not_instructions",
+      "original_filename": "04_代理人名录.md"
+    },
+    {
+      "category": "world",
+      "path": "world/raw/8a88fa143fd101bbdeaaa7c183bac9213dae1464a87f4daa7f97777bd8d6dd2a/05_组织与阵营.md",
+      "bytes": 10011,
+      "sha256": "8a88fa143fd101bbdeaaa7c183bac9213dae1464a87f4daa7f97777bd8d6dd2a",
+      "status": "archived_not_indexed",
+      "verification_status": "pending_source_verification",
+      "trust": "reference_data_not_instructions",
+      "original_filename": "05_组织与阵营.md"
+    },
+    {
+      "category": "world",
+      "path": "world/raw/55f1425301fa1826b3204ed4522509709176080e7f9b1fed480eab8f46e8ee24/06_地理与地点.md",
+      "bytes": 4440,
+      "sha256": "55f1425301fa1826b3204ed4522509709176080e7f9b1fed480eab8f46e8ee24",
+      "status": "archived_not_indexed",
+      "verification_status": "pending_source_verification",
+      "trust": "reference_data_not_instructions",
+      "original_filename": "06_地理与地点.md"
+    },
+    {
+      "category": "world",
+      "path": "world/raw/ffadeddb622c0b2802fc768d5534ba310b530c7144a6c6f01eadc89fe373559e/07_名词术语表.md",
+      "bytes": 9647,
+      "sha256": "ffadeddb622c0b2802fc768d5534ba310b530c7144a6c6f01eadc89fe373559e",
+      "status": "archived_not_indexed",
+      "verification_status": "pending_source_verification",
+      "trust": "reference_data_not_instructions",
+      "original_filename": "07_名词术语表.md"
+    },
+    {
+      "category": "world",
+      "path": "world/raw/408aec9b45d66e1257852372cd80a30d97f9a4bedca19004c58ab5159988ca0c/08_新艾利都历史年表.md",
+      "bytes": 6134,
+      "sha256": "408aec9b45d66e1257852372cd80a30d97f9a4bedca19004c58ab5159988ca0c",
+      "status": "archived_not_indexed",
+      "verification_status": "pending_source_verification",
+      "trust": "reference_data_not_instructions",
+      "original_filename": "08_新艾利都历史年表.md"
+    },
+    {
+      "category": "character",
+      "path": "character/raw/a0d30c138e35fb37cbdbae603ff312d1f519e55717850fca414d9a53afa9d66f/叶瞬光_完整角色资料.md",
+      "bytes": 49801,
+      "sha256": "a0d30c138e35fb37cbdbae603ff312d1f519e55717850fca414d9a53afa9d66f",
+      "status": "archived_not_indexed",
+      "verification_status": "pending_source_verification",
+      "trust": "reference_data_not_instructions",
+      "original_filename": "叶瞬光_完整角色资料.md"
+    },
+    {
+      "category": "voice",
+      "path": "voice/ye-shunguang/reference-original.mp4",
+      "bytes": 1691136,
+      "sha256": "4fbdd0a93d9b1939d2c345fef9c2b6287b0ffcb954ea40ea8b933de8e2649e80",
+      "status": "archived_not_integrated",
+      "source_type": "user_supplied",
+      "source_url": null,
+      "usage_conditions": "not_recorded",
+      "original_filename": "叶瞬光音频.mp4"
+    },
+    {
+      "category": "image",
+      "path": "assets/ye-shunguang/dual-form-wallpaper-muted.png",
+      "bytes": 229376,
+      "sha256": "38b0b435e8f234fe8fc1e0bc7da14c28cfbd06c185ec2f374398855733ffb208",
+      "status": "archived_not_integrated",
+      "source_type": "user_supplied",
+      "source_url": null,
+      "usage_conditions": "not_recorded",
+      "original_filename": "元气壁纸_1791786773089.png"
+    },
+    {
+      "category": "image",
+      "path": "assets/ye-shunguang/warm-dawn-full-body.webp",
+      "bytes": 113030,
+      "sha256": "5475ef17b1aa296f5d137fc0c7ab767cd59a462352e21e3fe96638d8cc98104f",
+      "status": "archived_not_integrated",
+      "source_type": "user_supplied",
+      "source_url": null,
+      "usage_conditions": "not_recorded",
+      "original_filename": "huaban-6970507273.webp"
+    },
+    {
+      "category": "image",
+      "path": "assets/ye-shunguang/warm-dawn-street-portrait.jpg",
+      "bytes": 253952,
+      "sha256": "e1fd12bf872d2e1c67e99f6479581eb923796163e22c3d58797c1901c7c99425",
+      "status": "archived_not_integrated",
+      "source_type": "user_supplied",
+      "source_url": null,
+      "usage_conditions": "not_recorded",
+      "original_filename": "元气壁纸_1791786977637.jpg"
+    },
+    {
+      "category": "image",
+      "path": "assets/ye-shunguang/blossom-portrait.png",
+      "bytes": 946176,
+      "sha256": "e7406842a6a4d7bc07d05ad39745ecfa02a5562edc29f1c8da144e786371e44a",
+      "status": "archived_not_integrated",
+      "source_type": "user_supplied",
+      "source_url": null,
+      "usage_conditions": "not_recorded",
+      "original_filename": "元气壁纸_1791786836308.png"
+    },
+    {
+      "category": "image",
+      "path": "assets/ye-shunguang/dual-form-wallpaper-color.png",
+      "bytes": 3018752,
+      "sha256": "aa82f319e3c9a4882547da5ed36ade7b3a6693ecc66aaa868c7a73cfd2db8492",
+      "status": "archived_not_integrated",
+      "source_type": "user_supplied",
+      "source_url": null,
+      "usage_conditions": "not_recorded",
+      "original_filename": "元气壁纸_1791786823420.png"
+    },
+    {
+      "category": "model_weights",
+      "path": "models/bge-m3/pytorch_model.bin",
+      "bytes": 2271145830,
+      "sha256": "b5e0ce3470abf5ef3831aa1bd5553b486803e83251590ab7ff35a117cf6aad38",
+      "status": "archived_not_integrated",
+      "source_type": "user_supplied",
+      "source_url": null,
+      "usage_conditions": "not_recorded",
+      "claimed_model": "BAAI/bge-m3",
+      "model_identity_verified": false,
+      "load_status": "not_tested",
+      "note": "Only the supplied weight file is archived; accompanying configuration and tokenizer files have not been supplied.",
+      "original_filename": "pytorch_model.bin"
+    }
+  ],
+  "privacy_note": "Original local absolute paths removed from this public archival snapshot; resource hashes are unchanged."
+}

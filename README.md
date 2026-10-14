@@ -1,103 +1,96 @@
 # 瞬光伴行
 
-以《绝区零》叶瞬光为原型的非官方陪伴 Web 应用。电脑运行后端，浏览器聊天；每个人填写自己的 API，不共享作者的密钥和数据。
+[English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
-支持角色对话与流式回复、会话历史、多模型配置、角色知识检索、天气/网页搜索、手动长期记忆、参考音频 TTS、休息提醒。界面采用暖霞拾光红金三栏，所有配置集中在“陪伴设置”。
+以《绝区零》叶瞬光为原型的非官方陪伴 Web 应用。支持角色对话、流式回复与停止、多模型连接、角色与世界知识检索及引用、天气与网页搜索、手动长期记忆、参考音频声音克隆、播放队列和休息提醒。电脑运行后端，电脑或同一 Wi-Fi 的手机通过浏览器使用；所有配置集中在“陪伴设置”。
 
-## 1. 准备环境
+## 首次安装
 
-目前按 Windows 使用。安装 **Python 3.11** 和 **Node.js 24**，确认终端可执行 `python` 与 `npm`。凭据使用 Windows 当前账户加密，macOS/Linux 尚未适配密钥存储。
+支持 **Windows 10/11 64 位、Python 3.11 64 位和 Node.js 24**。先安装 Python 与 Node.js，确认终端能运行 `py -3.11`（或 `python`）、`node` 和 `npm`。它们是基础运行时，项目安装脚本不会替你安装。建议16GB内存；脚本要求至少12GiB磁盘余量，首次安装需要联网下载数GB依赖和模型。
 
-点击仓库页面 **Code → Download ZIP** 并解压，或通过 Git 克隆。必须进入解压后的项目根目录，不能在 ZIP 里面直接启动。
+1. 克隆本仓库，或点击 **Code → Download ZIP**，解压到普通文件夹。
+2. 双击根目录 **`Install.bat`**。安装窗口会显示进度与错误；等待出现 `Installation success`。
+3. 双击 **`Start_up.bat`**。CMD 显示后端日志，服务就绪后自动打开 `http://127.0.0.1:8000/`。
+4. 在“陪伴设置 → 模型连接”填写自己的 API Key，读取并选择模型，保存并测试连接。
 
-## 2. 首次安装
+`Install.bat` 会创建两个隔离的 Python 环境，安装锁定的后端、前端和检索依赖，构建前端，创建空 SQLite 数据库，检查音频组件，下载并校验 BGE-M3，然后使用**仓库已附带的角色与世界资料**建立本地 Qdrant 索引并验证实际检索。不需要自己整理或添加 Markdown/TXT，也不需要另外安装 MySQL、Docker、CUDA Toolkit 或独立 Qdrant 服务。
 
-在项目根目录打开 PowerShell，执行一次：
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1
-```
-
-脚本创建项目虚拟环境、安装锁定依赖并构建前端。需要网络，不需要复制作者的虚拟环境、数据库或模型文件。
-
-## 3. 启动与填写自己的 API
-
-双击根目录 **Start_up.bat**。CMD 显示后端日志，服务就绪后自动打开 `http://127.0.0.1:8000/`。
-
-1. 打开“陪伴设置 → 模型连接”。
-2. 选择提供商和协议，填写你自己的 API Key。
-3. 读取可用模型并选择；上游没有列表权限时手动填写模型 ID。
-4. 保存并测试连接，再开始聊天。
-
-模型配置只在界面填写，不读取 `.env` 或 `LLM_*` 环境变量。支持 MiMo、DeepSeek 和自定义兼容接口；OpenAI 兼容与 Anthropic 兼容使用不同适配。其他服务是否可用取决于接口与权限。
-
-已有密钥不回显：留空保留、填写替换、明确移除。数据和加密配置保存在你自己电脑的 `data/`，该目录被 Git 忽略。不同 Windows 账户或电脑需重新填写密钥。
-
-保持后端 CMD 窗口打开。关闭它可停止后端，`Ctrl+C` 用于正常退出；关闭网页本身不会停止后端。再次启动发现已有服务时只打开网页，日志及停止操作仍在原后端窗口。
-
-## 4. 其他配置
-
-- **工具服务**：天气使用 Open-Meteo；默认网页搜索无需 Key，使用公开搜索入口。公开服务可能限流或要求验证。Tavily 是可选配置，需要你自己的有效 Key。
-- **长期记忆**：初始为空。手动总结会话、核对候选后确认；可编辑、处理冲突与删除。聊天历史和长期事实分别管理。
-- **声音与播放**：当前使用 MiMo `mimo-v2.5-tts-voiceclone`。填写自己的语音 API Key，选择自己的本地参考 MP3，保存后合成新文字。选择文件会自动选中，支持重新选择。默认路径为 `source/resources/voice/ye-shunguang/reference-original.mp3`，也可使用服务电脑上的绝对路径。
-- **参考音频外传**：默认关闭。开启并保存后，合成会将所选音频发给 MiMo；本地选择/验证不会外传。没有参考音频或未授权时不会改用预置音色。支持排队、停止、缓存重播与静音，语音失败不影响文字聊天。
-- **关怀提醒**：设定间隔、安静时段和暂停；文字提醒可配合已配置的 TTS。它不检测坐姿，浏览器后台可能延迟，关闭页面后不能可靠提醒。
-
-模型和工具请求会发送到你配置的服务，使用服务可能产生其规定的费用。
-
-## 5. 可选：本地知识检索
-
-基础聊天不需要安装本地 embedding。本仓库包含角色与世界观原始资料、版本清单，以及经过核实的事实摘要。资料中的社区整理、听写存疑、同人和剧透标签保留，不代表所有设定都已核实。
-
-有合适 NVIDIA GPU 时：
+安装会检查 NVIDIA 驱动与显存条件，尝试 CUDA 12.8 版 PyTorch并验证实际运算；条件不满足时使用CPU，CPU索引和检索可能较慢。脚本不会安装或修改显卡驱动。若缺少Microsoft Visual C++运行库，会从微软官方下载并检查签名，Windows可能要求管理员确认。主动使用CPU可执行：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-rag.ps1
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Cpu
 ```
 
-没有 NVIDIA GPU 时可选择 CPU 安装路径，性能取决于电脑：
+安装项目清单见 [INSTALL_LIST.md](INSTALL_LIST.md)。每次运行还会生成 **`data/install-list.md`**，列出本次处理的 Python包、实际安装的 npm包、模型文件、来源和数据库位置，区分已有依赖与本次安装；包管理器可能使用缓存。失败会返回非零退出码并保留阶段记录，不能把失败清单当作安装成功。
+
+## BGE-M3 的下载和位置
+
+完整模型在 [GitHub Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)，包括 PyTorch权重、tokenizer、配置、来源记录、模型卡和MIT许可。ZIP约1.42GB，解压后模型组件约2.3GB；不需要Git LFS。
+
+**默认自动安装：**`Install.bat` 下载ZIP并验证包与每个模型组件的SHA256，解压到：
+
+```text
+source/resources/models/bge-m3/
+├── pytorch_model.bin
+├── config.json
+├── tokenizer.json
+├── tokenizer_config.json
+├── special_tokens_map.json
+├── sentencepiece.bpe.model
+├── modules.json
+├── 1_Pooling/config.json
+├── model-provenance.json
+├── MODEL-CARD.md
+└── LICENSE.txt
+```
+
+**手动下载：**从Release下载 `bge-m3-5617a9f.zip`，把ZIP内的 `bge-m3` 文件夹解压到 `source/resources/models/`，确保权重最终位于 `source/resources/models/bge-m3/pytorch_model.bin`，然后运行 `Install.bat`。验证合格的现有模型会复用，不会重复下载。只有一个`.bin`文件不算完整模型。
+
+下载缓存位于 `data/install/model-cache/`。网络中断后重新运行安装脚本即可尝试续传；哈希错误会明确停止。如果GitHub下载不可用，可明确选择锁定版本的官方Hugging Face来源：
 
 ```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-rag.ps1 -Cpu
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -ModelSource official
 ```
 
-这一步单独安装 PyTorch/BGE-M3/Qdrant，下载约2.3GB的官方权重及配套组件，执行推理检查并建索引。无需另装 Docker 或独立 Qdrant 服务。下载文件按固定版本与 SHA256 校验，失败会明确报错。
-
-添加你自己的 UTF-8 Markdown/TXT 资料：
-
-```powershell
-.\.venv\Scripts\python.exe scripts/import-character-resource.py 'D:\my-materials\character.md'
-.\.venv\Scripts\python.exe scripts/import-character-resource.py 'D:\my-materials\world.md' --category world
-```
-
-导入后在“世界档案”点击更新索引。命令行重建前关闭后端，避免同一 Qdrant 库被两个进程占用：
+默认不会静默切换模型或下载源。运行中更新索引可使用“世界档案”；命令行重建前关闭后端窗口：
 
 ```powershell
 .\.venv-rag\Scripts\python.exe scripts/rag-cli.py rebuild
 ```
 
-## 6. 可选：图片和手机访问
+## 资源与个人数据
 
-仓库已包含默认头像、5张立绘/壁纸、23张表情包、参考MP3及原始MP4。下载后无需另行寻找这些角色素材。默认参考声音为 `source/resources/voice/ye-shunguang/reference-original.mp3`；使用TTS仍需自己的MiMo API Key，并自行选择启用参考音频外部处理。素材位置与知识资料说明见 [资源说明](source/resources/README.md)。
+仓库附带原默认头像、5张立绘／壁纸、全部23张表情、默认参考MP3、参考片段及原始MP4，还有你可直接使用的角色／世界原始资料、历史版本和核实摘要。资料说明见 [资源目录](source/resources/README.md)。社区整理、听写存疑、剧透与未知内容保留标记，不代表所有设定均已核实。
 
-你的API密钥、聊天、个人记忆及本机配置均在 `data/`，不会随代码分享。模型权重不上传，由可选检索安装脚本下载。工程进度文档、测试报告和作者的旧开发Git历史也不包含在仓库中。
+每位使用者的密钥、本机配置、聊天、长期记忆、音频缓存和数据库都保存在自己的 `data/`，被Git忽略。新用户没有作者的聊天或个人记忆。密钥使用当前Windows账户DPAPI加密，不回显已有值：留空保留、输入替换、明确移除。更换电脑或Windows账户需重新填写。模型配置只在界面填写，不读取`.env`或`LLM_*`环境变量。
 
-同一可信 Wi-Fi 下使用手机：先停止本机后端，再执行：
+工程进度、交付清单、验收报告、私人日志和原开发Git历史不在公开仓库；README与安装清单是面向使用者的操作文档。安装不会替你填写API、购买服务、训练声音或上传参考音频。
+
+## 声音、工具与提醒
+
+- **声音与播放**：使用自己的MiMo语音API。默认参考文件为 `source/resources/voice/ye-shunguang/reference-original.mp3`，也可选择文件或填写服务电脑上的绝对路径。开启并保存“允许发送参考音频”后才会把录音发给MiMo合成新文字；初始关闭。支持排队、停止、重播与静音，失败不影响文字聊天。
+- **工具服务**：天气使用Open-Meteo；网页搜索默认使用无需Key的公开入口，Tavily是可选配置。公开服务可能限流或要求验证；界面显示调用结果、失败和真实来源。
+- **长期记忆**：手动总结会话、预览候选并确认，支持查看、编辑、冲突更新和删除；聊天历史与长期事实分别管理。
+- **关怀提醒**：配置间隔、安静时段、暂停和测试。按时间触发，不检测坐姿；浏览器后台可能延迟，关闭页面后不能可靠提醒。
+
+模型与声音服务需要使用者自己的可用API，可能按服务规则计费。当前凭据后端适配Windows；macOS/Linux尚未适配。
+
+## 同一 Wi-Fi 的手机访问
+
+先关闭本机后端，再在项目根目录运行：
 
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-lan.ps1
 ```
 
-首次设置至少10位访问口令，手机打开脚本显示的电脑 IPv4 地址并登录。手机不要使用127.0.0.1访问电脑。脚本不修改防火墙或开放公网。真实手机的键盘、布局与音频权限可能因设备而不同。
+首次设置至少10位访问口令，手机打开脚本显示的电脑IPv4地址并登录。手机不要用127.0.0.1访问电脑。脚本不修改防火墙、不开放公网。手机浏览器的软键盘和音频权限可能因设备不同。
 
-## 常见问题
+## 更新与常见问题
 
-- 找不到 `python` / `npm`：确认安装了上述运行时，重开终端。
-- 缺少虚拟环境或前端构建：先完成首次安装，并查看安装窗口错误。
-- API认证、额度或模型列表失败：核对自己提供商的地址、协议、模型权限和 Key。
-- 8000被其他程序占用：先停止占用者；启动脚本不会杀掉不认识的进程。
-- 语音没有参考文件：在“声音与播放”选择自己的 MP3，保存并按需启用外部处理。
-- 浏览器阻止音频自动播放：先点击消息播放按钮。
-- 想更新代码：Git用户先停止后端、`git pull`，然后重新运行安装脚本；ZIP用户重新下载代码，不要覆盖或分享私人 `data/`。
+- **更新**：先关闭后端，Git用户执行 `git pull`，再双击 `Install.bat`。ZIP用户下载新代码，保留自己的 `data/`，不要把它分享给别人。已有模型通过校验后复用，资料索引按版本增量更新。
+- **安装失败**：查看窗口最后失败阶段及 `data/install-list.md`，解决网络、磁盘、基础运行时等问题后重新运行。不要把含私人数据的整个工程打包求助。
+- **端口被占用**：关闭原后端或占用8000的程序；启动脚本不会杀掉不认识的进程。
+- **停止后端**：在后端CMD按 `Ctrl+C` 或关闭该窗口；关闭网页不会停止后端。
+- **没有声音**：核对自己的语音Key、参考文件及外部处理开关；浏览器阻止播放时先点击消息播放按钮。
 
-本应用不是官方产品。角色设定及游戏名称归原权利方；AI回答和检索材料可能存在错误。
+本项目是非官方角色应用。原角色、游戏设定、图片和声音归各自权利方；附带素材不表示项目拥有原角色权益。AI回答和检索资料可能存在错误。

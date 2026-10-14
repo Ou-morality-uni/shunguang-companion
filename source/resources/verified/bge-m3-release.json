@@ -1,0 +1,79 @@
+{
+  "schema_version": 1,
+  "repository": "BAAI/bge-m3",
+  "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+  "release_tag": "bge-m3-5617a9f",
+  "release_url": "https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f",
+  "license": "MIT",
+  "upstream": "https://huggingface.co/BAAI/bge-m3/tree/5617a9f61b028005a4858fdac845db406aefb181",
+  "archive": {
+    "name": "bge-m3-5617a9f.zip",
+    "bytes": 1424426534,
+    "sha256": "63e744a3b752a8e188777531581ae6f2d7fc62d46c7e914508be2537006981dc"
+  },
+  "assets": [
+    {
+      "name": "bge-m3-5617a9f.zip",
+      "bytes": 1424426534,
+      "sha256": "63e744a3b752a8e188777531581ae6f2d7fc62d46c7e914508be2537006981dc",
+      "url": "https://github.com/Ou-morality-uni/shunguang-companion/releases/download/bge-m3-5617a9f/bge-m3-5617a9f.zip"
+    }
+  ],
+  "files": [
+    {
+      "path": "pytorch_model.bin",
+      "bytes": 2271145830,
+      "sha256": "b5e0ce3470abf5ef3831aa1bd5553b486803e83251590ab7ff35a117cf6aad38"
+    },
+    {
+      "path": "sentencepiece.bpe.model",
+      "bytes": 5069051,
+      "sha256": "cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865"
+    },
+    {
+      "path": "tokenizer.json",
+      "bytes": 17098108,
+      "sha256": "21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08"
+    },
+    {
+      "path": "config.json",
+      "bytes": 687,
+      "sha256": "26159e7ad065073448460117eb24b7a4572f6f4e78eadff65dc0a11c052449fa"
+    },
+    {
+      "path": "special_tokens_map.json",
+      "bytes": 964,
+      "sha256": "8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "bytes": 444,
+      "sha256": "a62b2b6784f990259fddef5f16388693a8043be4f69179e6a5257eeb3f9abac4"
+    },
+    {
+      "path": "1_Pooling/config.json",
+      "bytes": 191,
+      "sha256": "e54c164a07274f2eb45bb724f54a79d1efcc90c41573887cd9a29aeee0597352"
+    },
+    {
+      "path": "modules.json",
+      "bytes": 349,
+      "sha256": "84e40c8e006c9b1d6c122e02cba9b02458120b5fb0c87b746c41e0207cf642cf"
+    },
+    {
+      "path": "model-provenance.json",
+      "bytes": 1949,
+      "sha256": "c9ee7e94f79cea2d5a0f224f89c8cce82b803d86ec90d9e65e37f64cded2ce88"
+    },
+    {
+      "path": "MODEL-CARD.md",
+      "bytes": 15822,
+      "sha256": "0b81ccf9134e5874d620a86e6905062ea999e779c34eb1a7e65eaeb7fe00e450"
+    },
+    {
+      "path": "LICENSE.txt",
+      "bytes": 1065,
+      "sha256": "587a673933425dbc36ec61268d3b954051b2d3ef3c9b322ede357976055ffdd5"
+    }
+  ]
+}

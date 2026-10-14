@@ -1,0 +1,57 @@
+{
+  "repository": "BAAI/bge-m3",
+  "revision": "5617a9f61b028005a4858fdac845db406aefb181",
+  "license": "MIT",
+  "format": "PyTorch state_dict",
+  "source": "https://huggingface.co/BAAI/bge-m3/tree/5617a9f61b028005a4858fdac845db406aefb181",
+  "files": [
+    {
+      "filename": "pytorch_model.bin",
+      "bytes": 2271145830,
+      "sha256": "b5e0ce3470abf5ef3831aa1bd5553b486803e83251590ab7ff35a117cf6aad38",
+      "origin": "official_pinned_download"
+    },
+    {
+      "filename": "sentencepiece.bpe.model",
+      "bytes": 5069051,
+      "sha256": "cfc8146abe2a0488e9e2a0c56de7952f7c11ab059eca145a0a727afce0db2865",
+      "origin": "official_pinned_download"
+    },
+    {
+      "filename": "tokenizer.json",
+      "bytes": 17098108,
+      "sha256": "21106b6d7dab2952c1d496fb21d5dc9db75c28ed361a05f5020bbba27810dd08",
+      "origin": "official_pinned_download"
+    },
+    {
+      "filename": "config.json",
+      "bytes": 687,
+      "sha256": "26159e7ad065073448460117eb24b7a4572f6f4e78eadff65dc0a11c052449fa",
+      "origin": "official_pinned_download"
+    },
+    {
+      "filename": "special_tokens_map.json",
+      "bytes": 964,
+      "sha256": "8c785abebea9ae3257b61681b4e6fd8365ceafde980c21970d001e834cf10835",
+      "origin": "official_pinned_download"
+    },
+    {
+      "filename": "tokenizer_config.json",
+      "bytes": 444,
+      "sha256": "a62b2b6784f990259fddef5f16388693a8043be4f69179e6a5257eeb3f9abac4",
+      "origin": "official_pinned_download"
+    },
+    {
+      "filename": "1_Pooling/config.json",
+      "bytes": 191,
+      "sha256": "e54c164a07274f2eb45bb724f54a79d1efcc90c41573887cd9a29aeee0597352",
+      "origin": "official_pinned_download"
+    },
+    {
+      "filename": "modules.json",
+      "bytes": 349,
+      "sha256": "84e40c8e006c9b1d6c122e02cba9b02458120b5fb0c87b746c41e0207cf642cf",
+      "origin": "official_pinned_download"
+    }
+  ]
+}
