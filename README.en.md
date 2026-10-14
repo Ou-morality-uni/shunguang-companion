@@ -8,7 +8,14 @@ An unofficial browser companion inspired by Ye Shunguang from Zenless Zone Zero.
 
 Use **64-bit Windows 10/11, 64-bit Python 3.11, and Node.js 24**. Install Python and Node.js first and make sure `py -3.11` (or `python`), `node`, and `npm` work in a new terminal. The project installer checks these prerequisites; it does not download them. 16GB RAM is recommended. The installer requires at least 12 GiB of free disk space and an internet connection for several GB of dependencies and model files.
 
-1. Clone this repository, or select **Code → Download ZIP** and extract it into a regular folder.
+1. Get the project. If Git is installed, run these commands in PowerShell:
+
+   ```powershell
+   git clone https://github.com/Ou-morality-uni/shunguang-companion
+   cd shunguang-companion
+   ```
+
+   Alternatively, select **Code → Download ZIP**, extract it into a regular folder, and open the project root.
 2. Double-click **`Install.bat`** in the project root. Wait for `Installation success`; the window shows progress and errors.
 3. Double-click **`Start_up.bat`**. A CMD window displays backend logs and the browser opens at `http://127.0.0.1:8000/` once the server is ready.
 4. Open Companion Settings (陪伴设置) → Model Connection (模型连接), enter your own API key, discover/select a model, save, and test the connection.
@@ -93,4 +100,4 @@ Set an access password of at least 10 characters. Open the computer's IPv4 addre
 - Press `Ctrl+C` or close the backend CMD window to stop it. Closing the browser alone does not stop the backend.
 - If audio fails, check your voice key, reference file, and external-processing option. Click a message's play button if the browser blocks playback.
 
-This is an unofficial fan application. Original characters, game setting, images, and voices belong to their respective rights holders. Included assets do not grant ownership of those rights. AI responses and retrieved material may contain errors.
+This is an unofficial fan application. Original characters, game setting, images, and voices belong to their respective rights holders. This is for personal study and communicationIncluded assets do not grant ownership of those rights. AI responses and retrieved material may contain errors.

@@ -8,7 +8,14 @@
 
 支持 **Windows 10/11 64 位、Python 3.11 64 位和 Node.js 24**。先安装 Python 与 Node.js，确认终端能运行 `py -3.11`（或 `python`）、`node` 和 `npm`。它们是基础运行时，项目安装脚本不会替你安装。建议16GB内存；脚本要求至少12GiB磁盘余量，首次安装需要联网下载数GB依赖和模型。
 
-1. 克隆本仓库，或点击 **Code → Download ZIP**，解压到普通文件夹。
+1. 获取项目。已安装 Git 时，可在 PowerShell 执行：
+
+   ```powershell
+   git clone https://github.com/Ou-morality-uni/shunguang-companion
+   cd shunguang-companion
+   ```
+
+   也可点击 **Code → Download ZIP**，解压到普通文件夹并进入项目根目录。
 2. 双击根目录 **`Install.bat`**。安装窗口会显示进度与错误；等待出现 `Installation success`。
 3. 双击 **`Start_up.bat`**。CMD 显示后端日志，服务就绪后自动打开 `http://127.0.0.1:8000/`。
 4. 在“陪伴设置 → 模型连接”填写自己的 API Key，读取并选择模型，保存并测试连接。
@@ -93,4 +100,4 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-lan.ps1
 - **停止后端**：在后端CMD按 `Ctrl+C` 或关闭该窗口；关闭网页不会停止后端。
 - **没有声音**：核对自己的语音Key、参考文件及外部处理开关；浏览器阻止播放时先点击消息播放按钮。
 
-本项目是非官方角色应用。原角色、游戏设定、图片和声音归各自权利方；附带素材不表示项目拥有原角色权益。AI回答和检索资料可能存在错误。
+本项目是非官方角色应用。原角色、游戏设定、图片和声音归各自权利方，用于个人的学习与交流。附带素材不表示项目拥有原角色权益。AI回答和检索资料可能存在错误。
