@@ -5,6 +5,7 @@ import importlib.util
 import io
 import json
 import subprocess
+import sys
 import zipfile
 from pathlib import Path
 from types import SimpleNamespace
@@ -144,6 +145,7 @@ def test_existing_native_runtime_does_not_download(monkeypatch):
     assert receipt['vc_runtime']['action'] == 'existing_system_runtime'
 
 
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows Authenticode validation requires powershell.exe')
 def test_unsigned_native_installer_is_rejected_before_execution(tmp_path):
     candidate = tmp_path / 'unsigned.exe'
     candidate.write_bytes(b'not an executable')

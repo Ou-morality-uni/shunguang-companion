@@ -6,12 +6,13 @@ permissions:
 jobs:
   backend:
     strategy:
+      fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest]
+        os: [windows-latest, ubuntu-24.04]
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
           cache: pip
@@ -23,15 +24,15 @@ jobs:
       - run: python scripts/export-openapi.py --check
 
   frontend:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: '22'
+          node-version: '24'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
