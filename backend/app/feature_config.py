@@ -40,6 +40,7 @@ class TTSConfig(BaseModel):
     base_url: str = 'https://api.xiaomimimo.com/v1'
     model: str = 'mimo-v2.5-tts-voiceclone'
     voice: str = ''
+    resource_id: str = Field(default='seed-icl-2.0', max_length=100)
     api_key: SecretStr = SecretStr('')
     use_model_key: bool = False
     timeout: float = Field(default=45, ge=5, le=90)
@@ -55,7 +56,7 @@ class TTSConfig(BaseModel):
     @field_validator('provider')
     @classmethod
     def provider_valid(cls, value):
-        if value not in ('mimo', 'openai', 'custom'):
+        if value not in ('mimo', 'aliyun', 'volcengine', 'openai', 'custom'):
             raise ValueError('不支持的语音服务')
         return value
 
@@ -64,11 +65,18 @@ class TTSConfig(BaseModel):
     def url_valid(cls, value):
         value = value.strip().rstrip('/')
         parsed = urlparse(value)
-        if parsed.scheme != 'https' or not parsed.hostname or parsed.username or parsed.password or parsed.query or parsed.fragment:
+        if (
+            parsed.scheme != 'https'
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+        ):
             raise ValueError('语音接口必须是无账号和查询参数的 HTTPS 地址')
         return value
 
-    @field_validator('model', 'voice')
+    @field_validator('model', 'voice', 'resource_id')
     @classmethod
     def id_valid(cls, value):
         value = value.strip()
@@ -168,24 +176,49 @@ def tts_secret(value: TTSConfig) -> str:
 
 
 def capabilities(value: TTSConfig) -> dict:
+    persistent = (value.provider == 'aliyun' and value.model.startswith('qwen3-tts-vc-realtime-')) or (
+        value.provider == 'volcengine' and value.resource_id == 'seed-icl-2.0'
+    )
     return {
         'reference_audio': value.provider == 'mimo' and value.model == 'mimo-v2.5-tts-voiceclone',
+        'persistent_voice': persistent,
+        'streaming_audio': persistent,
         'reference_upload_local': True,
         'voice_discovery': False,
-        'voice_id_generation': False,
+        'voice_id_generation': value.provider == 'aliyun',
     }
 
 
 def public(value: FeatureConfig) -> dict:
     result = value.model_dump(exclude={'tools': {'api_key'}, 'tts': {'api_key'}})
     result['tools']['has_api_key'] = bool(value.tools.api_key.get_secret_value())
-    result['tools']['coverage'] = {'public': '公开网页搜索，无需 API Key：DuckDuckGo 主查询，最多一次 Bing RSS 回退；公开服务可能限流或要求验证，不保证持续可用。', 'bing': 'Bing 公开 RSS 网页搜索（尽力服务），无专用 API 可用性保证，结果需核对。', 'wikipedia': '百科检索（Wikipedia），不覆盖实时新闻或整个网页', 'tavily': 'Tavily 网页搜索，需要有效密钥'}[value.tools.search_provider]
+    result['tools']['coverage'] = {
+        'public': '公开网页搜索，无需 API Key：DuckDuckGo 主查询，最多一次 Bing RSS 回退；公开服务可能限流或要求验证，不保证持续可用。',
+        'bing': 'Bing 公开 RSS 网页搜索（尽力服务），无专用 API 可用性保证，结果需核对。',
+        'wikipedia': '百科检索（Wikipedia），不覆盖实时新闻或整个网页',
+        'tavily': 'Tavily 网页搜索，需要有效密钥',
+    }[value.tools.search_provider]
     result['tts']['has_api_key'] = bool(tts_secret(value.tts))
     from .voice import reference_signature
-    result['tts']['reference_sha256'] = reference_signature(value.tts.reference_path)
-    result['tts']['configured'] = bool(tts_secret(value.tts) and capabilities(value.tts)['reference_audio'] and result['tts']['reference_sha256'] and value.tts.external_reference_enabled)
+
+    result['tts']['reference_sha256'] = (
+        reference_signature(value.tts.reference_path) if value.tts.provider == 'mimo' else None
+    )
+    result['tts']['configured'] = bool(
+        tts_secret(value.tts)
+        and (
+            (capabilities(value.tts)['persistent_voice'] and value.tts.model and value.tts.voice)
+            or (
+                capabilities(value.tts)['reference_audio']
+                and result['tts']['reference_sha256']
+                and value.tts.external_reference_enabled
+            )
+        )
+    )
     result['tts']['capabilities'] = capabilities(value.tts)
-    result['tts']['notice'] = '使用所选本地 MP3/WAV 模拟声音；需支持参考音频的克隆模型。开启并保存外部处理后，合成请求才会把所选音频发给小米，不训练声音，不使用预置音色兜底。'
+    result['tts']['notice'] = (
+        '小米每次合成提交参考音频；阿里云和火山使用已注册的音色 ID。不会自动切换厂商或使用预置音色兜底。'
+    )
     return result
 
 
@@ -209,11 +242,19 @@ def update(patch: dict) -> FeatureConfig:
                 if not isinstance(clear, bool) or (clear and submitted):
                     raise ValueError('移除与替换密钥不能同时进行')
                 previous = getattr(current, name)
-                same_origin = name != 'tts' or (block.get('provider', previous.provider) == previous.provider and block.get('base_url', previous.base_url).rstrip('/') == previous.base_url)
-                block['api_key'] = SecretStr('' if clear else submitted or (previous.api_key.get_secret_value() if same_origin else ''))
+                same_origin = name != 'tts' or (
+                    block.get('provider', previous.provider) == previous.provider
+                    and block.get('base_url', previous.base_url).rstrip('/') == previous.base_url
+                )
+                block['api_key'] = SecretStr(
+                    '' if clear else submitted or (previous.api_key.get_secret_value() if same_origin else '')
+                )
             record[name].update(block)
         updated = FeatureConfig.model_validate(record)
-        if updated.tts.reference_end <= updated.tts.reference_start or updated.tts.reference_end - updated.tts.reference_start > 60:
+        if (
+            updated.tts.reference_end <= updated.tts.reference_start
+            or updated.tts.reference_end - updated.tts.reference_start > 60
+        ):
             raise ValueError('参考片段需要 0–60 秒的有效范围')
         save(updated)
         return updated

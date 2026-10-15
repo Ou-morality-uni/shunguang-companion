@@ -35,3 +35,7 @@ __pycache__/
 .agents/
 .idea/
 .vscode/
+
+.ruff_cache/
+
+frontend/coverage/

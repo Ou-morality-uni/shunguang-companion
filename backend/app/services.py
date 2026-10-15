@@ -1,9 +1,11 @@
 """Feature routes mounted beneath the app's common access protection."""
 
 import asyncio
+import json
+from contextlib import aclosing
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 from . import feature_config, reminders, tools, voice
@@ -65,7 +67,14 @@ async def tts_discover(payload: DiscoveryRequest):
             secret = current.api_key.get_secret_value()
         if len(secret) > 2048 or any(c.isspace() for c in secret):
             raise ValueError('invalid credential')
-        value = feature_config.TTSConfig(provider=payload.provider, base_url=payload.base_url, api_key=SecretStr(secret), use_model_key=payload.use_model_key, model=payload.model or '', voice=payload.voice or '')
+        value = feature_config.TTSConfig(
+            provider=payload.provider,
+            base_url=payload.base_url,
+            api_key=SecretStr(secret),
+            use_model_key=payload.use_model_key,
+            model=payload.model or '',
+            voice=payload.voice or '',
+        )
         return await voice.discover(value)
     except voice.VoiceError as error:
         raise HTTPException(error.status, error.message)
@@ -79,21 +88,97 @@ class SynthesisRequest(BaseModel):
 
 
 @router.post('/api/tts/synthesize')
-async def tts_synthesize(payload: SynthesisRequest):
-    try:
+async def tts_synthesize(payload: SynthesisRequest, request: Request):
+    async def synthesize():
         async with SYNTHESIS_SLOTS:
             return await voice.synthesize(feature_config.load().tts, payload.text)
+
+    async def disconnected():
+        # FastAPI has already consumed the JSON body. Await the disconnect event
+        # directly: is_disconnected() uses a cancel scope that can swallow the
+        # watcher's cancellation and keep an otherwise finished request alive.
+        while (await request.receive())['type'] != 'http.disconnect':
+            pass
+
+    task = asyncio.create_task(synthesize())
+    watcher = asyncio.create_task(disconnected())
+    try:
+        done, _ = await asyncio.wait((task, watcher), return_when=asyncio.FIRST_COMPLETED)
+        if task not in done:
+            raise HTTPException(499, '语音请求已取消。')
+        return task.result()
+    except voice.VoiceError as error:
+        raise HTTPException(error.status, error.message)
+    except HTTPException:
+        raise
+    except Exception:
+        raise HTTPException(502, '语音合成失败，文字聊天仍可使用。')
+    finally:
+        for pending in (task, watcher):
+            if not pending.done():
+                pending.cancel()
+        await asyncio.gather(task, watcher, return_exceptions=True)
+
+
+@router.post('/api/tts/stream')
+async def tts_stream(payload: SynthesisRequest):
+    from . import tts_providers
+
+    settings = feature_config.load().tts
+    try:
+        tts_providers.validate(settings, payload.text)
+        await voice.validate_origin(settings.base_url, settings.provider)
+        if not feature_config.capabilities(settings)['streaming_audio']:
+            raise voice.VoiceError('当前克隆服务不支持实时音频流。', 422)
+    except voice.VoiceError as error:
+        raise HTTPException(error.status, error.message)
+
+    async def events():
+        try:
+            async with SYNTHESIS_SLOTS, aclosing(tts_providers.stream_events(settings, payload.text)) as stream:
+                async for event in stream:
+                    yield f'event: {event["event"]}\ndata: {json.dumps(event["data"])}\n\n'
+        except voice.VoiceError as error:
+            yield f'event: error\ndata: {json.dumps({"message": error.message})}\n\n'
+        except Exception:
+            yield 'event: error\ndata: {"message":"语音流中断，文字聊天仍可使用。"}\n\n'
+
+    return StreamingResponse(
+        events(),
+        media_type='text/event-stream',
+        headers={
+            'Cache-Control': 'no-store',
+            'X-Accel-Buffering': 'no',
+        },
+    )
+
+
+class VoiceRegistration(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    name: str = Field(default='shunguang', pattern=r'^[A-Za-z0-9_]{1,16}$')
+
+
+@router.post('/api/tts/register')
+async def tts_register(payload: VoiceRegistration):
+    from .tts_providers import register_aliyun
+
+    try:
+        return await register_aliyun(feature_config.load().tts, payload.name)
     except voice.VoiceError as error:
         raise HTTPException(error.status, error.message)
     except Exception:
-        raise HTTPException(502, '语音合成失败，文字聊天仍可使用。')
+        raise HTTPException(502, '音色创建未能确认成功，请先在厂商控制台查询，避免重复创建。')
 
 
 @router.get('/api/tts/audio/{name}')
 def tts_audio(name: str):
     try:
         path = voice.audio_path(name)
-        return FileResponse(path, media_type='audio/wav' if path.suffix == '.wav' else 'audio/mpeg', headers={'Cache-Control': 'private, no-store'})
+        return FileResponse(
+            path,
+            media_type='audio/wav' if path.suffix == '.wav' else 'audio/mpeg',
+            headers={'Cache-Control': 'private, no-store'},
+        )
     except voice.VoiceError as error:
         raise HTTPException(error.status, error.message)
 
@@ -157,7 +242,9 @@ class ReferenceUpload(BaseModel):
 @router.post('/api/voice/references/upload', status_code=201)
 async def reference_upload(payload: ReferenceUpload):
     try:
-        return await asyncio.to_thread(voice.upload_reference, payload.name, payload.format, payload.audio_base64, payload.text)
+        return await asyncio.to_thread(
+            voice.upload_reference, payload.name, payload.format, payload.audio_base64, payload.text
+        )
     except voice.VoiceError as error:
         raise HTTPException(error.status, error.message)
     except OSError:

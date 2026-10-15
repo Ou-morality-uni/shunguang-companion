@@ -1,50 +1,593 @@
 import { useEffect, useRef, useState } from 'react';
-import { BookOpen, Check, Clock3, Heart, LoaderCircle, Pause, Play, Search, ShieldCheck, Sparkles, Square, Trash2, Volume2, VolumeX } from 'lucide-react';
+import {
+  BookOpen,
+  Check,
+  Clock3,
+  Heart,
+  LoaderCircle,
+  Pause,
+  Play,
+  Search,
+  ShieldCheck,
+  Sparkles,
+  Square,
+  Trash2,
+  Volume2,
+  VolumeX,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { request, type Candidate, type Conversation, type Features, type Memory, type RagStatus, type ReminderEvent, type Source } from './api';
+import {
+  request,
+  type Candidate,
+  type Conversation,
+  type Features,
+  type Memory,
+  type RagStatus,
+  type ReminderEvent,
+  type Source,
+} from './api';
 import { Sources } from './Evidence';
 import { useCompanionAudio } from './useAudioQueue';
 
-export type Page='chat'|'memory'|'world'|'reminders';
-export type Panel='model'|'voice'|'effects'|'tools'|'memory'|'reminders'|null;
-function PageHeading({eyebrow,title,description}:{eyebrow:string;title:string;description:string}){return <div className="page-heading"><span className="eyebrow">{eyebrow}</span><h1>{title}</h1><p>{description}</p></div>;}
-
-export function VoiceConsole({compact=false}:{compact?:boolean}) {
-  const audio=useCompanionAudio(),canvas=useRef<HTMLCanvasElement>(null);
-  useEffect(()=>{
-    const el=canvas.current;if(!el)return;const ctx=el.getContext('2d');if(!ctx)return;
-    let frame=0;
-    const draw=()=>{ctx.clearRect(0,0,el.width,el.height);const data=new Uint8Array(audio.analyser?.frequencyBinCount||64);audio.analyser?.getByteTimeDomainData(data);ctx.strokeStyle='#e5bd8d';ctx.lineWidth=2;ctx.beginPath();for(let i=0;i<data.length;i++){const y=audio.playing?data[i]/255*el.height:el.height/2;const x=i/(data.length-1)*el.width;if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);}ctx.stroke();if(audio.playing&&!document.hidden)frame=requestAnimationFrame(draw);};
-    draw();const visible=()=>{cancelAnimationFrame(frame);draw();};document.addEventListener('visibilitychange',visible);return()=>{cancelAnimationFrame(frame);document.removeEventListener('visibilitychange',visible);};
-  },[audio.analyser,audio.playing]);
-  const time=(seconds:number)=>`${Math.floor(seconds/60)}:${Math.floor(seconds%60).toString().padStart(2,'0')}`;
-  return <div className={`voice-console ${compact?'compact':''}`}><canvas ref={canvas} className="audio-wave" width={500} height={70} aria-label={audio.playing?'实际音频波形':'无音频播放'} role="img"/><div className="voice-controls"><button type="button" className="voice-play" onClick={audio.stop} disabled={!audio.busy} aria-label="停止语音"><Square size={15}/></button><span>{audio.busy?audio.playing?'正在播放':'正在合成':'让关心，听得见'}<small>{audio.busy?audio.label:'点击回复下方播放'}{audio.queued>0?` · 排队 ${audio.queued} 条`:''}</small></span><span className="voice-time">{time(audio.progress)} / {time(audio.duration)}</span></div><div className="inline-actions"><button type="button" className="text-link" onClick={audio.replay}><Play size={14}/>重播上一条</button><button type="button" className="text-link" onClick={audio.toggleMute}>{audio.muted?<VolumeX size={14}/>:<Volume2 size={14}/>} {audio.muted?'取消静音':'静音'}</button></div>{audio.error&&<p className="settings-notice" role="status">{audio.error}</p>}{!compact&&<p className="space-note">合成与播放按队列顺序进行。停止会清空队列。浏览器可能需要先点击播放；语音失败时文字聊天仍然可用。</p>}</div>;
+export type Page = 'chat' | 'memory' | 'world' | 'reminders';
+export type Panel = 'model' | 'voice' | 'effects' | 'tools' | 'memory' | 'reminders' | null;
+function PageHeading({
+  eyebrow,
+  title,
+  description,
+}: {
+  eyebrow: string;
+  title: string;
+  description: string;
+}) {
+  return (
+    <div className="page-heading">
+      <span className="eyebrow">{eyebrow}</span>
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </div>
+  );
 }
 
-type MemoryProps={conversations:Conversation[];active:string|null;onChanged?:()=>void;compact?:boolean};
-export function MemorySpace({conversations,active,onChanged,compact=false}:MemoryProps) {
-  const [memories,setMemories]=useState<Memory[]>([]),[chosen,setChosen]=useState(active||''),[candidates,setCandidates]=useState<Candidate[]>([]),[selected,setSelected]=useState<Set<string>>(new Set()),[busy,setBusy]=useState(false),[notice,setNotice]=useState(''),[editing,setEditing]=useState<string|null>(null),[editValue,setEditValue]=useState(''),[deleting,setDeleting]=useState<string|null>(null);
-  async function load(){setMemories(await request<Memory[]>('/memories'));}
-  useEffect(()=>{load().catch(e=>setNotice((e as Error).message));},[]);
-  useEffect(()=>{if(active)setChosen(active);},[active]);
-  async function summarize(){setBusy(true);setNotice('');setCandidates([]);try{const result=await request<{candidates:Candidate[]}>('/memories/summarize',{method:'POST',body:JSON.stringify({conversation_id:chosen})});setCandidates(result.candidates);setSelected(new Set(result.candidates.map(item=>item.id)));if(!result.candidates.length)setNotice('这段对话没有可确认的用户事实。');}catch(e){setNotice((e as Error).message);}finally{setBusy(false);}}
-  async function confirm(){setBusy(true);try{await request('/memories/confirm',{method:'POST',body:JSON.stringify({candidates:candidates.filter(item=>selected.has(item.id)).map(({id,key,value})=>({id,key,value}))})});setCandidates([]);await load();onChanged?.();setNotice('已保存确认的事实，后续会话可以使用。');}catch(e){setNotice((e as Error).message);}finally{setBusy(false);}}
-  async function update(item:Memory){setBusy(true);try{await request(`/memories/${item.id}`,{method:'PATCH',body:JSON.stringify({value:editValue})});setEditing(null);await load();onChanged?.();setNotice('记忆已更新。');}catch(e){setNotice((e as Error).message);}finally{setBusy(false);}}
-  async function remove(id:string){setBusy(true);try{await request(`/memories/${id}`,{method:'DELETE'});setDeleting(null);await load();onChanged?.();setNotice('已删除，之后的对话不再注入这条事实。');}catch(e){setNotice((e as Error).message);}finally{setBusy(false);}}
-  return <div className={compact?'memory-settings-content':'space-page'}>{!compact&&<><PageHeading eyebrow="LITTLE THINGS ABOUT YOU" title="关于你的，慢慢记住。" description="聊天记录与长期事实分别管理，只有你确认的事实才跨会话使用。"/><div className="summary-stats"><div><strong>{memories.length}</strong><span>已确认的记忆</span></div><div><Heart size={23}/><span>你决定哪些值得记住</span></div></div></>}<div className="memory-summary glass"><label className="field">选择要总结的对话<select value={chosen} onChange={e=>setChosen(e.target.value)}><option value="">请选择对话</option>{conversations.map(item=><option key={item.id} value={item.id}>{item.title}</option>)}</select></label><Button disabled={!chosen||busy} onClick={()=>void summarize()}>{busy?<LoaderCircle className="spin" size={15}/>:<Sparkles size={15}/>}手动总结这段对话</Button><p className="space-note">提炼只读取用户消息；预览后确认保存，可取消或修改候选事实。</p></div>{notice&&<div className="settings-notice" role="status">{notice}</div>}{candidates.length>0&&<div className="candidate-list"><h3>确认候选事实</h3>{candidates.map(item=><article className="memory-item" key={item.id}><label className="candidate-check"><input type="checkbox" checked={selected.has(item.id)} onChange={e=>setSelected(previous=>{const next=new Set(previous);if(e.target.checked)next.add(item.id);else next.delete(item.id);return next;})}/>{item.key}</label><Input aria-label={`候选事实 ${item.key}`} value={item.value} onChange={e=>setCandidates(items=>items.map(value=>value.id===item.id?{...value,value:e.target.value}:value))}/>{item.evidence&&<blockquote>用户原话：{item.evidence}</blockquote>}{item.existing_value&&<p className="conflict-note">已有事实：{item.existing_value}<br/>确认后将更新这项事实。</p>}</article>)}<div className="inline-actions"><Button disabled={busy||!selected.size} onClick={()=>void confirm()}><Check size={15}/>确认保存 {selected.size} 条</Button><Button variant="outline" disabled={busy} onClick={()=>setCandidates([])}>取消候选</Button></div></div>}<div className="memory-list">{memories.length===0?<div className="empty-space glass"><BookOpen size={30}/><h2>故事，还在第一章</h2><p>还没有长期记忆。可以选择一段对话总结并确认。</p></div>:memories.map(item=><article className="memory-item glass" key={item.id}><strong>{item.key}</strong>{editing===item.id?<><Input aria-label={`编辑记忆 ${item.key}`} value={editValue} onChange={e=>setEditValue(e.target.value)}/><div className="inline-actions"><Button disabled={busy||!editValue.trim()} onClick={()=>void update(item)}>保存修改</Button><Button variant="outline" onClick={()=>setEditing(null)}>取消</Button></div></>:<><p>{item.value}</p><div className="inline-actions"><button type="button" className="text-link" onClick={()=>{setEditing(item.id);setEditValue(item.value);}}>编辑</button><button type="button" className="text-link" onClick={()=>setDeleting(item.id)}><Trash2 size={14}/>删除</button></div></>}{deleting===item.id&&<div className="delete-confirm"><span>删除这条长期事实？</span><Button variant="outline" disabled={busy} onClick={()=>void remove(item.id)}>确认删除</Button><button type="button" className="text-link" onClick={()=>setDeleting(null)}>取消</button></div>}</article>)}</div>{!compact&&<div className="privacy-strip"><ShieldCheck size={19}/><div><strong>由你确认，随时修改或删除</strong><p>删除长期事实不删除原聊天记录。若聊天记录仍在，手动总结时可能再次提炼，请自行取消该候选。</p></div></div>}</div>;
+export function VoiceConsole({ compact = false }: { compact?: boolean }) {
+  const audio = useCompanionAudio(),
+    canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const el = canvas.current;
+    if (!el) return;
+    const ctx = el.getContext('2d');
+    if (!ctx) return;
+    let frame = 0;
+    const draw = () => {
+      ctx.clearRect(0, 0, el.width, el.height);
+      const data = new Uint8Array(audio.analyser?.frequencyBinCount || 64);
+      audio.analyser?.getByteTimeDomainData(data);
+      ctx.strokeStyle = '#e5bd8d';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      for (let i = 0; i < data.length; i++) {
+        const y = audio.playing ? (data[i] / 255) * el.height : el.height / 2;
+        const x = (i / (data.length - 1)) * el.width;
+        if (i === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      }
+      ctx.stroke();
+      if (audio.playing && !document.hidden) frame = requestAnimationFrame(draw);
+    };
+    draw();
+    const visible = () => {
+      cancelAnimationFrame(frame);
+      draw();
+    };
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener('visibilitychange', visible);
+    };
+  }, [audio.analyser, audio.playing]);
+  const time = (seconds: number) =>
+    `${Math.floor(seconds / 60)}:${Math.floor(seconds % 60)
+      .toString()
+      .padStart(2, '0')}`;
+  return (
+    <div className={`voice-console ${compact ? 'compact' : ''}`}>
+      <canvas
+        ref={canvas}
+        className="audio-wave"
+        width={500}
+        height={70}
+        aria-label={audio.playing ? '实际音频波形' : '无音频播放'}
+        role="img"
+      />
+      <div className="voice-controls">
+        <button
+          type="button"
+          className="voice-play"
+          onClick={audio.stop}
+          disabled={!audio.busy}
+          aria-label="停止语音"
+        >
+          <Square size={15} />
+        </button>
+        <span>
+          {audio.busy ? (audio.playing ? '正在播放' : '正在合成') : '让关心，听得见'}
+          <small>
+            {audio.busy ? audio.label : '点击回复下方播放'}
+            {audio.queued > 0 ? ` · 排队 ${audio.queued} 条` : ''}
+            {audio.firstAudioMs !== null ? ` · 首音约 ${(audio.firstAudioMs / 1000).toFixed(2)} 秒` : ''}
+          </small>
+        </span>
+        <span className="voice-time">
+          {time(audio.progress)} / {time(audio.duration)}
+        </span>
+      </div>
+      <div className="inline-actions">
+        <button type="button" className="text-link" onClick={audio.replay}>
+          <Play size={14} />
+          重播上一条
+        </button>
+        <button type="button" className="text-link" onClick={audio.toggleMute}>
+          {audio.muted ? <VolumeX size={14} /> : <Volume2 size={14} />} {audio.muted ? '取消静音' : '静音'}
+        </button>
+      </div>
+      {audio.error && (
+        <p className="settings-notice" role="status">
+          {audio.error}
+        </p>
+      )}
+      {!compact && (
+        <p className="space-note">
+          合成与播放按队列顺序进行。停止会清空队列。浏览器可能需要先点击播放；语音失败时文字聊天仍然可用。
+        </p>
+      )}
+    </div>
+  );
+}
+
+type MemoryProps = {
+  conversations: Conversation[];
+  active: string | null;
+  onChanged?: () => void;
+  compact?: boolean;
+};
+export function MemorySpace({ conversations, active, onChanged, compact = false }: MemoryProps) {
+  const [memories, setMemories] = useState<Memory[]>([]),
+    [chosen, setChosen] = useState(active || ''),
+    [candidates, setCandidates] = useState<Candidate[]>([]),
+    [selected, setSelected] = useState<Set<string>>(new Set()),
+    [busy, setBusy] = useState(false),
+    [notice, setNotice] = useState(''),
+    [editing, setEditing] = useState<string | null>(null),
+    [editValue, setEditValue] = useState(''),
+    [deleting, setDeleting] = useState<string | null>(null);
+  async function load() {
+    setMemories(await request<Memory[]>('/memories'));
+  }
+  useEffect(() => {
+    load().catch((e) => setNotice((e as Error).message));
+  }, []);
+  useEffect(() => {
+    if (active) setChosen(active);
+  }, [active]);
+  async function summarize() {
+    setBusy(true);
+    setNotice('');
+    setCandidates([]);
+    try {
+      const result = await request<{ candidates: Candidate[] }>('/memories/summarize', {
+        method: 'POST',
+        body: JSON.stringify({ conversation_id: chosen }),
+      });
+      setCandidates(result.candidates);
+      setSelected(new Set(result.candidates.map((item) => item.id)));
+      if (!result.candidates.length) setNotice('这段对话没有可确认的用户事实。');
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function confirm() {
+    setBusy(true);
+    try {
+      await request('/memories/confirm', {
+        method: 'POST',
+        body: JSON.stringify({
+          candidates: candidates
+            .filter((item) => selected.has(item.id))
+            .map(({ id, key, value }) => ({ id, key, value })),
+        }),
+      });
+      setCandidates([]);
+      await load();
+      onChanged?.();
+      setNotice('已保存确认的事实，后续会话可以使用。');
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function update(item: Memory) {
+    setBusy(true);
+    try {
+      await request(`/memories/${item.id}`, { method: 'PATCH', body: JSON.stringify({ value: editValue }) });
+      setEditing(null);
+      await load();
+      onChanged?.();
+      setNotice('记忆已更新。');
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function remove(id: string) {
+    setBusy(true);
+    try {
+      await request(`/memories/${id}`, { method: 'DELETE' });
+      setDeleting(null);
+      await load();
+      onChanged?.();
+      setNotice('已删除，之后的对话不再注入这条事实。');
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className={compact ? 'memory-settings-content' : 'space-page'}>
+      {!compact && (
+        <>
+          <PageHeading
+            eyebrow="LITTLE THINGS ABOUT YOU"
+            title="关于你的，慢慢记住。"
+            description="聊天记录与长期事实分别管理，只有你确认的事实才跨会话使用。"
+          />
+          <div className="summary-stats">
+            <div>
+              <strong>{memories.length}</strong>
+              <span>已确认的记忆</span>
+            </div>
+            <div>
+              <Heart size={23} />
+              <span>你决定哪些值得记住</span>
+            </div>
+          </div>
+        </>
+      )}
+      <div className="memory-summary glass">
+        <label className="field">
+          选择要总结的对话
+          <select value={chosen} onChange={(e) => setChosen(e.target.value)}>
+            <option value="">请选择对话</option>
+            {conversations.map((item) => (
+              <option key={item.id} value={item.id}>
+                {item.title}
+              </option>
+            ))}
+          </select>
+        </label>
+        <Button disabled={!chosen || busy} onClick={() => void summarize()}>
+          {busy ? <LoaderCircle className="spin" size={15} /> : <Sparkles size={15} />}手动总结这段对话
+        </Button>
+        <p className="space-note">提炼只读取用户消息；预览后确认保存，可取消或修改候选事实。</p>
+      </div>
+      {notice && (
+        <div className="settings-notice" role="status">
+          {notice}
+        </div>
+      )}
+      {candidates.length > 0 && (
+        <div className="candidate-list">
+          <h3>确认候选事实</h3>
+          {candidates.map((item) => (
+            <article className="memory-item" key={item.id}>
+              <label className="candidate-check">
+                <input
+                  type="checkbox"
+                  checked={selected.has(item.id)}
+                  onChange={(e) =>
+                    setSelected((previous) => {
+                      const next = new Set(previous);
+                      if (e.target.checked) next.add(item.id);
+                      else next.delete(item.id);
+                      return next;
+                    })
+                  }
+                />
+                {item.key}
+              </label>
+              <Input
+                aria-label={`候选事实 ${item.key}`}
+                value={item.value}
+                onChange={(e) =>
+                  setCandidates((items) =>
+                    items.map((value) =>
+                      value.id === item.id ? { ...value, value: e.target.value } : value,
+                    ),
+                  )
+                }
+              />
+              {item.evidence && <blockquote>用户原话：{item.evidence}</blockquote>}
+              {item.existing_value && (
+                <p className="conflict-note">
+                  已有事实：{item.existing_value}
+                  <br />
+                  确认后将更新这项事实。
+                </p>
+              )}
+            </article>
+          ))}
+          <div className="inline-actions">
+            <Button disabled={busy || !selected.size} onClick={() => void confirm()}>
+              <Check size={15} />
+              确认保存 {selected.size} 条
+            </Button>
+            <Button variant="outline" disabled={busy} onClick={() => setCandidates([])}>
+              取消候选
+            </Button>
+          </div>
+        </div>
+      )}
+      <div className="memory-list">
+        {memories.length === 0 ? (
+          <div className="empty-space glass">
+            <BookOpen size={30} />
+            <h2>故事，还在第一章</h2>
+            <p>还没有长期记忆。可以选择一段对话总结并确认。</p>
+          </div>
+        ) : (
+          memories.map((item) => (
+            <article className="memory-item glass" key={item.id}>
+              <strong>{item.key}</strong>
+              {editing === item.id ? (
+                <>
+                  <Input
+                    aria-label={`编辑记忆 ${item.key}`}
+                    value={editValue}
+                    onChange={(e) => setEditValue(e.target.value)}
+                  />
+                  <div className="inline-actions">
+                    <Button disabled={busy || !editValue.trim()} onClick={() => void update(item)}>
+                      保存修改
+                    </Button>
+                    <Button variant="outline" onClick={() => setEditing(null)}>
+                      取消
+                    </Button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p>{item.value}</p>
+                  <div className="inline-actions">
+                    <button
+                      type="button"
+                      className="text-link"
+                      onClick={() => {
+                        setEditing(item.id);
+                        setEditValue(item.value);
+                      }}
+                    >
+                      编辑
+                    </button>
+                    <button type="button" className="text-link" onClick={() => setDeleting(item.id)}>
+                      <Trash2 size={14} />
+                      删除
+                    </button>
+                  </div>
+                </>
+              )}
+              {deleting === item.id && (
+                <div className="delete-confirm">
+                  <span>删除这条长期事实？</span>
+                  <Button variant="outline" disabled={busy} onClick={() => void remove(item.id)}>
+                    确认删除
+                  </Button>
+                  <button type="button" className="text-link" onClick={() => setDeleting(null)}>
+                    取消
+                  </button>
+                </div>
+              )}
+            </article>
+          ))
+        )}
+      </div>
+      {!compact && (
+        <div className="privacy-strip">
+          <ShieldCheck size={19} />
+          <div>
+            <strong>由你确认，随时修改或删除</strong>
+            <p>删除长期事实不删除原聊天记录。若聊天记录仍在，手动总结时可能再次提炼，请自行取消该候选。</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function WorldArchive() {
-  const [query,setQuery]=useState(''),[status,setStatus]=useState<RagStatus|null>(null),[results,setResults]=useState<Source[]>([]),[busy,setBusy]=useState(false),[notice,setNotice]=useState('');
-  async function load(){setStatus(await request<RagStatus>('/rag/status'));}
-  useEffect(()=>{load().catch(e=>setNotice((e as Error).message));},[]);
-  async function rebuild(){setBusy(true);setNotice('正在整理并增量更新索引，首次加载本地模型可能需要较长时间。');try{const data=await request<RagStatus>('/rag/rebuild',{method:'POST'});setStatus(data);await load();setNotice('索引任务完成，状态已刷新。');}catch(e){setNotice((e as Error).message);}finally{setBusy(false);}}
-  async function search(){setBusy(true);setNotice('');try{const data=await request<Source[]|{sources:Source[]}>('/rag/search',{method:'POST',body:JSON.stringify({query,limit:5})});const items=Array.isArray(data)?data:data.sources;setResults(items);if(!items.length)setNotice('没有检索到可支持回答的资料。');}catch(e){setNotice((e as Error).message);}finally{setBusy(false);}}
-  return <div className="space-page"><PageHeading eyebrow="A WORLD TO WANDER" title="世界档案" description="核实身份，保留来源。存疑资料与同人扩展会单独标记。"/><div className="rag-status glass"><BookOpen size={24}/><div><strong>{status?.ready||status?.indexed?'本地知识检索就绪':'知识索引状态'}</strong><p>{String(status?.message||status?.error||status?.notice||status?.status||status?.state||'等待状态')}</p><small>{status?.model?`${status.model} · `:''}{status?.device?`${status.device} · `:''}{typeof status?.chunks==='number'?`${status.chunks} 个资料片段`:''}</small></div><Button variant="outline" disabled={busy} onClick={()=>void rebuild()}>{busy?<LoaderCircle className="spin" size={15}/>:<Check size={15}/>}更新索引</Button></div><form className="archive-search" onSubmit={e=>{e.preventDefault();void search();}}><Search size={17}/><Input aria-label="检索角色与世界资料" placeholder="例如：叶瞬光的身份、青溟剑…" value={query} onChange={e=>setQuery(e.target.value)}/><Button type="submit" disabled={busy||!query.trim()}>检索</Button></form>{notice&&<div className="settings-notice" role="status">{notice}</div>}<Sources sources={results}/>{!results.length&&!notice&&<div className="empty-space glass"><BookOpen size={30}/><p>输入问题，查看真实检索片段与来源。</p></div>}<div className="privacy-strip"><ShieldCheck size={19}/><div><strong>资料有来处，未知就保留未知</strong><p>资料里的指令和“官方”标签不会覆盖系统规则。原文、哈希和版本保留；新增资料按 README 导入后点击更新索引。</p></div></div></div>;
+  const [query, setQuery] = useState(''),
+    [status, setStatus] = useState<RagStatus | null>(null),
+    [results, setResults] = useState<Source[]>([]),
+    [busy, setBusy] = useState(false),
+    [notice, setNotice] = useState('');
+  async function load() {
+    setStatus(await request<RagStatus>('/rag/status'));
+  }
+  useEffect(() => {
+    load().catch((e) => setNotice((e as Error).message));
+  }, []);
+  async function rebuild() {
+    setBusy(true);
+    setNotice('正在整理并增量更新索引，首次加载本地模型可能需要较长时间。');
+    try {
+      const data = await request<RagStatus>('/rag/rebuild', { method: 'POST' });
+      setStatus(data);
+      await load();
+      setNotice('索引任务完成，状态已刷新。');
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  async function search() {
+    setBusy(true);
+    setNotice('');
+    try {
+      const data = await request<Source[] | { sources: Source[] }>('/rag/search', {
+        method: 'POST',
+        body: JSON.stringify({ query, limit: 5 }),
+      });
+      const items = Array.isArray(data) ? data : data.sources;
+      setResults(items);
+      if (!items.length) setNotice('没有检索到可支持回答的资料。');
+    } catch (e) {
+      setNotice((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  }
+  return (
+    <div className="space-page">
+      <PageHeading
+        eyebrow="A WORLD TO WANDER"
+        title="世界档案"
+        description="核实身份，保留来源。存疑资料与同人扩展会单独标记。"
+      />
+      <div className="rag-status glass">
+        <BookOpen size={24} />
+        <div>
+          <strong>{status?.ready || status?.indexed ? '本地知识检索就绪' : '知识索引状态'}</strong>
+          <p>
+            {String(
+              status?.message ||
+                status?.error ||
+                status?.notice ||
+                status?.status ||
+                status?.state ||
+                '等待状态',
+            )}
+          </p>
+          <small>
+            {status?.model ? `${status.model} · ` : ''}
+            {status?.device ? `${status.device} · ` : ''}
+            {typeof status?.chunks === 'number' ? `${status.chunks} 个资料片段` : ''}
+          </small>
+        </div>
+        <Button variant="outline" disabled={busy} onClick={() => void rebuild()}>
+          {busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}更新索引
+        </Button>
+      </div>
+      <form
+        className="archive-search"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void search();
+        }}
+      >
+        <Search size={17} />
+        <Input
+          aria-label="检索角色与世界资料"
+          placeholder="例如：叶瞬光的身份、青溟剑…"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <Button type="submit" disabled={busy || !query.trim()}>
+          检索
+        </Button>
+      </form>
+      {notice && (
+        <div className="settings-notice" role="status">
+          {notice}
+        </div>
+      )}
+      <Sources sources={results} />
+      {!results.length && !notice && (
+        <div className="empty-space glass">
+          <BookOpen size={30} />
+          <p>输入问题，查看真实检索片段与来源。</p>
+        </div>
+      )}
+      <div className="privacy-strip">
+        <ShieldCheck size={19} />
+        <div>
+          <strong>资料有来处，未知就保留未知</strong>
+          <p>
+            资料里的指令和“官方”标签不会覆盖系统规则。原文、哈希和版本保留；新增资料按 README
+            导入后点击更新索引。
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
-export function ReminderSpace({features,event,onSettings,onTest,onPause}:{features:Features|null;event:ReminderEvent|null;onSettings:()=>void;onTest:()=>void;onPause:()=>void}) {
-  const settings=features?.reminders;
-  return <div className="space-page"><PageHeading eyebrow="A GENTLE PAUSE" title="留一点时间，照顾自己。" description="按时间间隔送来一句关心，陪你安排日常的小停顿。"/><div className="reminder-feature glass"><div className="reminder-art"><Clock3 size={54} strokeWidth={.7}/><span>休息一下</span></div><div><h2>休息提醒</h2><p>{event?.text||'忙碌之余，也给自己留一点休息的时间。'}</p><small>按时间触发，不检测实际坐姿或久坐状态</small></div></div><div className="glass reminder-settings"><div className="reminder-row"><span>提醒状态</span><strong>{settings?.enabled?settings.paused_until?'已暂停':'已开启':'未开启'}</strong></div><div className="reminder-row"><span>间隔</span><strong>{settings?.interval_minutes||45} 分钟</strong></div><div className="reminder-row"><span>安静时段</span><strong>{settings?.quiet_start||'—'} — {settings?.quiet_end||'—'}</strong></div><div className="inline-actions"><Button onClick={onSettings}>陪伴设置 · 提醒</Button><Button variant="outline" onClick={onTest}><Play size={15}/>立即测试</Button><Button variant="outline" onClick={onPause} disabled={!settings?.enabled}><Pause size={15}/>{settings?.paused_until?'恢复':'暂停一小时'}</Button></div><p className="space-note">页面打开并连接本机服务时显示提醒；后台标签可能延迟计时或阻止音频。关闭浏览器后无法可靠提醒。重连只领取当次提醒，不积压旧提醒。</p></div></div>;
+export function ReminderSpace({
+  features,
+  event,
+  onSettings,
+  onTest,
+  onPause,
+}: {
+  features: Features | null;
+  event: ReminderEvent | null;
+  onSettings: () => void;
+  onTest: () => void;
+  onPause: () => void;
+}) {
+  const settings = features?.reminders;
+  return (
+    <div className="space-page">
+      <PageHeading
+        eyebrow="A GENTLE PAUSE"
+        title="留一点时间，照顾自己。"
+        description="按时间间隔送来一句关心，陪你安排日常的小停顿。"
+      />
+      <div className="reminder-feature glass">
+        <div className="reminder-art">
+          <Clock3 size={54} strokeWidth={0.7} />
+          <span>休息一下</span>
+        </div>
+        <div>
+          <h2>休息提醒</h2>
+          <p>{event?.text || '忙碌之余，也给自己留一点休息的时间。'}</p>
+          <small>按时间触发，不检测实际坐姿或久坐状态</small>
+        </div>
+      </div>
+      <div className="glass reminder-settings">
+        <div className="reminder-row">
+          <span>提醒状态</span>
+          <strong>{settings?.enabled ? (settings.paused_until ? '已暂停' : '已开启') : '未开启'}</strong>
+        </div>
+        <div className="reminder-row">
+          <span>间隔</span>
+          <strong>{settings?.interval_minutes || 45} 分钟</strong>
+        </div>
+        <div className="reminder-row">
+          <span>安静时段</span>
+          <strong>
+            {settings?.quiet_start || '—'} — {settings?.quiet_end || '—'}
+          </strong>
+        </div>
+        <div className="inline-actions">
+          <Button onClick={onSettings}>陪伴设置 · 提醒</Button>
+          <Button variant="outline" onClick={onTest}>
+            <Play size={15} />
+            立即测试
+          </Button>
+          <Button variant="outline" onClick={onPause} disabled={!settings?.enabled}>
+            <Pause size={15} />
+            {settings?.paused_until ? '恢复' : '暂停一小时'}
+          </Button>
+        </div>
+        <p className="space-note">
+          页面打开并连接本机服务时显示提醒；后台标签可能延迟计时或阻止音频。关闭浏览器后无法可靠提醒。重连只领取当次提醒，不积压旧提醒。
+        </p>
+      </div>
+    </div>
+  );
 }

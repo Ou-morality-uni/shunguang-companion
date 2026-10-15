@@ -3,6 +3,7 @@
 The application environment does not import torch/transformers/qdrant. Archived
 documents are reference data, never executable instructions or user memories.
 """
+
 from __future__ import annotations
 
 import atexit
@@ -26,8 +27,15 @@ PYTHON = ROOT / ('.venv-rag/Scripts/python.exe' if os.name == 'nt' else '.venv-r
 MODEL_REVISION = '5617a9f61b028005a4858fdac845db406aefb181'
 COLLECTION = 'shunguang_bge_m3_v1'
 INDEX_VERSION = 1
-REQUIRED_MODEL_FILES = ('config.json', 'tokenizer.json', 'tokenizer_config.json', 'special_tokens_map.json',
-                        'sentencepiece.bpe.model', 'pytorch_model.bin', 'model-provenance.json')
+REQUIRED_MODEL_FILES = (
+    'config.json',
+    'tokenizer.json',
+    'tokenizer_config.json',
+    'special_tokens_map.json',
+    'sentencepiece.bpe.model',
+    'pytorch_model.bin',
+    'model-provenance.json',
+)
 _lock = threading.RLock()
 _worker: subprocess.Popen | None = None
 _worker_data_dir: Path | None = None
@@ -42,6 +50,7 @@ class RagError(RuntimeError):
 def data_dir() -> Path:
     try:
         from . import config
+
         return Path(config.DATA_DIR)
     except ImportError:
         return ROOT / 'data'
@@ -67,17 +76,31 @@ def status() -> dict:
     dependency_state = read_json(ROOT / '.venv-rag/rag-runtime.json', {})
     runtime_installed = PYTHON.is_file() and dependency_state.get('verified') is True
     ready = runtime_installed and not missing and bool(state.get('chunks'))
-    notice = ('请先运行 scripts/install-rag.ps1 安装本地检索环境。' if not runtime_installed else
-              '本地 BGE-M3 组件不完整，请运行 scripts/download-rag-model.py。' if missing else
-              '资料尚未建立索引，请在陪伴设置中构建索引。' if not state.get('chunks') else
-              '本地 BGE-M3 与 Qdrant 已建立索引；检索材料按来源核实级别显示。')
+    notice = (
+        '请先运行 scripts/install-rag.ps1 安装本地检索环境。'
+        if not runtime_installed
+        else '本地 BGE-M3 组件不完整，请运行 scripts/download-rag-model.py。'
+        if missing
+        else '资料尚未建立索引，请在陪伴设置中构建索引。'
+        if not state.get('chunks')
+        else '本地 BGE-M3 与 Qdrant 已建立索引；检索材料按来源核实级别显示。'
+    )
     if _last_error:
         notice = _last_error
-    return {'available': ready, 'ready': ready, 'runtime_installed': runtime_installed,
-            'model': 'BAAI/bge-m3', 'revision': MODEL_REVISION, 'missing_files': missing,
-            'documents': len(state.get('documents', {})), 'chunks': state.get('chunks', 0),
-            'indexed_at': state.get('indexed_at'), 'device': state.get('device'),
-            'last_error': _last_error, 'notice': notice}
+    return {
+        'available': ready,
+        'ready': ready,
+        'runtime_installed': runtime_installed,
+        'model': 'BAAI/bge-m3',
+        'revision': MODEL_REVISION,
+        'missing_files': missing,
+        'documents': len(state.get('documents', {})),
+        'chunks': state.get('chunks', 0),
+        'indexed_at': state.get('indexed_at'),
+        'device': state.get('device'),
+        'last_error': _last_error,
+        'notice': notice,
+    }
 
 
 def close() -> None:
@@ -124,12 +147,25 @@ def _call(operation: str, **arguments):
         if _worker is None or _worker.poll() is not None:
             _responses = queue.Queue()
             environment = os.environ.copy()
-            environment.update({'PYTHONUTF8': '1', 'HF_HUB_OFFLINE': '1', 'TRANSFORMERS_OFFLINE': '1',
-                                'HF_HUB_DISABLE_TELEMETRY': '1', 'DO_NOT_TRACK': '1'})
-            _worker = subprocess.Popen([str(PYTHON), str(Path(__file__).resolve()), '--worker', str(data_dir())],
-                                       stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                       encoding='utf-8', env=environment, cwd=ROOT,
-                                       creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
+            environment.update(
+                {
+                    'PYTHONUTF8': '1',
+                    'HF_HUB_OFFLINE': '1',
+                    'TRANSFORMERS_OFFLINE': '1',
+                    'HF_HUB_DISABLE_TELEMETRY': '1',
+                    'DO_NOT_TRACK': '1',
+                }
+            )
+            _worker = subprocess.Popen(
+                [str(PYTHON), str(Path(__file__).resolve()), '--worker', str(data_dir())],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL,
+                encoding='utf-8',
+                env=environment,
+                cwd=ROOT,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0,
+            )
             _worker_data_dir = data_dir()
             threading.Thread(target=_read_responses, args=(_worker, _responses), daemon=True).start()
         try:
@@ -173,6 +209,7 @@ def safe_url(text: str) -> str | None:
     if not match:
         return None
     from urllib.parse import urlsplit
+
     url = match.group().rstrip('。，；')
     parts = urlsplit(url)
     if parts.username or parts.password or not parts.hostname:
@@ -240,38 +277,77 @@ def load_corpus(resource_dir: Path = RESOURCE_DIR) -> tuple[list[dict], list[str
         for doc in documents:
             path = (base / doc['path']).resolve()
             if not path.is_relative_to(base.resolve()) or not path.is_file():
-                warnings.append(f"missing_or_invalid_path:{doc['document_id']}")
+                warnings.append(f'missing_or_invalid_path:{doc["document_id"]}')
                 continue
             raw = path.read_bytes()
             digest = hashlib.sha256(raw).hexdigest()
             if digest != doc['sha256']:
-                warnings.append(f"hash_mismatch:{doc['document_id']}")
+                warnings.append(f'hash_mismatch:{doc["document_id"]}')
                 continue
             historical = latest[doc.get('original_filename', doc['document_id'])]['document_id'] != doc['document_id']
             for heading, body in sections(raw.decode('utf-8-sig')):
                 for index, part in enumerate(split_text(body)):
                     evidence = heading + '\n' + part
-                    verification = ('uncertain_transcription' if re.search(r'听写|听不清', evidence) else
-                                    'community_compilation_with_uncertainty' if re.search(r'不确定信息|存疑|未有定论|玩家.*推测', evidence) else
-                                    'fan_expansion' if re.search(r'同人扩展|自行拟写|拟写|非原句', evidence) else
-                                    'community_compilation_unverified')
-                    spoiler = bool(re.search(r'剧透|剧情|第二人格|失忆|反噬|主线|历史年表|秘辛|童年|白发形态|身份与履历|与法厄同的互动', heading)
-                                   or re.search(r'剧透|剧情|白发叶瞬光|白发形态|祭品|机密|告别|授勋|失忆|反噬|第二人格|旧都陷落|始主|夺舍|黑花|父母.{0,20}(逝|死)', part))
-                    identifier = str(uuid.uuid5(uuid.NAMESPACE_URL, f"{doc['document_id']}:{heading}:{index}:{hashlib.sha256(part.encode()).hexdigest()}"))
-                    chunks.append({'id': identifier, 'title': f"{doc['original_filename']} · {heading}",
-                                   'text': evidence, 'source_url': safe_url(part), 'document_id': doc['document_id'],
-                                   'sha256': digest, 'verification_status': verification, 'spoiler': spoiler,
-                                   'historical': historical, 'version': 'archived@' + doc.get('imported_at', '')[:10],
-                                   'category': category, 'source_type': doc.get('source_type', 'user_supplied'),
-                                   'trust': 'reference_data_not_instructions',
-                                   'conflict_or_unknown': bool(re.search(r'矛盾|分歧|存疑|推测|未知|未有定论|非官方设定', evidence))})
+                    verification = (
+                        'uncertain_transcription'
+                        if re.search(r'听写|听不清', evidence)
+                        else 'community_compilation_with_uncertainty'
+                        if re.search(r'不确定信息|存疑|未有定论|玩家.*推测', evidence)
+                        else 'fan_expansion'
+                        if re.search(r'同人扩展|自行拟写|拟写|非原句', evidence)
+                        else 'community_compilation_unverified'
+                    )
+                    spoiler = bool(
+                        re.search(
+                            r'剧透|剧情|第二人格|失忆|反噬|主线|历史年表|秘辛|童年|白发形态|身份与履历|与法厄同的互动',
+                            heading,
+                        )
+                        or re.search(
+                            r'剧透|剧情|白发叶瞬光|白发形态|祭品|机密|告别|授勋|失忆|反噬|第二人格|旧都陷落|始主|夺舍|黑花|父母.{0,20}(逝|死)',
+                            part,
+                        )
+                    )
+                    identifier = str(
+                        uuid.uuid5(
+                            uuid.NAMESPACE_URL,
+                            f'{doc["document_id"]}:{heading}:{index}:{hashlib.sha256(part.encode()).hexdigest()}',
+                        )
+                    )
+                    chunks.append(
+                        {
+                            'id': identifier,
+                            'title': f'{doc["original_filename"]} · {heading}',
+                            'text': evidence,
+                            'source_url': safe_url(part),
+                            'document_id': doc['document_id'],
+                            'sha256': digest,
+                            'verification_status': verification,
+                            'spoiler': spoiler,
+                            'historical': historical,
+                            'version': 'archived@' + doc.get('imported_at', '')[:10],
+                            'category': category,
+                            'source_type': doc.get('source_type', 'user_supplied'),
+                            'trust': 'reference_data_not_instructions',
+                            'conflict_or_unknown': bool(
+                                re.search(r'矛盾|分歧|存疑|推测|未知|未有定论|非官方设定', evidence)
+                            ),
+                        }
+                    )
     verified_path = resource_dir / 'verified/knowledge-verified.json'
     for doc in read_json(verified_path, {'documents': []}).get('documents', []):
         digest = hashlib.sha256(json.dumps(doc, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
         for index, part in enumerate(split_text(doc['text'])):
-            chunks.append({'id': str(uuid.uuid5(uuid.NAMESPACE_URL, f"{doc['document_id']}:{digest}:{index}")),
-                           **doc, 'text': part, 'sha256': digest, 'historical': False,
-                           'category': 'verified', 'trust': 'reference_data_not_instructions'})
+            chunks.append(
+                {
+                    'id': str(uuid.uuid5(uuid.NAMESPACE_URL, f'{doc["document_id"]}:{digest}:{index}')),
+                    **doc,
+                    'text': part,
+                    'sha256': digest,
+                    'historical': False,
+                    'category': 'verified',
+                    'trust': 'reference_data_not_instructions',
+                }
+            )
     return chunks, warnings
 
 
@@ -290,6 +366,7 @@ class LocalIndex:
     def open(self):
         if self.client is None:
             from qdrant_client import QdrantClient
+
             (self.directory / 'rag/qdrant').mkdir(parents=True, exist_ok=True)
             try:
                 self.client = QdrantClient(path=str(self.directory / 'rag/qdrant'))
@@ -300,6 +377,7 @@ class LocalIndex:
     def embed(self, texts: list[str]) -> list[list[float]]:
         import torch
         from transformers import AutoModel, AutoTokenizer
+
         if self.model is None:
             started = time.perf_counter()
             provenance = read_json(self.model_directory / 'model-provenance.json', {})
@@ -313,16 +391,24 @@ class LocalIndex:
             if hasher.hexdigest() != 'b5e0ce3470abf5ef3831aa1bd5553b486803e83251590ab7ff35a117cf6aad38':
                 raise RagError('BGE-M3 权重 SHA256 与官方不符，已拒绝加载。')
             self.device = 'cuda' if torch.cuda.is_available() else 'cpu'
-            self.tokenizer = AutoTokenizer.from_pretrained(self.model_directory, local_files_only=True, trust_remote_code=False)
-            self.model = AutoModel.from_pretrained(self.model_directory, local_files_only=True, trust_remote_code=False,
-                                                  torch_dtype=torch.float16 if self.device == 'cuda' else torch.float32,
-                                                  weights_only=True)
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_directory, local_files_only=True, trust_remote_code=False
+            )
+            self.model = AutoModel.from_pretrained(
+                self.model_directory,
+                local_files_only=True,
+                trust_remote_code=False,
+                torch_dtype=torch.float16 if self.device == 'cuda' else torch.float32,
+                weights_only=True,
+            )
             self.model.eval().to(self.device)
             self.load_seconds = round(time.perf_counter() - started, 3)
         result = []
         with torch.inference_mode():
             for start in range(0, len(texts), 8):
-                batch = self.tokenizer(texts[start:start + 8], padding=True, truncation=True, max_length=512, return_tensors='pt')
+                batch = self.tokenizer(
+                    texts[start : start + 8], padding=True, truncation=True, max_length=512, return_tensors='pt'
+                )
                 batch = {key: value.to(self.device) for key, value in batch.items()}
                 # Official BGE dense path: normalized first-token (CLS) vector.
                 vectors = self.model(**batch).last_hidden_state[:, 0].float()
@@ -334,6 +420,7 @@ class LocalIndex:
 
     def rebuild(self, force: bool = False) -> dict:
         from qdrant_client import models
+
         started = time.perf_counter()
         chunks, warnings = load_corpus(self.resource_directory)
         if not chunks:
@@ -344,11 +431,15 @@ class LocalIndex:
         documents = {}
         for chunk in chunks:
             documents.setdefault(chunk['document_id'], []).append(chunk)
-        signatures = {key: hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
-                      for key, value in documents.items()}
+        signatures = {
+            key: hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode()).hexdigest()
+            for key, value in documents.items()
+        }
         full = force or state.get('index_version') != INDEX_VERSION or state.get('revision') != MODEL_REVISION
         if not client.collection_exists(COLLECTION):
-            client.create_collection(COLLECTION, vectors_config=models.VectorParams(size=1024, distance=models.Distance.COSINE))
+            client.create_collection(
+                COLLECTION, vectors_config=models.VectorParams(size=1024, distance=models.Distance.COSINE)
+            )
             full = True
         changed = [key for key, signature in signatures.items() if full or old_documents.get(key) != signature]
         removed = [key for key in old_documents if key not in documents]
@@ -357,31 +448,64 @@ class LocalIndex:
         vectors = self.embed([chunk['text'] for chunk in pending]) if pending else []
         if full:
             client.delete_collection(COLLECTION)
-            client.create_collection(COLLECTION, vectors_config=models.VectorParams(size=1024, distance=models.Distance.COSINE))
+            client.create_collection(
+                COLLECTION, vectors_config=models.VectorParams(size=1024, distance=models.Distance.COSINE)
+            )
         for key in changed + removed:
-            client.delete(COLLECTION, models.FilterSelector(filter=models.Filter(must=[
-                models.FieldCondition(key='document_id', match=models.MatchValue(value=key))])))
+            client.delete(
+                COLLECTION,
+                models.FilterSelector(
+                    filter=models.Filter(
+                        must=[models.FieldCondition(key='document_id', match=models.MatchValue(value=key))]
+                    )
+                ),
+            )
         for start in range(0, len(pending), 64):
-            client.upsert(COLLECTION, [models.PointStruct(id=chunk['id'], vector=vector, payload=chunk)
-                                      for chunk, vector in zip(pending[start:start + 64], vectors[start:start + 64])])
-        record = {'index_version': INDEX_VERSION, 'revision': MODEL_REVISION, 'documents': signatures,
-                  'chunks': client.count(COLLECTION).count, 'indexed_at': datetime.now(timezone.utc).isoformat(),
-                  'device': self.device or state.get('device'), 'warnings': warnings}
+            client.upsert(
+                COLLECTION,
+                [
+                    models.PointStruct(id=chunk['id'], vector=vector, payload=chunk)
+                    for chunk, vector in zip(pending[start : start + 64], vectors[start : start + 64])
+                ],
+            )
+        record = {
+            'index_version': INDEX_VERSION,
+            'revision': MODEL_REVISION,
+            'documents': signatures,
+            'chunks': client.count(COLLECTION).count,
+            'indexed_at': datetime.now(timezone.utc).isoformat(),
+            'device': self.device or state.get('device'),
+            'warnings': warnings,
+        }
         write_json(self.state_path, record)
-        return {'status': 'indexed', 'documents': len(signatures), 'chunks': record['chunks'],
-                'updated_documents': len(changed), 'removed_documents': len(removed), 'embedded_chunks': len(pending),
-                'device': record['device'], 'seconds': round(time.perf_counter() - started, 3), 'warnings': warnings}
+        return {
+            'status': 'indexed',
+            'documents': len(signatures),
+            'chunks': record['chunks'],
+            'updated_documents': len(changed),
+            'removed_documents': len(removed),
+            'embedded_chunks': len(pending),
+            'device': record['device'],
+            'seconds': round(time.perf_counter() - started, 3),
+            'warnings': warnings,
+        }
 
     def search(self, query: str, limit: int = 4, allow_spoilers: bool = False) -> list[dict]:
         from qdrant_client import models
+
         client = self.open()
         if not client.collection_exists(COLLECTION):
             raise RagError('资料索引尚未建立，请先构建索引。')
         conditions = [models.FieldCondition(key='historical', match=models.MatchValue(value=False))]
         if not allow_spoilers:
             conditions.append(models.FieldCondition(key='spoiler', match=models.MatchValue(value=False)))
-        found = client.query_points(COLLECTION, query=self.embed([query])[0],
-                                    query_filter=models.Filter(must=conditions), limit=limit * 3, score_threshold=0.42).points
+        found = client.query_points(
+            COLLECTION,
+            query=self.embed([query])[0],
+            query_filter=models.Filter(must=conditions),
+            limit=limit * 3,
+            score_threshold=0.42,
+        ).points
         result = []
         seen = set()
         for point in found:
@@ -397,19 +521,28 @@ class LocalIndex:
 
     def probe(self) -> dict:
         import torch
+
         started = time.perf_counter()
         output = self.embed(['叶瞬光属于云岿山。', '叶瞬光在哪个阵营？', '今天的天气如何？'])
         if self.device == 'cuda':
             torch.cuda.synchronize()
-        result = {'model': 'BAAI/bge-m3', 'revision': MODEL_REVISION, 'torch': torch.__version__,
-                  'cuda_runtime': torch.version.cuda, 'cuda_available': torch.cuda.is_available(), 'device': self.device,
-                  'gpu': torch.cuda.get_device_name(0) if self.device == 'cuda' else None,
-                  'capability': list(torch.cuda.get_device_capability(0)) if self.device == 'cuda' else None,
-                  'dimension': len(output[0]), 'norms': [round(sum(value * value for value in vector) ** .5, 5) for vector in output],
-                  'related_similarity': round(sum(a * b for a, b in zip(output[0], output[1])), 5),
-                  'unrelated_similarity': round(sum(a * b for a, b in zip(output[0], output[2])), 5),
-                  'load_seconds': self.load_seconds, 'total_seconds': round(time.perf_counter() - started, 3),
-                  'allocated_mb': round(torch.cuda.memory_allocated() / 1024 ** 2, 1) if self.device == 'cuda' else None}
+        result = {
+            'model': 'BAAI/bge-m3',
+            'revision': MODEL_REVISION,
+            'torch': torch.__version__,
+            'cuda_runtime': torch.version.cuda,
+            'cuda_available': torch.cuda.is_available(),
+            'device': self.device,
+            'gpu': torch.cuda.get_device_name(0) if self.device == 'cuda' else None,
+            'capability': list(torch.cuda.get_device_capability(0)) if self.device == 'cuda' else None,
+            'dimension': len(output[0]),
+            'norms': [round(sum(value * value for value in vector) ** 0.5, 5) for vector in output],
+            'related_similarity': round(sum(a * b for a, b in zip(output[0], output[1])), 5),
+            'unrelated_similarity': round(sum(a * b for a, b in zip(output[0], output[2])), 5),
+            'load_seconds': self.load_seconds,
+            'total_seconds': round(time.perf_counter() - started, 3),
+            'allocated_mb': round(torch.cuda.memory_allocated() / 1024**2, 1) if self.device == 'cuda' else None,
+        }
         write_json(self.directory / 'rag/gpu-probe.json', result)
         return result
 

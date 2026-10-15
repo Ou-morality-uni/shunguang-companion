@@ -17,7 +17,6 @@ httpcore2==2.13.1
 httpx==0.28.1
 httpx2==2.13.1
 idna==3.20
-iniconfig==2.3.1
 jiter==0.11.0
 jsonpatch==1.35
 jsonpointer==3.2.1
@@ -29,13 +28,8 @@ openai==2.8.1
 opentelemetry-api==1.45.1
 orjson==3.13.0
 packaging==26.3
-pluggy==1.6.0
 pydantic==2.14.0
-pydantic-settings==2.15.0
 pydantic_core==2.50.0
-Pygments==2.21.0
-pytest==9.1.1
-python-dotenv==1.2.4
 PyYAML==6.0.3
 regex==2026.9.29
 requests==2.34.2
@@ -54,3 +48,17 @@ uvicorn==0.54.0
 websockets==17.2
 xxhash==4.0.1
 zstandard==0.25.0
+keyring==25.7.0
+cryptography==50.0.2
+cffi==2.1.1
+pycparser==3.11
+pywin32-ctypes==0.2.3; sys_platform == "win32"
+importlib_metadata==9.0.1
+jaraco.classes==3.4.0
+jaraco.functools==4.6.0
+jaraco.context==6.1.2
+zipp==4.1.1
+more-itertools==11.2.1
+backports.tarfile==1.2.0
+SecretStorage==3.3.3; sys_platform == "linux"
+jeepney==0.9.0; sys_platform == "linux"

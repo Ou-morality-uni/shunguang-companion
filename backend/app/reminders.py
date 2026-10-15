@@ -64,11 +64,20 @@ def poll(*, immediate=False):
         if reconnected:
             state['next_due'] = now + interval
         due = float(state.get('next_due', now + interval))
-        paused = bool(settings.paused_until and datetime.fromisoformat(settings.paused_until.replace('Z', '+00:00')).timestamp() > now)
+        paused = bool(
+            settings.paused_until
+            and datetime.fromisoformat(settings.paused_until.replace('Z', '+00:00')).timestamp() > now
+        )
         in_quiet = quiet(settings, now)
         event = None
         if immediate or (settings.enabled and not paused and not in_quiet and not reconnected and now >= due):
-            event = {'id': uuid.uuid4().hex, 'text': REMINDER_TEXT, 'voice': settings.voice, 'created_at': timestamp(now), 'test': immediate}
+            event = {
+                'id': uuid.uuid4().hex,
+                'text': REMINDER_TEXT,
+                'voice': settings.voice,
+                'created_at': timestamp(now),
+                'test': immediate,
+            }
             # Consume durably before returning. A dropped response is not replayed.
             state['last_event_id'] = event['id']
             state['last_delivery'] = now
@@ -77,4 +86,12 @@ def poll(*, immediate=False):
             state['next_due'] = now + interval
         state['last_poll'] = now
         write_state(state)
-        return {'event': event, 'next_due': timestamp(state.get('next_due', due)), 'paused': paused, 'quiet': in_quiet, 'enabled': settings.enabled, 'reconnected': reconnected, 'notice': '休息提醒按时间间隔触发，不检测姿态。页面前台轮询时可靠；后台受浏览器节流限制。关闭页面不提醒，恢复连接后不补发历史提醒。立即测试会忽略开关和安静时段。'}
+        return {
+            'event': event,
+            'next_due': timestamp(state.get('next_due', due)),
+            'paused': paused,
+            'quiet': in_quiet,
+            'enabled': settings.enabled,
+            'reconnected': reconnected,
+            'notice': '休息提醒按时间间隔触发，不检测姿态。页面前台轮询时可靠；后台受浏览器节流限制。关闭页面不提醒，恢复连接后不补发历史提醒。立即测试会忽略开关和安静时段。',
+        }

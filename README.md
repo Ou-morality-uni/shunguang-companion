@@ -1,4 +1,6 @@
-# 瞬光伴行
+# 瞬光伴行 v0.1.5
+
+[v0.1.5 更新说明](RELEASE_NOTES_v0.1.5.md) · [语音配置与选型](docs/tts.md)
 
 [English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
@@ -75,12 +77,12 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -M
 
 ## 声音、工具与提醒
 
-- **声音与播放**：使用自己的MiMo语音API。默认参考文件为 `source/resources/voice/ye-shunguang/reference-original.mp3`，也可选择文件或填写服务电脑上的绝对路径。开启并保存“允许发送参考音频”后才会把录音发给MiMo合成新文字；初始关闭。支持排队、停止、重播与静音，失败不影响文字聊天。
+- **声音与播放**：支持小米 MiMo、阿里云 Qwen 实时声音复刻和火山豆包声音复刻 2.0。小米选择本地参考 MP3 并明确允许外部处理；阿里云、火山填写已注册音色 ID，阿里云也可在页面授权后创建音色。支持边生成边分句朗读、提前准备下一句、停止、重播及静音。详细配置见 [TTS 接入与选型](docs/tts.md)。
 - **工具服务**：天气使用Open-Meteo；网页搜索默认使用无需Key的公开入口，Tavily是可选配置。公开服务可能限流或要求验证；界面显示调用结果、失败和真实来源。
 - **长期记忆**：手动总结会话、预览候选并确认，支持查看、编辑、冲突更新和删除；聊天历史与长期事实分别管理。
 - **关怀提醒**：配置间隔、安静时段、暂停和测试。按时间触发，不检测坐姿；浏览器后台可能延迟，关闭页面后不能可靠提醒。
 
-模型与声音服务需要使用者自己的可用API，可能按服务规则计费。当前凭据后端适配Windows；macOS/Linux尚未适配。
+模型与声音服务需要使用者自己的可用API，可能按服务规则计费。Windows 使用 DPAPI；其他系统已增加系统密钥环后端，macOS/Linux 仍需实机验收。
 
 ## 同一 Wi-Fi 的手机访问
 
@@ -100,4 +102,11 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-lan.ps1
 - **停止后端**：在后端CMD按 `Ctrl+C` 或关闭该窗口；关闭网页不会停止后端。
 - **没有声音**：核对自己的语音Key、参考文件及外部处理开关；浏览器阻止播放时先点击消息播放按钮。
 
-本项目是非官方角色应用。原角色、游戏设定、图片和声音归各自权利方，用于个人的学习与交流。附带素材不表示项目拥有原角色权益。AI回答和检索资料可能存在错误。
+本项目是非官方角色应用。原角色、游戏设定、图片和声音归各自权利方；本项目用于个人开发学习。AI回答和检索资料可能存在错误。
+
+
+## 开发与长期维护
+
+模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](RELEASE_NOTES_v0.1.5.md)。
+
+开发环境安装 `backend/requirements-dev.txt` 后，可用 `python scripts/dev.py verify` 统一运行检查；接口变化后用 `python scripts/dev.py contracts` 更新契约。生产安装继续使用运行时锁文件。数据库升级会先自动备份旧库；升级后不要用旧程序直接打开新库。

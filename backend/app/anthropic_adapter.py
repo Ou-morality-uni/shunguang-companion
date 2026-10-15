@@ -2,6 +2,7 @@
 
 No URL-only protocol switching; tool_use/tool_result are explicitly serialized.
 """
+
 import json
 
 import httpx
@@ -25,8 +26,15 @@ def serialize(messages):
             blocks = [{'type': 'tool_result', 'tool_use_id': message.tool_call_id, 'content': str(message.content)}]
         elif isinstance(message, AIMessage):
             role = 'assistant'
-            blocks = [{'type': 'text', 'text': message.content}] if isinstance(message.content, str) and message.content else []
-            blocks.extend({'type': 'tool_use', 'id': call['id'], 'name': call['name'], 'input': call['args']} for call in message.tool_calls)
+            blocks = (
+                [{'type': 'text', 'text': message.content}]
+                if isinstance(message.content, str) and message.content
+                else []
+            )
+            blocks.extend(
+                {'type': 'tool_use', 'id': call['id'], 'name': call['name'], 'input': call['args']}
+                for call in message.tool_calls
+            )
         else:
             role = 'user'
             blocks = [{'type': 'text', 'text': str(message.content)}]
@@ -48,10 +56,20 @@ class AnthropicModel:
 
     def payload(self, messages, stream):
         system, turns = serialize(messages)
-        result = {'model': self.config.llm_model, 'max_tokens': 1800, 'temperature': self.config.llm_temperature, 'system': system, 'messages': turns, 'stream': stream}
+        result = {
+            'model': self.config.llm_model,
+            'max_tokens': self.config.llm_max_tokens,
+            'temperature': self.config.llm_temperature,
+            'system': system,
+            'messages': turns,
+            'stream': stream,
+        }
         if self.tools:
             converted = [convert_to_openai_tool(tool)['function'] for tool in self.tools]
-            result['tools'] = [{'name': t['name'], 'description': t.get('description', ''), 'input_schema': t['parameters']} for t in converted]
+            result['tools'] = [
+                {'name': t['name'], 'description': t.get('description', ''), 'input_schema': t['parameters']}
+                for t in converted
+            ]
         return result
 
     async def ainvoke(self, messages):
@@ -63,8 +81,15 @@ class AnthropicModel:
         return AIMessage(content=accumulated.content, tool_calls=accumulated.tool_calls)
 
     async def astream(self, messages):
-        async with httpx.AsyncClient(timeout=self.config.llm_timeout, follow_redirects=False, verify=ssl_context()) as client:
-            async with client.stream('POST', endpoint(self.config.llm_base_url, 'messages', anthropic=True), headers=headers(self.config), json=self.payload(messages, True)) as response:
+        async with httpx.AsyncClient(
+            timeout=self.config.llm_timeout, follow_redirects=False, verify=ssl_context()
+        ) as client:
+            async with client.stream(
+                'POST',
+                endpoint(self.config.llm_base_url, 'messages', anthropic=True),
+                headers=headers(self.config),
+                json=self.payload(messages, True),
+            ) as response:
                 if response.status_code != 200:
                     raise ProviderError(response.status_code)
                 stopped, size = False, 0
@@ -84,7 +109,17 @@ class AnthropicModel:
                         block = data.get('content_block', {})
                         if block.get('type') == 'tool_use':
                             initial = block.get('input', {})
-                            yield AIMessageChunk(content='', tool_call_chunks=[{'name': block['name'], 'id': block['id'], 'args': json.dumps(initial) if initial else '', 'index': data['index']}])
+                            yield AIMessageChunk(
+                                content='',
+                                tool_call_chunks=[
+                                    {
+                                        'name': block['name'],
+                                        'id': block['id'],
+                                        'args': json.dumps(initial) if initial else '',
+                                        'index': data['index'],
+                                    }
+                                ],
+                            )
                         elif block.get('type') == 'text' and block.get('text'):
                             yield AIMessageChunk(content=block['text'])
                     if kind == 'content_block_delta':
@@ -92,6 +127,16 @@ class AnthropicModel:
                         if delta.get('type') == 'text_delta':
                             yield AIMessageChunk(content=delta.get('text', ''))
                         elif delta.get('type') == 'input_json_delta':
-                            yield AIMessageChunk(content='', tool_call_chunks=[{'name': None, 'id': None, 'args': delta.get('partial_json', ''), 'index': data['index']}])
+                            yield AIMessageChunk(
+                                content='',
+                                tool_call_chunks=[
+                                    {
+                                        'name': None,
+                                        'id': None,
+                                        'args': delta.get('partial_json', ''),
+                                        'index': data['index'],
+                                    }
+                                ],
+                            )
                 if not stopped:
                     raise ProviderError()

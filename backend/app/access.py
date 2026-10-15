@@ -1,4 +1,5 @@
 """Single-user LAN protection. Passwords/tokens never appear in URLs or logs."""
+
 import hashlib
 import hmac
 import ipaddress
@@ -11,6 +12,7 @@ from threading import RLock
 from urllib.parse import urlparse
 
 from fastapi.responses import JSONResponse
+
 from . import config
 
 SESSION_LOCK = RLock()
@@ -56,7 +58,7 @@ def authenticated(request):
 def login(request, password):
     host = request.client.host if request.client else 'unknown'
     with SESSION_LOCK:
-        recent = [t for t in attempts.get(host, []) if time.time()-t < 300]
+        recent = [t for t in attempts.get(host, []) if time.time() - t < 300]
         attempts[host] = recent
         if len(recent) >= 8:
             return JSONResponse({'detail': '尝试过于频繁，请五分钟后重试。'}, status_code=429)
@@ -70,7 +72,15 @@ def login(request, password):
         sessions[token] = time.time() + 12 * 3600
         attempts.pop(host, None)
     response = JSONResponse({'ok': True})
-    response.set_cookie(COOKIE, token, httponly=True, samesite='strict', secure=request.url.scheme == 'https', max_age=12*3600, path='/')
+    response.set_cookie(
+        COOKIE,
+        token,
+        httponly=True,
+        samesite='strict',
+        secure=request.url.scheme == 'https',
+        max_age=12 * 3600,
+        path='/',
+    )
     return response
 
 

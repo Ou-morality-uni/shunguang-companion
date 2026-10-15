@@ -1,4 +1,6 @@
-# Shunguang Companion
+# Shunguang Companion v0.1.5
+
+[v0.1.5 release notes (Chinese)](RELEASE_NOTES_v0.1.5.md) · [TTS setup (Chinese)](docs/tts.md)
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
@@ -75,12 +77,12 @@ Development progress documents, delivery checklists, acceptance reports, private
 
 ## Audio, tools, memory, and reminders
 
-- **Audio**: use your own MiMo voice API. The default reference is `source/resources/voice/ye-shunguang/reference-original.mp3`; you may select a file or specify an absolute path on the server computer. Reference audio is sent to MiMo only after you enable and save the external-processing option, which is initially off. Playback supports queues, stop, replay, and mute. Audio errors do not prevent text chat.
+- **Audio**: supports Xiaomi MiMo, Alibaba Cloud Qwen realtime voice cloning, and Volcengine Doubao voice cloning 2.0. MiMo uses a local reference recording with explicit external-processing consent; Alibaba Cloud and Volcengine reuse a registered voice ID. Supports sentence playback while the reply is generated, next-sentence prefetch, stop, replay, and mute. See [TTS setup (Chinese)](docs/tts.md).
 - **Tools**: Open-Meteo provides weather. Search defaults to public, key-free endpoints; Tavily is optional. Public services may rate-limit or require verification. The UI displays actual results, failures, and sources.
 - **Memory**: manually summarize a conversation, review candidates, and confirm facts. View, edit, resolve conflicts, or delete them. Chat history and long-term user facts are separate.
 - **Reminders**: configure intervals, quiet hours, pause, and tests. These are time-based reminders, not posture detection. Background tabs may be delayed; reminders cannot reliably run after closing the page.
 
-Model and voice providers require your own usable API credentials and may charge according to their terms. Credential storage currently supports Windows; macOS/Linux support is not implemented.
+Model and voice providers require your own usable API credentials and may charge according to their terms. Windows uses DPAPI. A system-keyring backend is included for other platforms, but macOS/Linux still require real-device validation.
 
 ## Mobile access on the same Wi-Fi
 
@@ -100,4 +102,4 @@ Set an access password of at least 10 characters. Open the computer's IPv4 addre
 - Press `Ctrl+C` or close the backend CMD window to stop it. Closing the browser alone does not stop the backend.
 - If audio fails, check your voice key, reference file, and external-processing option. Click a message's play button if the browser blocks playback.
 
-This is an unofficial fan application. Original characters, game setting, images, and voices belong to their respective rights holders. This is for personal study and communicationIncluded assets do not grant ownership of those rights. AI responses and retrieved material may contain errors.
+This is an unofficial fan application. Original characters, game setting, images, and voices belong to their respective rights holders. Included assets do not grant ownership of those rights. AI responses and retrieved material may contain errors.
