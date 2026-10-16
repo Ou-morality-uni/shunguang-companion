@@ -116,7 +116,7 @@ async def guard(request, call_next):
             return JSONResponse({'detail': '跨站访问已阻止。'}, status_code=403)
     public = request.url.path in ('/', '/api/auth/status', '/api/auth/login') or request.url.path.startswith('/assets/')
     if lan_mode() and not public and not authenticated(request):
-        return JSONResponse({'detail': '请先输入局域网访问口令。'}, status_code=401)
+        return JSONResponse({'detail': '请先输入局域网访问口令。', 'code': 'lan_auth_required'}, status_code=401)
     response = await call_next(request)
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy'] = 'no-referrer'

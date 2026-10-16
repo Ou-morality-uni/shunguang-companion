@@ -107,7 +107,9 @@ def test_lan_auth_protects_data_and_cross_origin(tmp_path, monkeypatch):
     with TestClient(main.app) as client:
         assert client.get('/api/auth/status').json() == {'required': True, 'authenticated': False}
         for path in ('/api/settings', '/api/conversations', '/api/voice/references', '/docs'):
-            assert client.get(path).status_code == 401
+            denied = client.get(path)
+            assert denied.status_code == 401
+            assert denied.json()['code'] == 'lan_auth_required'
         assert client.post('/api/auth/login', json={'password': 'wrong'}).status_code == 401
         response = client.post('/api/auth/login', json={'password': 'unit-access-password'})
         assert response.status_code == 200
@@ -115,6 +117,30 @@ def test_lan_auth_protects_data_and_cross_origin(tmp_path, monkeypatch):
         assert client.get('/api/settings').status_code == 200
         assert client.patch('/api/settings', headers={'Origin': 'https://evil.example'}, json={}).status_code == 403
         assert client.get('/api/settings', headers={'Host': 'evil.example'}).status_code == 403
+
+
+@pytest.mark.parametrize('lan_enabled', [False, True])
+def test_provider_401_does_not_require_lan_login(tmp_path, monkeypatch, lan_enabled):
+    from backend.app import cloud_voices, voice
+
+    monkeypatch.setattr(runtime, 'store', Store(tmp_path / 'test.db'))
+    monkeypatch.setenv('SHUNGUANG_LAN_MODE', '1' if lan_enabled else '0')
+    monkeypatch.setattr(access, 'sessions', {})
+    monkeypatch.setattr(access, 'attempts', {})
+
+    async def invalid_key():
+        raise voice.VoiceError('语音服务鉴权或权限失败，请检查密钥及模型权限。', 401, code='authentication')
+
+    monkeypatch.setattr(cloud_voices, 'list_voices', invalid_key)
+    with TestClient(main.app) as client:
+        if lan_enabled:
+            access.save_password('unit-access-password')
+            assert client.post('/api/auth/login', json={'password': 'unit-access-password'}).status_code == 200
+        denied = client.get('/api/tts/voices')
+        assert denied.status_code == 401
+        assert denied.json() == {'detail': '语音服务鉴权或权限失败，请检查密钥及模型权限。'}
+        assert client.get('/api/auth/status').json() == {'required': lan_enabled, 'authenticated': True}
+        assert client.get('/api/settings').status_code == 200
 
 
 def test_profiles_do_not_forward_keys_to_other_hosts(tmp_path, monkeypatch):

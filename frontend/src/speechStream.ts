@@ -1,4 +1,5 @@
 import { SseDecoder } from './sse';
+import { httpError } from './httpError';
 
 /** Bounded incremental text segmentation: punctuation, length, and an explicit timed flush. */
 export class SpeechSegmenter {
@@ -34,9 +35,7 @@ export async function streamSpeech(text: string, signal: AbortSignal, onAudio: (
     signal,
   });
   if (!response.ok) {
-    if (response.status === 401) window.dispatchEvent(new Event('shunguang-auth-required'));
-    const data = await response.json().catch(() => ({}));
-    throw new Error(typeof data.detail === 'string' ? data.detail : '语音流连接失败。');
+    throw await httpError(response, '语音流连接失败。');
   }
   if (!response.body) throw new Error('浏览器无法读取语音流。');
   let result = '',

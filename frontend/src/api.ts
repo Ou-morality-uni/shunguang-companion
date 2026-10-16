@@ -1,5 +1,6 @@
 import type { components } from './generated/api-schema';
 import { SseDecoder } from './sse';
+import { httpError } from './httpError';
 type Schemas = components['schemas'];
 type OptionalFields<T> = { [K in keyof T]?: Exclude<T[K], null> };
 export type ModelSettings = Schemas['SettingsOut'];
@@ -152,9 +153,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     headers: { 'Content-Type': 'application/json', ...options.headers },
   });
   if (!response.ok) {
-    if (response.status === 401) window.dispatchEvent(new Event('shunguang-auth-required'));
-    const data = await response.json().catch(() => ({}));
-    throw new Error(typeof data.detail === 'string' ? data.detail : `请求失败（${response.status}）`);
+    throw await httpError(response, `请求失败（${response.status}）`);
   }
   if (response.status === 204) return undefined as T;
   return response.json();
@@ -173,9 +172,7 @@ export async function streamChat(
     signal,
   });
   if (!response.ok) {
-    if (response.status === 401) window.dispatchEvent(new Event('shunguang-auth-required'));
-    const data = await response.json().catch(() => ({}));
-    throw new Error(typeof data.detail === 'string' ? data.detail : '对话请求失败');
+    throw await httpError(response, '对话请求失败');
   }
   if (!response.body) throw new Error('浏览器无法读取流式回复');
   const reader = response.body.getReader();

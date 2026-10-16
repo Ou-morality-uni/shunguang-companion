@@ -43,7 +43,9 @@ describe('stream transport', () => {
       vi
         .fn()
         .mockResolvedValueOnce(new Response(null, { status: 204 }))
-        .mockResolvedValueOnce(new Response('{"detail":"请登录"}', { status: 401 })),
+        .mockResolvedValueOnce(
+          new Response('{"detail":"请登录","code":"lan_auth_required"}', { status: 401 }),
+        ),
     );
     await expect(request('/conversations/id', { method: 'DELETE' })).resolves.toBeUndefined();
     await expect(request('/settings')).rejects.toThrow('请登录');
