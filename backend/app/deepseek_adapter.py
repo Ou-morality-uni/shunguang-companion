@@ -1,0 +1,114 @@
+"""DeepSeek Chat Completions: explicit fast mode and faithful tool-message replay."""
+
+import asyncio
+import json
+
+import httpx
+from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
+from langchain_core.utils.function_calling import convert_to_openai_tool
+from openai import AsyncOpenAI
+
+from .providers import ProviderError, headers
+from .transport import ssl_context
+
+
+def serialize(messages):
+    if isinstance(messages, str):
+        messages = [HumanMessage(content=messages)]
+    result = []
+    for message in messages:
+        if isinstance(message, SystemMessage):
+            item = {'role': 'system', 'content': message.content}
+        elif isinstance(message, ToolMessage):
+            item = {'role': 'tool', 'content': message.content, 'tool_call_id': message.tool_call_id}
+        elif isinstance(message, AIMessage):
+            item = {'role': 'assistant', 'content': message.content or ''}
+            if message.tool_calls:
+                item['tool_calls'] = [
+                    {
+                        'id': call['id'],
+                        'type': 'function',
+                        'function': {'name': call['name'], 'arguments': json.dumps(call['args'], ensure_ascii=False)},
+                    }
+                    for call in message.tool_calls
+                ]
+            # Fast mode does not send historical reasoning. Do not turn it into
+            # displayable text to conceal an empty or truncated final response.
+        else:
+            item = {'role': 'user', 'content': message.content}
+        result.append(item)
+    return result
+
+
+class DeepSeekModel:
+    def __init__(self, config, tools=None):
+        self.config, self.tools = config, tools or []
+        self.model_name = config.llm_model
+
+    def bind_tools(self, tools):
+        return DeepSeekModel(self.config, tools)
+
+    async def ainvoke(self, messages):
+        accumulated = None
+        async for chunk in self.astream(messages):
+            accumulated = chunk if accumulated is None else accumulated + chunk
+        if accumulated is None:
+            raise ProviderError(code='empty_response')
+        return AIMessage(
+            content=accumulated.content,
+            tool_calls=accumulated.tool_calls,
+            additional_kwargs=accumulated.additional_kwargs,
+        )
+
+    async def astream(self, messages):
+        payload = {
+            'model': self.config.llm_model,
+            'messages': serialize(messages),
+            'max_tokens': self.config.llm_max_tokens,
+            'temperature': self.config.llm_temperature,
+            'stream': True,
+            'extra_body': {'thinking': {'type': 'disabled'}},
+        }
+        if self.tools:
+            payload['tools'] = [convert_to_openai_tool(tool) for tool in self.tools]
+        async with asyncio.timeout(self.config.llm_timeout):
+            async with httpx.AsyncClient(
+                verify=ssl_context(), follow_redirects=False, timeout=self.config.llm_timeout
+            ) as transport:
+                async with AsyncOpenAI(
+                    api_key=self.config.llm_api_key.get_secret_value(),
+                    base_url=self.config.llm_base_url,
+                    default_headers=headers(self.config),
+                    http_client=transport,
+                    max_retries=0,
+                ) as client:
+                    stream = await client.chat.completions.create(**payload)
+                    finished = False
+                    try:
+                        async for event in stream:
+                            if not event.choices:
+                                continue
+                            choice = event.choices[0]
+                            if choice.finish_reason:
+                                finished = True
+                            delta = choice.delta
+                            calls = [
+                                {
+                                    'name': call.function.name if call.function else None,
+                                    'args': call.function.arguments or '' if call.function else '',
+                                    'id': call.id,
+                                    'index': call.index,
+                                }
+                                for call in delta.tool_calls or []
+                            ]
+                            yield AIMessageChunk(
+                                content=delta.content or '',
+                                tool_call_chunks=calls,
+                                response_metadata={'finish_reason': choice.finish_reason}
+                                if choice.finish_reason
+                                else {},
+                            )
+                    finally:
+                        await stream.close()
+                    if not finished:
+                        raise ProviderError(code='incomplete_stream')

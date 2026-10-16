@@ -4,7 +4,7 @@
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
-An unofficial browser companion inspired by Ye Shunguang from Zenless Zone Zero. Features include streaming character chat, multiple model connections, local knowledge retrieval with citations, weather and web search, manually confirmed long-term memory, reference-audio voice cloning, audio playback queues, and break reminders. Run the backend on a computer and use a desktop or same-network mobile browser. Configuration lives in Companion Settings.
+An unofficial browser companion inspired by Ye Shunguang from Zenless Zone Zero. Features include streaming character chat, multiple model connections, local knowledge retrieval with citations, weather and web search, automatic cross-chat memory with manual controls, reference-audio voice cloning, audio playback queues, and break reminders. Run the backend on a computer and use a desktop or same-network mobile browser. Configuration lives in Companion Settings.
 
 ## Install and start
 
@@ -77,9 +77,9 @@ Development progress documents, delivery checklists, acceptance reports, private
 
 ## Audio, tools, memory, and reminders
 
-- **Audio**: supports Xiaomi MiMo, Alibaba Cloud Qwen realtime voice cloning, and Volcengine Doubao voice cloning 2.0. MiMo uses a local reference recording with explicit external-processing consent; Alibaba Cloud and Volcengine reuse a registered voice ID. Supports sentence playback while the reply is generated, next-sentence prefetch, stop, replay, and mute. See [TTS setup (Chinese)](docs/tts.md).
+- **Audio**: supports Xiaomi MiMo and Alibaba Cloud Bailian. MiMo references an existing recording on the server computer. Bailian creates and saves multiple cloud voices from transient uploads, with list, select, copy, and delete controls. Qwen-Audio 3.1/3.0 streaming and the separate legacy Qwen-TTS protocol are supported; voices cannot be mixed across models. Includes sentence playback, stop, replay, and mute. See [TTS setup (Chinese)](docs/tts.md).
 - **Tools**: Open-Meteo provides weather. Search defaults to public, key-free endpoints; Tavily is optional. Public services may rate-limit or require verification. The UI displays actual results, failures, and sources.
-- **Memory**: manually summarize a conversation, review candidates, and confirm facts. View, edit, resolve conflicts, or delete them. Chat history and long-term user facts are separate.
+- **Memory**: explicit user statements can be saved automatically and real excerpts recalled across chats. Manual summarization remains optional, with edit, forget, and disable controls. User facts, chat history, and game lore remain separate; personal-memory questions skip lore retrieval.
 - **Reminders**: configure intervals, quiet hours, pause, and tests. These are time-based reminders, not posture detection. Background tabs may be delayed; reminders cannot reliably run after closing the page.
 
 Model and voice providers require your own usable API credentials and may charge according to their terms. Windows uses DPAPI. A system-keyring backend is included for other platforms, but macOS/Linux still require real-device validation.

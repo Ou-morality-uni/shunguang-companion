@@ -13,7 +13,9 @@ const verificationLabels: Record<string, string> = {
 export function Sources({ sources = [] }: { sources?: Source[] }) {
   return sources.length ? (
     <details className="message-evidence">
-      <summary>查看来源 · {sources.length} 条</summary>
+      <summary>
+        {sources.every((item) => item.usage === 'cited') ? '引用来源' : '参考资料'} · {sources.length} 条
+      </summary>
       <div className="source-list">
         {sources.map((item, index) => {
           const url = safeSourceUrl(item.source_url || item.url);
@@ -54,7 +56,12 @@ export function ToolFeedback({ tools = [] }: { tools?: ToolEvent[] }) {
         const result =
           item.result && typeof item.result === 'object' ? (item.result as Record<string, unknown>) : null;
         const sources = result && Array.isArray(result.sources) ? (result.sources as Source[]) : [];
-        const names: Record<string, string> = { weather: '天气查询', web_search: '网页搜索' };
+        const names: Record<string, string> = {
+          weather: '天气查询',
+          web_search: '网页搜索',
+          remember_user_fact: '记住这件事',
+          recall_conversations: '回忆聊天',
+        };
         return (
           <details key={item.id || index} className={`tool-call ${item.status === 'error' ? 'failed' : ''}`}>
             <summary>
@@ -63,11 +70,19 @@ export function ToolFeedback({ tools = [] }: { tools?: ToolEvent[] }) {
               <span>
                 {item.status === 'running'
                   ? '执行中'
-                  : item.status === 'error'
-                    ? '调用失败'
-                    : item.status === 'success' || item.status === 'complete'
-                      ? '已返回'
-                      : item.status || '已返回'}
+                  : result?.needs_clarification === true
+                    ? '待补充信息'
+                    : result?.code === 'no_results'
+                      ? '无匹配结果'
+                      : result?.code === 'low_relevance'
+                        ? '结果不相关'
+                        : item.status === 'error'
+                          ? '调用失败'
+                          : item.status === 'success' || item.status === 'complete'
+                            ? result?.ok === false
+                              ? '无可用结果'
+                              : '已返回'
+                            : item.status || '已返回'}
               </span>
             </summary>
             {item.message && <p>{item.message}</p>}

@@ -3,11 +3,14 @@ import { SseDecoder } from './sse';
 /** Bounded incremental text segmentation: punctuation, length, and an explicit timed flush. */
 export class SpeechSegmenter {
   private buffer = '';
+  constructor(private minimum = 0) {}
   push(text: string, flush = false): string[] {
     this.buffer += text;
     const parts: string[] = [];
     while (this.buffer) {
-      const match = /[。！？!?；;\n]|\.(?=\s)/.exec(this.buffer);
+      const pattern = /[。！？!?；;\n]|\.(?=\s)/g;
+      if (this.minimum) pattern.lastIndex = Math.max(0, this.minimum - 1);
+      const match = pattern.exec(this.buffer);
       let end = match ? match.index + 1 : 0;
       if (!end && this.buffer.length >= 180) end = 180;
       if (end > 180) end = 180;

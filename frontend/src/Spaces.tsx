@@ -244,12 +244,12 @@ export function MemorySpace({ conversations, active, onChanged, compact = false 
           <PageHeading
             eyebrow="LITTLE THINGS ABOUT YOU"
             title="关于你的，慢慢记住。"
-            description="聊天记录与长期事实分别管理，只有你确认的事实才跨会话使用。"
+            description="明确自述可自动记住，跨聊天按需回忆。这里可查看、更正和删除，手动总结作为补充。"
           />
           <div className="summary-stats">
             <div>
               <strong>{memories.length}</strong>
-              <span>已确认的记忆</span>
+              <span>已保存的记忆</span>
             </div>
             <div>
               <Heart size={23} />
@@ -337,7 +337,7 @@ export function MemorySpace({ conversations, active, onChanged, compact = false 
           <div className="empty-space glass">
             <BookOpen size={30} />
             <h2>故事，还在第一章</h2>
-            <p>还没有长期记忆。可以选择一段对话总结并确认。</p>
+            <p>还没有长期记忆。聊天中可以告诉她你的家乡、称呼或偏好，也可在此手动整理。</p>
           </div>
         ) : (
           memories.map((item) => (
@@ -399,8 +399,10 @@ export function MemorySpace({ conversations, active, onChanged, compact = false 
         <div className="privacy-strip">
           <ShieldCheck size={19} />
           <div>
-            <strong>由你确认，随时修改或删除</strong>
-            <p>删除长期事实不删除原聊天记录。若聊天记录仍在，手动总结时可能再次提炼，请自行取消该候选。</p>
+            <strong>自动记忆，随时管理</strong>
+            <p>
+              删除事实会阻止旧消息再次被提炼或跨聊天召回；原聊天记录仍保留。以后明确重新告诉她，可以再次记住。
+            </p>
           </div>
         </div>
       )}

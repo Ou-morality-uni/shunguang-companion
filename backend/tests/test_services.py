@@ -259,7 +259,11 @@ def test_search_real_contract_coverage_and_tavily_sources(client, monkeypatch):
             200,
             json={
                 'results': [
-                    {'title': 'Official', 'url': 'https://example.org/page', 'content': 'Source content'},
+                    {
+                        'title': 'FastAPI Official',
+                        'url': 'https://example.org/page',
+                        'content': 'FastAPI source content',
+                    },
                     {'title': 'private', 'url': 'http://127.0.0.1/internal', 'content': 'discard'},
                 ]
             },
@@ -420,10 +424,9 @@ def test_mimo_discovery_and_true_audio_contract(client, monkeypatch):
         )
 
     fake_http(monkeypatch, upstream)
-    uploaded = client.post(
-        '/api/voice/references/upload',
-        json={'name': 'reference.wav', 'format': 'wav', 'audio_base64': base64.b64encode(wav_bytes()).decode('ascii')},
-    ).json()
+    reference = config.ROOT / 'reference.wav'
+    reference.write_bytes(wav_bytes())
+    uploaded = {'path': str(reference)}
     client.patch(
         '/api/features',
         json={
@@ -453,10 +456,9 @@ def test_tts_failure_does_not_return_upstream_body(client, monkeypatch):
     monkeypatch.setattr(voice, 'validate_origin', allow_origin)
     fake_http(monkeypatch, lambda request: httpx.Response(401, text='super-private-upstream-key'))
     assert client.post('/api/tts/synthesize', json={'text': '你好'}).status_code == 503
-    uploaded = client.post(
-        '/api/voice/references/upload',
-        json={'name': 'reference.wav', 'format': 'wav', 'audio_base64': base64.b64encode(wav_bytes()).decode('ascii')},
-    ).json()
+    reference = config.ROOT / 'reference.wav'
+    reference.write_bytes(wav_bytes())
+    uploaded = {'path': str(reference)}
     client.patch(
         '/api/features',
         json={
@@ -472,44 +474,13 @@ def test_tts_failure_does_not_return_upstream_body(client, monkeypatch):
     assert response.status_code == 502 and 'super-private-upstream-key' not in response.text
 
 
-def test_reference_upload_local_and_external_consent(client, monkeypatch):
-    uploaded = client.post(
+def test_reference_archive_disabled_without_writing_files(client):
+    response = client.post(
         '/api/voice/references/upload',
-        json={
-            'name': 'test.wav',
-            'format': 'wav',
-            'audio_base64': base64.b64encode(wav_bytes()).decode(),
-            'text': '按真实试听确认的文字',
-        },
+        json={'name': 'sample.wav', 'format': 'wav', 'audio_base64': base64.b64encode(wav_bytes()).decode()},
     )
-    assert uploaded.status_code == 201
-    record = uploaded.json()
-    assert client.get(record['url']).content == wav_bytes()
-    assert any(x['id'] == record['id'] for x in client.get('/api/voice/references').json()['references'])
-    client.patch(
-        '/api/features',
-        json={
-            'tts': {
-                'enabled': True,
-                'api_key': 'ref-test-key',
-                'model': 'mimo-v2.5-tts-voiceclone',
-                'reference_id': record['id'],
-            }
-        },
-    )
-    called = []
-
-    async def upstream(*args, **kwargs):
-        called.append(1)
-        return b'', ''
-
-    monkeypatch.setattr(voice, 'upstream', upstream)
-    response = client.post('/api/tts/synthesize', json={'text': '你好'})
-    assert response.status_code == 409 and not called
-    assert client.get('/api/voice/references/invalid/file').status_code == 404
-    assert (
-        client.post('/api/voice/preview', json={'reference_id': record['id'], 'start': 9, 'end': 2}).status_code == 422
-    )
+    assert response.status_code == 410
+    assert not (config.DATA_DIR / 'voice-references').exists()
 
 
 def test_origin_rejects_private_addresses_and_wrong_presets(monkeypatch):

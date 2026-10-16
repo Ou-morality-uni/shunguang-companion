@@ -27,6 +27,7 @@ import {
 import { MemorySpace, VoiceConsole, type Panel } from './Spaces';
 import { useCompanionAudio } from './useAudioQueue';
 import { ToolFeedback } from './Evidence';
+import { CloudVoiceManager } from './CloudVoiceManager';
 
 const categories = [
   { id: 'model', label: '模型连接', icon: Cpu },
@@ -149,8 +150,7 @@ export function CompanionSettings({
   const returningFocus = useRef<HTMLElement | null>(null),
     mobileCategory = useRef<HTMLSelectElement | null>(null),
     requestLock = useRef(false);
-  const referenceFileInput = useRef<HTMLInputElement | null>(null),
-    referenceLock = useRef(false);
+  const referenceLock = useRef(false);
   const panelRef = useRef(panel);
   panelRef.current = panel;
   const [profiles, setProfiles] = useState<Array<ModelSettings & { id: string }>>([]);
@@ -368,8 +368,7 @@ export function CompanionSettings({
       delete body.reference_sha256;
       if (section === 'tts') {
         const current = featureDraft.tts;
-        if (!['mimo', 'aliyun', 'volcengine'].includes(current.provider))
-          throw new Error('请选择已适配的声音复刻厂商。');
+        if (!['mimo', 'aliyun'].includes(current.provider)) throw new Error('请选择已适配的声音复刻厂商。');
         const selected =
           current.provider === 'mimo'
             ? await request<InspectedVoiceReference>('/voice/reference/inspect', {
@@ -417,7 +416,7 @@ export function CompanionSettings({
       }
       setNotice(
         section === 'tts'
-          ? '声音配置已保存。阿里云和火山按音色 ID 合成；小米按授权发送参考音频。'
+          ? '声音配置已保存。百炼按云端音色 ID 合成；小米按授权发送参考音频。'
           : '配置已保存。',
       );
     } catch (e) {
@@ -449,70 +448,16 @@ export function CompanionSettings({
       setReferenceBusy(false);
     }
   }
-  async function uploadReference(file?: File) {
-    if (!file || referenceLock.current) return;
-    if (file.size > 6 * 1024 * 1024) {
-      setNotice('参考 MP3 需不超过 6 MB。');
-      return;
-    }
-    if (!file.name.toLowerCase().endsWith('.mp3')) {
-      setNotice('请选择 MP3 参考音频。');
-      return;
-    }
-    referenceLock.current = true;
-    setReferenceBusy(true);
-    setNotice('正在把所选 MP3 保存到运行服务的电脑，不会外传…');
-    try {
-      const audio_base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(',')[1]);
-        reader.onerror = () => reject(new Error('无法读取 MP3 文件'));
-        reader.readAsDataURL(file);
-      });
-      const uploaded = await request<InspectedVoiceReference>('/voice/references/upload', {
-        method: 'POST',
-        body: JSON.stringify({ name: file.name, format: 'mp3', audio_base64 }),
-      });
-      if (!uploaded.path || !uploaded.id) throw new Error('上传结果缺少参考文件定位，请重试。');
-      setTts({ reference_path: uploaded.path, reference_id: uploaded.id, reference_sha256: uploaded.sha256 });
-      setReferenceInfo(uploaded);
-      setNotice('MP3 已归档并自动选中。请保存配置后测试，无需再从列表选择。');
-    } catch (e) {
-      setNotice((e as Error).message);
-    } finally {
-      referenceLock.current = false;
-      setReferenceBusy(false);
-    }
-  }
   const tts = featureDraft?.tts,
     tools = featureDraft?.tools,
     reminders = featureDraft?.reminders;
-  const referenceSupported = !!tts && ['mimo', 'aliyun', 'volcengine'].includes(tts.provider);
+  const referenceSupported = !!tts && ['mimo', 'aliyun'].includes(tts.provider);
   const cloneProviders = ttsProviders.filter(
     (item) => item.id === 'mimo' || item.reference_audio || item.reference_supported,
   );
   const voiceDirty =
     voiceSignature(tts) !== voiceSignature(features?.tts) || !!voiceKey.trim() || clearVoiceKey;
   const savedCloneReady = !!features?.tts.enabled && !!features.tts.configured;
-  async function registerVoice() {
-    if (voiceDirty || busy || requestLock.current) return;
-    requestLock.current = true;
-    setBusy(true);
-    setNotice('正在向阿里云提交已保存的参考音频，创建一次音色…');
-    try {
-      const result = await request<{ voice: string }>('/tts/register', {
-        method: 'POST',
-        body: JSON.stringify({ name: 'shunguang' }),
-      });
-      setTts({ voice: result.voice });
-      setNotice(`音色已创建：${result.voice}。请保存配置后测试；后续合成不会重复上传参考音频。`);
-    } catch (failure) {
-      setNotice((failure as Error).message);
-    } finally {
-      requestLock.current = false;
-      setBusy(false);
-    }
-  }
   function testSavedClone() {
     if (voiceDirty) {
       setNotice('参考文件或语音设置已修改，请先保存克隆配置，再测试已保存的声音。');
@@ -861,7 +806,7 @@ export function CompanionSettings({
                   disabled={busy || referenceBusy}
                   style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
                 >
-                  <p className="space-note">小米使用本地参考音频；阿里云和火山使用已注册的克隆音色 ID。</p>
+                  <p className="space-note">小米使用本地参考音频；百炼使用已注册的云端音色 ID。</p>
                   <Toggle
                     label="开启 TTS"
                     checked={!!tts.enabled}
@@ -878,23 +823,38 @@ export function CompanionSettings({
                     <select
                       aria-label="语音提供商"
                       value={tts.provider}
+                      disabled={busy || referenceBusy}
                       onChange={(e) => {
-                        const item = cloneProviders.find((value) => value.id === e.target.value);
-                        setTts({
-                          provider: e.target.value,
-                          base_url: item?.base_url || tts.base_url,
-                          model: item?.model || '',
-                          voice: '',
-                          use_model_key: false,
-                          external_reference_enabled: false,
-                          resource_id: 'seed-icl-2.0',
-                          has_api_key:
-                            item?.base_url === features?.tts.base_url && !!features?.tts.has_api_key,
-                        });
-                        setVoiceKey('');
-                        setClearVoiceKey(false);
-                        setTtsModels([]);
-                        setNotice(item?.notice || '请填写该厂商的声音复刻配置。');
+                        const id = e.target.value;
+                        const item = cloneProviders.find((value) => value.id === id);
+                        if (!item) return;
+                        setBusy(true);
+                        void request<{ tts: Features['tts'] | null }>(
+                          `/tts/profile?provider=${encodeURIComponent(id)}&base_url=${encodeURIComponent(item.base_url)}`,
+                        )
+                          .then((stored) => {
+                            setTts(
+                              stored.tts || {
+                                provider: id,
+                                base_url: item.base_url,
+                                model: item.model || '',
+                                voice: '',
+                                use_model_key: false,
+                                external_reference_enabled: false,
+                                has_api_key: false,
+                              },
+                            );
+                            setVoiceKey('');
+                            setClearVoiceKey(false);
+                            setTtsModels([]);
+                            setNotice(
+                              stored.tts?.has_api_key
+                                ? '已恢复此厂商的配置，留空保留对应密钥；请保存后使用。'
+                                : item.notice || '请填写该厂商的密钥。',
+                            );
+                          })
+                          .catch((error: Error) => setNotice(error.message))
+                          .finally(() => setBusy(false));
                       }}
                     >
                       {cloneProviders.map((item) => (
@@ -911,7 +871,8 @@ export function CompanionSettings({
                         )}
                     </select>
                     <span className="field-hint">
-                      阿里云、火山支持实时音频播放；小米克隆采用分句合成。切换厂商后请填写对应密钥和音色。
+                      百炼使用云端音色实时合成；小米引用原 MP3
+                      并合并短句合成。切换厂商后请使用对应密钥和音色。
                     </span>
                   </label>
                   <label className="field">
@@ -982,16 +943,46 @@ export function CompanionSettings({
                   )}
                   <label className="field">
                     TTS 克隆模型 ID
-                    <Input
-                      aria-label="TTS 克隆模型 ID"
-                      readOnly={tts.provider === 'mimo'}
-                      onChange={(e) => setTts({ model: e.target.value })}
-                      value={tts.provider === 'mimo' ? cloneModel : tts.model}
-                    />
+                    {tts.provider === 'aliyun' ? (
+                      <select
+                        aria-label="TTS 克隆模型 ID"
+                        value={tts.model}
+                        onChange={(event) => setTts({ model: event.target.value, voice: '' })}
+                      >
+                        {![
+                          'qwen-audio-3.1-tts-flash',
+                          'qwen-audio-3.0-tts-flash',
+                          'qwen-audio-3.0-tts-plus',
+                        ].includes(tts.model) && (
+                          <option value={tts.model}>{tts.model}（旧配置，请核对）</option>
+                        )}
+                        <option value="qwen-audio-3.1-tts-flash">Qwen-Audio 3.1 Flash</option>
+                        <option value="qwen-audio-3.0-tts-flash">Qwen-Audio 3.0 Flash</option>
+                        <option value="qwen-audio-3.0-tts-plus">Qwen-Audio 3.0 Plus</option>
+                      </select>
+                    ) : (
+                      <Input
+                        aria-label="TTS 克隆模型 ID"
+                        readOnly={tts.provider === 'mimo'}
+                        onChange={(e) => setTts({ model: e.target.value })}
+                        value={tts.provider === 'mimo' ? cloneModel : tts.model}
+                      />
+                    )}
                     <span className="field-hint">
                       音色必须与合成模型、账号及地域匹配；预设列表不代表账号权限验证。
                     </span>
                   </label>
+                  {tts.provider === 'aliyun' && features && (
+                    <CloudVoiceManager
+                      key={tts.base_url + tts.model}
+                      dirty={voiceDirty}
+                      features={features}
+                      onSaved={(next) => {
+                        setFeatureDraft(editableFeatures(next));
+                        onFeaturesSaved(next);
+                      }}
+                    />
+                  )}
                   {tts.provider !== 'mimo' && (
                     <label className="field">
                       克隆音色 ID
@@ -1000,36 +991,14 @@ export function CompanionSettings({
                         value={tts.voice}
                         maxLength={150}
                         onChange={(e) => setTts({ voice: e.target.value })}
-                        placeholder={
-                          tts.provider === 'volcengine'
-                            ? '控制台已就绪的 speaker ID'
-                            : '已创建的 Qwen voice ID'
-                        }
+                        placeholder="已创建的 Qwen voice ID"
                       />
                       <span className="field-hint">合成时只发送文字和音色 ID，无需重复上传 MP3。</span>
                     </label>
                   )}
-                  {tts.provider === 'volcengine' && (
-                    <>
-                      <label className="field">
-                        声音复刻资源 ID
-                        <Input
-                          aria-label="声音复刻资源 ID"
-                          readOnly
-                          value={tts.resource_id || 'seed-icl-2.0'}
-                        />
-                      </label>
-                      <p className="space-note">
-                        使用新版 API Key。请先在火山控制台的音色库完成复刻并确认就绪，再填写 speaker ID。
-                        <a href="https://console.volcengine.com/speech/new/" target="_blank" rel="noreferrer">
-                          打开火山语音控制台
-                        </a>
-                      </p>
-                    </>
-                  )}
                   {!referenceSupported && (
                     <p className="settings-notice" role="status">
-                      当前提供商未适配，请选择小米、阿里云或火山声音复刻服务。
+                      当前提供商未适配，请选择小米或百炼声音复刻服务。
                     </p>
                   )}
                   <label className="field">
@@ -1043,7 +1012,7 @@ export function CompanionSettings({
                       onChange={(e) => setTts({ speed: Number(e.target.value) })}
                     />
                   </label>
-                  {tts.provider !== 'volcengine' && (
+                  {referenceSupported && (
                     <>
                       <div className="reference-panel local-reference-picker">
                         <h3>选择本地参考音频</h3>
@@ -1066,31 +1035,11 @@ export function CompanionSettings({
                             maxLength={1200}
                           />
                           <span className="field-hint">
-                            相对路径从项目目录定位，也可填写运行服务电脑上的绝对路径。手机可用下方文件按钮选择
-                            MP3。
+                            相对路径从项目目录定位，也可填写运行服务电脑上的绝对路径。小米仅引用该文件；百炼也可在云端音色区临时选择
+                            MP3 创建。
                           </span>
                         </label>
-                        <input
-                          ref={referenceFileInput}
-                          type="file"
-                          hidden
-                          accept=".mp3,audio/mpeg"
-                          aria-label="选择参考 MP3 文件"
-                          onChange={(e) => {
-                            const file = e.target.files?.[0];
-                            e.target.value = '';
-                            void uploadReference(file);
-                          }}
-                        />
                         <div className="inline-actions">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={referenceBusy}
-                            onClick={() => referenceFileInput.current?.click()}
-                          >
-                            选择 MP3 文件
-                          </Button>
                           <Button
                             type="button"
                             variant="outline"
@@ -1104,7 +1053,7 @@ export function CompanionSettings({
                           {referenceBusy ? (
                             <>
                               <LoaderCircle size={16} className="spin" />
-                              正在本机登记 MP3…
+                              正在本机验证 MP3…
                             </>
                           ) : referenceInfo ? (
                             <>
@@ -1132,8 +1081,8 @@ export function CompanionSettings({
                           )}
                         </div>
                         <p className="space-note">
-                          文件选择最多 6
-                          MB。验证和文件归档仅在运行服务的电脑完成，不会发送外部服务。上传成功会自动选中，可再次选择同一文件。
+                          音频最多 6
+                          MB。路径验证只在本机执行，不复制文件、不创建参考目录。百炼创建成功后不再依赖此路径。
                         </p>
                       </div>
                       <Toggle
@@ -1156,20 +1105,6 @@ export function CompanionSettings({
                               onChange={(e) => setTts({ reference_text: e.target.value })}
                             />
                           </label>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={
-                              busy ||
-                              referenceBusy ||
-                              voiceDirty ||
-                              !tts.external_reference_enabled ||
-                              !tts.has_api_key
-                            }
-                            onClick={() => void registerVoice()}
-                          >
-                            用已保存的参考音频创建音色（一次）
-                          </Button>
                         </>
                       )}
                     </>
@@ -1356,7 +1291,39 @@ export function CompanionSettings({
             {panel === 'memory' && (
               <>
                 <h2>长期记忆</h2>
-                <p className="space-note">本阶段采用手动总结与确认，不自动保存个人资料。</p>
+                <p className="space-note">
+                  自动记忆基于明确自述，手动总结作为补充。你可以随时修改、删除或暂停自动记忆。
+                </p>
+                {features && (
+                  <div className="reference-panel">
+                    <Toggle
+                      label="自动记忆用户事实"
+                      description="根据明确自述自动保存；记忆仍可查看、更正与删除。"
+                      checked={features.memory?.auto_save ?? true}
+                      onChange={(auto_save) =>
+                        void request<Features>('/features', {
+                          method: 'PATCH',
+                          body: JSON.stringify({ memory: { auto_save } }),
+                        })
+                          .then(onFeaturesSaved)
+                          .catch((error: Error) => setNotice(error.message))
+                      }
+                    />
+                    <Toggle
+                      label="跨聊天回忆"
+                      description="允许读取同一资料空间的真实聊天经历。"
+                      checked={features.memory?.recall_history ?? true}
+                      onChange={(recall_history) =>
+                        void request<Features>('/features', {
+                          method: 'PATCH',
+                          body: JSON.stringify({ memory: { recall_history } }),
+                        })
+                          .then(onFeaturesSaved)
+                          .catch((error: Error) => setNotice(error.message))
+                      }
+                    />
+                  </div>
+                )}
                 <MemorySpace
                   compact
                   conversations={conversations}

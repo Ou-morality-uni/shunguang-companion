@@ -4,6 +4,7 @@ No URL-only protocol switching; tool_use/tool_result are explicitly serialized.
 """
 
 import json
+from urllib.parse import urlparse
 
 import httpx
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
@@ -64,6 +65,8 @@ class AnthropicModel:
             'messages': turns,
             'stream': stream,
         }
+        if urlparse(self.config.llm_base_url).hostname == 'api.deepseek.com':
+            result['thinking'] = {'type': 'disabled'}
         if self.tools:
             converted = [convert_to_openai_tool(tool)['function'] for tool in self.tools]
             result['tools'] = [

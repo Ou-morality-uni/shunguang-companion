@@ -268,7 +268,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
         if (item.group.signature !== currentSignature.current) continue;
         activeGroup.current = item.group;
         prepare(item, token);
-        prepare(queue.current[0], token);
+        if (settingsRef.current?.provider !== 'mimo') prepare(queue.current[0], token);
         setQueued(queue.current.length);
         setBusy(true);
         setLabel(item.label);
@@ -329,7 +329,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
         settings.model === 'mimo-v2.5-tts-voiceclone' &&
         settings.external_reference_enabled &&
         settings.reference_path) ||
-        (['aliyun', 'volcengine'].includes(settings.provider) && settings.voice && settings.model));
+        (settings.provider === 'aliyun' && settings.voice && settings.model));
     if (!valid) setError('请先启用语音并保存该厂商的密钥、克隆模型和参考音频或音色 ID。');
     return !!valid;
   }
@@ -342,7 +342,8 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     playback.clips.push(...clips);
     queue.current.push(...clips.map((clip) => ({ ...clip, group: playback })));
     setQueued(queue.current.length);
-    if (working.current) prepare(queue.current[0], generation.current);
+    if (working.current && settingsRef.current?.provider !== 'mimo')
+      prepare(queue.current[0], generation.current);
     void drain();
   }
   function enqueue(text: string, itemLabel = '叶瞬光的回应') {
@@ -353,14 +354,22 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
       return;
     }
     void prepareGraph().catch(() => {});
-    addChunks(new SpeechSegmenter().push(text, true), group(), itemLabel);
+    addChunks(
+      new SpeechSegmenter(settingsRef.current?.provider === 'mimo' ? 70 : 0).push(text, true),
+      group(),
+      itemLabel,
+    );
   }
   function beginReply() {
     stop();
     setFirstAudioMs(null);
     if (!settings?.enabled || !settings.auto_play || !ready()) return;
     void prepareGraph().catch(() => {});
-    reply.current = { segmenter: new SpeechSegmenter(), group: group(), received: 0 };
+    reply.current = {
+      segmenter: new SpeechSegmenter(settingsRef.current?.provider === 'mimo' ? 70 : 0),
+      group: group(),
+      received: 0,
+    };
   }
   function appendReply(text: string) {
     const current = reply.current;
@@ -373,10 +382,13 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     }
     addChunks(current.segmenter.push(text), current.group);
     if (!flushTimer.current)
-      flushTimer.current = setTimeout(() => {
-        flushTimer.current = null;
-        if (reply.current === current) addChunks(current.segmenter.push('', true), current.group);
-      }, 700);
+      flushTimer.current = setTimeout(
+        () => {
+          flushTimer.current = null;
+          if (reply.current === current) addChunks(current.segmenter.push('', true), current.group);
+        },
+        settingsRef.current?.provider === 'mimo' ? 2400 : 700,
+      );
   }
   function finishReply(text: string) {
     const current = reply.current;

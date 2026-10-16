@@ -484,6 +484,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tts/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Tts Check */
+        post: operations["tts_check_api_tts_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tts/discover": {
         parameters: {
             query?: never;
@@ -510,6 +527,23 @@ export interface paths {
         };
         /** Tts Presets */
         get: operations["tts_presets_api_tts_presets_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tts/profile": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tts Profile */
+        get: operations["tts_profile_api_tts_profile_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -563,6 +597,57 @@ export interface paths {
         put?: never;
         /** Tts Synthesize */
         post: operations["tts_synthesize_api_tts_synthesize_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tts/voices": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Tts Voices */
+        get: operations["tts_voices_api_tts_voices_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tts/voices/delete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Delete Voice */
+        post: operations["delete_voice_api_tts_voices_delete_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tts/voices/select": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Select Voice */
+        post: operations["select_voice_api_tts_voices_select_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -682,6 +767,55 @@ export interface components {
             /** Conversation Id */
             conversation_id?: string | null;
         };
+        /** CloudVoiceCreatedOut */
+        CloudVoiceCreatedOut: {
+            /**
+             * Fallback Mode
+             * @default false
+             */
+            fallback_mode: boolean;
+            /** Features */
+            features: {
+                [key: string]: unknown;
+            };
+            /** Model */
+            model: string;
+            /**
+             * Reused
+             * @default false
+             */
+            reused: boolean;
+            /** Voice */
+            voice: string;
+        };
+        /** CloudVoiceListOut */
+        CloudVoiceListOut: {
+            /** Model */
+            model: string;
+            /** Selected */
+            selected: string;
+            /** Voices */
+            voices: components["schemas"]["CloudVoiceOut"][];
+        };
+        /** CloudVoiceOut */
+        CloudVoiceOut: {
+            /**
+             * Created At
+             * @default
+             */
+            created_at: string;
+            /** Model */
+            model: string;
+            /** Name */
+            name: string;
+            /**
+             * Status
+             * @default OK
+             */
+            status: string;
+            /** Voice */
+            voice: string;
+        };
         /** ConversationOut */
         ConversationOut: {
             /** Created At */
@@ -695,6 +829,10 @@ export interface components {
         };
         /** FeaturePatch */
         FeaturePatch: {
+            /** Memory */
+            memory?: {
+                [key: string]: unknown;
+            } | null;
             /** Reminders */
             reminders?: {
                 [key: string]: unknown;
@@ -760,6 +898,8 @@ export interface components {
         MessageOut: {
             /** Content */
             content: string;
+            /** Context Sources */
+            context_sources?: components["schemas"]["SourceOut"][];
             /** Conversation Id */
             conversation_id: string;
             /** Created At */
@@ -915,6 +1055,8 @@ export interface components {
             title?: string | null;
             /** Url */
             url?: string | null;
+            /** Usage */
+            usage?: string | null;
             /** Verification Status */
             verification_status?: string | null;
             /** Version */
@@ -966,11 +1108,23 @@ export interface components {
         };
         /** VoiceRegistration */
         VoiceRegistration: {
+            /** Audio Base64 */
+            audio_base64?: string | null;
+            /**
+             * Format
+             * @default mp3
+             */
+            format: string;
             /**
              * Name
-             * @default shunguang
+             * @default 叶瞬光
              */
             name: string;
+        };
+        /** VoiceSelection */
+        VoiceSelection: {
+            /** Voice */
+            voice: string;
         };
         /** DiscoveryRequest */
         backend__app__routes__settings__DiscoveryRequest: {
@@ -1880,6 +2034,26 @@ export interface operations {
             };
         };
     };
+    tts_check_api_tts_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     tts_discover_api_tts_discover_post: {
         parameters: {
             query?: never;
@@ -1933,6 +2107,38 @@ export interface operations {
             };
         };
     };
+    tts_profile_api_tts_profile_get: {
+        parameters: {
+            query: {
+                provider: string;
+                base_url: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     tts_register_api_tts_register_post: {
         parameters: {
             query?: never;
@@ -1952,7 +2158,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["CloudVoiceCreatedOut"];
                 };
             };
             /** @description Validation Error */
@@ -2009,6 +2215,92 @@ export interface operations {
         requestBody: {
             content: {
                 "application/json": components["schemas"]["SynthesisRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tts_voices_api_tts_voices_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CloudVoiceListOut"];
+                };
+            };
+        };
+    };
+    delete_voice_api_tts_voices_delete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceSelection"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    select_voice_api_tts_voices_select_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoiceSelection"];
             };
         };
         responses: {

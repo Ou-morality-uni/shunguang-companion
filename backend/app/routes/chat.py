@@ -149,26 +149,45 @@ async def chat(payload: ChatRequest):
     async def stream():
         text = ''
         persisted = False
-        metadata = {'sources': [], 'tools': []}
+        metadata = {'sources': [], 'context_sources': [], 'tools': []}
         assistant = None
         try:
             assistant = await io(runtime.store.add_message, conversation_id, 'assistant', '', 'streaming')
             stored_history = await io(runtime.store.messages, conversation_id, HISTORY_WINDOW + 1)
             yield event('user', user_message)
-            from .. import rag, tools
+            from .. import memory, rag, retrieval_router, tools
             from ..feature_config import load_features
 
             features = await io(load_features)
-            schemas = tools.schemas(features)
+            schemas = tools.schemas(features) + memory.schemas(features.memory)
+            decision = await io(retrieval_router.route, payload.content)
+            metadata['retrieval'] = {'domain': decision['domain'], 'candidate_count': 0, 'context_count': 0}
             try:
-                if (await interruptible(asyncio.to_thread(rag.status), stop)).get('ready'):
+                memory_result = await interruptible(
+                    memory.update_from_message(runtime.store, model, user_message, features.memory, stored_history),
+                    stop,
+                )
+            except StopRequested:
+                raise
+            except Exception:
+                memory_result = {'status': 'failed'}
+            recalled = (
+                await io(runtime.store.recall_history, payload.content, conversation_id)
+                if features.memory.recall_history and decision['domain'] in ('memory', 'memory_knowledge')
+                else []
+            )
+            try:
+                if decision['search'] and (await interruptible(asyncio.to_thread(rag.status), stop)).get('ready'):
                     permit = bool(re.search(r'(允许|接受|可以)剧透', payload.content)) and not bool(
                         re.search(r'(不允许|不接受|不要|禁止|不能).*剧透', payload.content)
                     )
-                    sources = await interruptible(asyncio.to_thread(rag.search, payload.content, 4, permit), stop)
-                    metadata['sources'] = [{**s, 'number': i + 1} for i, s in enumerate(sources)]
-                    if sources:
-                        yield event('sources', {'sources': metadata['sources']})
+                    sources = await interruptible(asyncio.to_thread(rag.search, decision['query'], 8, permit), stop)
+                    metadata['retrieval']['candidate_count'] = len(sources)
+                    sources = await io(retrieval_router.relevant_sources, decision['query'], sources)
+                    metadata['context_sources'] = [
+                        {**s, 'number': i + 1, 'usage': 'context'} for i, s in enumerate(sources)
+                    ]
+                    metadata['retrieval']['context_count'] = len(sources)
             except StopRequested:
                 raise
             except Exception:
@@ -181,19 +200,27 @@ async def chat(payload: ChatRequest):
                     },
                 )
             capabilities = (
-                '当前已确认长期事实仅来自参考数据。工具可用列表：'
+                '用户事实与实际记忆操作结果在参考数据中；不承诺没有成功写入的记忆。日常不要复述技术说明。工具可用列表：'
                 + ','.join(t.get('name', t.get('function', {}).get('name', '')) for t in schemas)
                 + '。工具关闭时不得假称查过天气或网页；需要实时信息请使用可用工具。一次回复最多4次工具调用。TTS和休息提醒由网页设置及播放控件管理，不能通过聊天声称改变设置或创建后台通知。'
             )
             history = await io(
-                build_messages, stored_history, await io(runtime.store.list_memories), metadata['sources'], capabilities
+                build_messages,
+                stored_history,
+                memory.recall_facts(await io(runtime.store.list_memories), payload.content),
+                metadata['context_sources'],
+                capabilities,
+                {'memory_action': memory_result, 'shared_history': recalled},
             )
             count, last_save = 0, time.monotonic()
             async with asyncio.timeout(CHAT_TIMEOUT):
                 for round_index in range(MAX_TOOL_ROUNDS):
                     current = (
                         model.bind_tools(schemas)
-                        if schemas and count < MAX_TOOL_CALLS and round_index < MAX_TOOL_ROUNDS - 1
+                        if schemas
+                        and hasattr(model, 'bind_tools')
+                        and count < MAX_TOOL_CALLS
+                        and round_index < MAX_TOOL_ROUNDS - 1
                         else model
                     )
                     accumulated = None
@@ -231,6 +258,10 @@ async def chat(payload: ChatRequest):
                         yield event('tool', state)
                         if count > MAX_TOOL_CALLS or name not in allowed_names:
                             result = {'ok': False, 'error': '工具未启用或调用次数已达上限。'}
+                        elif name in ('remember_user_fact', 'recall_conversations'):
+                            result = await io(
+                                memory.execute, name, args, runtime.store, user_message, features.memory, stored_history
+                            )
                         else:
                             try:
                                 result = await interruptible(
@@ -252,6 +283,8 @@ async def chat(payload: ChatRequest):
                         )
             if not text.strip():
                 raise EmptyResponseError()
+            metadata['sources'] = retrieval_router.cited_sources(text, metadata['context_sources'])
+            await io(runtime.store.update_summary, conversation_id)
             result = await io(runtime.store.update_message, assistant['id'], text, 'complete', metadata)
             persisted = True
             yield event('done', result)

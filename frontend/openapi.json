@@ -65,6 +65,99 @@
         "title": "ChatRequest",
         "type": "object"
       },
+      "CloudVoiceCreatedOut": {
+        "properties": {
+          "fallback_mode": {
+            "default": false,
+            "title": "Fallback Mode",
+            "type": "boolean"
+          },
+          "features": {
+            "additionalProperties": true,
+            "title": "Features",
+            "type": "object"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "reused": {
+            "default": false,
+            "title": "Reused",
+            "type": "boolean"
+          },
+          "voice": {
+            "title": "Voice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voice",
+          "model",
+          "features"
+        ],
+        "title": "CloudVoiceCreatedOut",
+        "type": "object"
+      },
+      "CloudVoiceListOut": {
+        "properties": {
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "selected": {
+            "title": "Selected",
+            "type": "string"
+          },
+          "voices": {
+            "items": {
+              "$ref": "#/components/schemas/CloudVoiceOut"
+            },
+            "title": "Voices",
+            "type": "array"
+          }
+        },
+        "required": [
+          "voices",
+          "model",
+          "selected"
+        ],
+        "title": "CloudVoiceListOut",
+        "type": "object"
+      },
+      "CloudVoiceOut": {
+        "properties": {
+          "created_at": {
+            "default": "",
+            "title": "Created At",
+            "type": "string"
+          },
+          "model": {
+            "title": "Model",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "status": {
+            "default": "OK",
+            "title": "Status",
+            "type": "string"
+          },
+          "voice": {
+            "title": "Voice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voice",
+          "name",
+          "model"
+        ],
+        "title": "CloudVoiceOut",
+        "type": "object"
+      },
       "ConversationOut": {
         "properties": {
           "created_at": {
@@ -96,6 +189,18 @@
       "FeaturePatch": {
         "additionalProperties": false,
         "properties": {
+          "memory": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Memory"
+          },
           "reminders": {
             "anyOf": [
               {
@@ -276,6 +381,13 @@
           "content": {
             "title": "Content",
             "type": "string"
+          },
+          "context_sources": {
+            "items": {
+              "$ref": "#/components/schemas/SourceOut"
+            },
+            "title": "Context Sources",
+            "type": "array"
           },
           "conversation_id": {
             "title": "Conversation Id",
@@ -693,6 +805,17 @@
             ],
             "title": "Url"
           },
+          "usage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Usage"
+          },
           "verification_status": {
             "anyOf": [
               {
@@ -865,14 +988,50 @@
       "VoiceRegistration": {
         "additionalProperties": false,
         "properties": {
+          "audio_base64": {
+            "anyOf": [
+              {
+                "maxLength": 8000000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Audio Base64"
+          },
+          "format": {
+            "default": "mp3",
+            "pattern": "^(mp3|wav)$",
+            "title": "Format",
+            "type": "string"
+          },
           "name": {
-            "default": "shunguang",
-            "pattern": "^[A-Za-z0-9_]{1,16}$",
+            "default": "叶瞬光",
+            "maxLength": 60,
+            "minLength": 1,
             "title": "Name",
             "type": "string"
           }
         },
         "title": "VoiceRegistration",
+        "type": "object"
+      },
+      "VoiceSelection": {
+        "additionalProperties": false,
+        "properties": {
+          "voice": {
+            "maxLength": 150,
+            "minLength": 1,
+            "pattern": "^[A-Za-z0-9_-]+$",
+            "title": "Voice",
+            "type": "string"
+          }
+        },
+        "required": [
+          "voice"
+        ],
+        "title": "VoiceSelection",
         "type": "object"
       },
       "backend__app__routes__settings__DiscoveryRequest": {
@@ -1910,6 +2069,22 @@
         "summary": "Tts Audio"
       }
     },
+    "/api/tts/check": {
+      "post": {
+        "operationId": "tts_check_api_tts_check_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Tts Check"
+      }
+    },
     "/api/tts/discover": {
       "post": {
         "operationId": "tts_discover_api_tts_discover_post",
@@ -1962,6 +2137,52 @@
         "summary": "Tts Presets"
       }
     },
+    "/api/tts/profile": {
+      "get": {
+        "operationId": "tts_profile_api_tts_profile_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "base_url",
+            "required": true,
+            "schema": {
+              "title": "Base Url",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tts Profile"
+      }
+    },
     "/api/tts/register": {
       "post": {
         "operationId": "tts_register_api_tts_register_post",
@@ -1979,7 +2200,9 @@
           "200": {
             "content": {
               "application/json": {
-                "schema": {}
+                "schema": {
+                  "$ref": "#/components/schemas/CloudVoiceCreatedOut"
+                }
               }
             },
             "description": "Successful Response"
@@ -2068,6 +2291,96 @@
           }
         },
         "summary": "Tts Synthesize"
+      }
+    },
+    "/api/tts/voices": {
+      "get": {
+        "operationId": "tts_voices_api_tts_voices_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CloudVoiceListOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Tts Voices"
+      }
+    },
+    "/api/tts/voices/delete": {
+      "post": {
+        "operationId": "delete_voice_api_tts_voices_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Voice"
+      }
+    },
+    "/api/tts/voices/select": {
+      "post": {
+        "operationId": "select_voice_api_tts_voices_select_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VoiceSelection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Select Voice"
       }
     },
     "/api/voice/preview": {

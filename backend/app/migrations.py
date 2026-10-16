@@ -1,6 +1,6 @@
 """Ordered, transactional upgrades from the pre-versioned database (version 0)."""
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 
 def migrate(db):
@@ -31,6 +31,23 @@ def migrate(db):
         db.execute('DROP TABLE messages_legacy')
         db.execute('CREATE INDEX messages_conversation ON messages(conversation_id,seq)')
         db.execute('PRAGMA user_version=2')
+    if version < 3:
+        db.execute('CREATE TABLE forgotten_messages (message_id TEXT PRIMARY KEY)')
+        db.execute("""CREATE TABLE memory_events (
+            id TEXT PRIMARY KEY, key TEXT NOT NULL, value TEXT NOT NULL,
+            source_message_id TEXT, evidence TEXT NOT NULL, action TEXT NOT NULL,
+            created_at TEXT NOT NULL
+        )""")
+        db.execute("""CREATE TABLE memory_blocks (
+            key TEXT NOT NULL, value TEXT NOT NULL, through_seq INTEGER NOT NULL,
+            PRIMARY KEY(key,value)
+        )""")
+        db.execute("""CREATE TABLE conversation_summaries (
+            conversation_id TEXT PRIMARY KEY, summary TEXT NOT NULL,
+            source_ids TEXT NOT NULL, updated_at TEXT NOT NULL,
+            FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+        )""")
+        db.execute('PRAGMA user_version=3')
 
 
 LEGACY_SCHEMA = """

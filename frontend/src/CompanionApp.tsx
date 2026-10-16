@@ -74,11 +74,17 @@ export default function App() {
     featuresRef = useRef(features);
   audioRef.current = audio;
   featuresRef.current = features;
-  const chat = useConversation((message) => audioRef.current.finishReply(message.content), {
-    start: () => audioRef.current.beginReply(),
-    delta: (text) => audioRef.current.appendReply(text),
-    cancel: () => audioRef.current.stop(),
-  });
+  const chat = useConversation(
+    (message) => {
+      audioRef.current.finishReply(message.content);
+      void refreshMemory();
+    },
+    {
+      start: () => audioRef.current.beginReply(),
+      delta: (text) => audioRef.current.appendReply(text),
+      cancel: () => audioRef.current.stop(),
+    },
+  );
   const {
     conversations,
     active,
@@ -537,7 +543,7 @@ export default function App() {
                     <span>{memoryCount} 条</span>
                   </div>
                   <div className="memory-card-content">
-                    <p>{memoryCount ? '把你确认的小事，放在心上。' : '从空白开始，慢慢认识你。'}</p>
+                    <p>{memoryCount ? '把你说过的小事，放在心上。' : '从空白开始，慢慢认识你。'}</p>
                     <ResourceImage
                       src="/api/resources/character/stickers/10-red-pat.png"
                       alt="叶瞬光摸头表情"

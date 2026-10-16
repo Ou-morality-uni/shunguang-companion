@@ -127,8 +127,15 @@ class ReminderConfig(BaseModel):
         return value
 
 
+class MemoryConfig(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    auto_save: bool = True
+    recall_history: bool = True
+
+
 class FeatureConfig(BaseModel):
     model_config = ConfigDict(extra='forbid')
+    memory: MemoryConfig = Field(default_factory=MemoryConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
     reminders: ReminderConfig = Field(default_factory=ReminderConfig)
@@ -145,6 +152,15 @@ def load() -> FeatureConfig:
             encrypted = block.pop('api_key_encrypted', '')
             block.pop('api_key', None)
             block['api_key'] = SecretStr(decrypt_secret(encrypted) if encrypted else '')
+        if record.get('tts', {}).get('provider') == 'volcengine':
+            record['tts'].update(
+                provider='mimo',
+                enabled=False,
+                voice='',
+                model='mimo-v2.5-tts-voiceclone',
+                base_url='https://api.xiaomimimo.com/v1',
+                api_key=SecretStr(''),
+            )
         return FeatureConfig.model_validate(record)
 
 
@@ -160,6 +176,47 @@ def save(value: FeatureConfig) -> None:
         temp = path.with_suffix('.tmp')
         temp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
         os.replace(temp, path)
+        cache_tts_profile(value.tts)
+
+
+def cache_tts_profile(value):
+    if value.provider not in ('mimo', 'aliyun'):
+        return
+    try:
+        path = config.DATA_DIR / 'tts-profiles.json'
+        profiles = json.loads(path.read_text(encoding='utf-8')) if path.exists() else []
+        if not isinstance(profiles, list) or any(not isinstance(p, dict) for p in profiles):
+            raise ValueError('invalid profile cache')
+        record = value.model_dump(exclude={'api_key'})
+        if value.api_key.get_secret_value():
+            record['api_key_encrypted'] = encrypt_secret(value.api_key.get_secret_value())
+        profiles = [p for p in profiles if (p.get('provider'), p.get('base_url')) != (value.provider, value.base_url)]
+        profiles.append(record)
+        temporary = path.with_suffix('.tmp')
+        temporary.write_text(json.dumps(profiles, ensure_ascii=False, indent=2), encoding='utf-8')
+        os.replace(temporary, path)
+    except (OSError, ValueError, TypeError) as error:
+        from .logging_setup import report_error
+
+        report_error('tts_profile_cache', error)
+
+
+def saved_tts_profile(provider, base_url):
+    with LOCK:
+        current = load().tts
+        if (provider, base_url) == (current.provider, current.base_url):
+            return current
+        path = config.DATA_DIR / 'tts-profiles.json'
+        profiles = json.loads(path.read_text(encoding='utf-8')) if path.exists() else []
+        record = next(
+            (dict(p) for p in profiles if (p.get('provider'), p.get('base_url')) == (provider, base_url)), None
+        )
+        if record is None:
+            return None
+        encrypted = record.pop('api_key_encrypted', '')
+        record.pop('api_key', None)
+        record['api_key'] = SecretStr(decrypt_secret(encrypted) if encrypted else '')
+        return TTSConfig.model_validate(record)
 
 
 def tts_secret(value: TTSConfig) -> str:
@@ -176,15 +233,15 @@ def tts_secret(value: TTSConfig) -> str:
 
 
 def capabilities(value: TTSConfig) -> dict:
-    persistent = (value.provider == 'aliyun' and value.model.startswith('qwen3-tts-vc-realtime-')) or (
-        value.provider == 'volcengine' and value.resource_id == 'seed-icl-2.0'
-    )
+    from .tts_providers import aliyun_model_supported
+
+    persistent = value.provider == 'aliyun' and aliyun_model_supported(value.model)
     return {
         'reference_audio': value.provider == 'mimo' and value.model == 'mimo-v2.5-tts-voiceclone',
         'persistent_voice': persistent,
         'streaming_audio': persistent,
-        'reference_upload_local': True,
-        'voice_discovery': False,
+        'reference_upload_local': False,
+        'voice_discovery': value.provider == 'aliyun',
         'voice_id_generation': value.provider == 'aliyun',
     }
 
@@ -217,14 +274,14 @@ def public(value: FeatureConfig) -> dict:
     )
     result['tts']['capabilities'] = capabilities(value.tts)
     result['tts']['notice'] = (
-        '小米每次合成提交参考音频；阿里云和火山使用已注册的音色 ID。不会自动切换厂商或使用预置音色兜底。'
+        '小米每次合成提交参考音频；百炼使用已注册的云端音色 ID。不会自动切换厂商或使用预置音色兜底。'
     )
     return result
 
 
 def update(patch: dict) -> FeatureConfig:
     with LOCK:
-        if set(patch) - {'tools', 'tts', 'reminders'}:
+        if set(patch) - {'tools', 'tts', 'reminders', 'memory'}:
             raise ValueError('未知设置分类')
         current = load()
         record = current.model_dump()
@@ -246,10 +303,30 @@ def update(patch: dict) -> FeatureConfig:
                     block.get('provider', previous.provider) == previous.provider
                     and block.get('base_url', previous.base_url).rstrip('/') == previous.base_url
                 )
+                if name == 'tts' and not same_origin:
+                    cache_tts_profile(previous)
+                saved = (
+                    saved_tts_profile(
+                        block.get('provider', previous.provider), block.get('base_url', previous.base_url).rstrip('/')
+                    )
+                    if name == 'tts' and not same_origin
+                    else None
+                )
                 block['api_key'] = SecretStr(
-                    '' if clear else submitted or (previous.api_key.get_secret_value() if same_origin else '')
+                    ''
+                    if clear
+                    else submitted
+                    or (
+                        previous.api_key.get_secret_value()
+                        if same_origin
+                        else saved.api_key.get_secret_value()
+                        if saved
+                        else ''
+                    )
                 )
             record[name].update(block)
+        if patch.get('tts', {}).get('provider') == 'volcengine':
+            raise ValueError('火山语音已移除，请选择小米或百炼')
         updated = FeatureConfig.model_validate(record)
         if (
             updated.tts.reference_end <= updated.tts.reference_start

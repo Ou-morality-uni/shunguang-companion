@@ -16,7 +16,7 @@ from ..config import (
     saved_profiles,
 )
 from ..constants import VERSION
-from ..llm import build_model, extract_text, friendly_error
+from ..llm import EmptyResponseError, build_model, extract_text, friendly_error
 from ..logging_setup import report_error
 from ..providers import PRESETS, discover
 from ..runtime import require_config
@@ -165,7 +165,10 @@ async def test_provider():
     config = await asyncio.to_thread(require_config)
     try:
         result = await build_model(config).ainvoke('请仅回复“连接成功”。')
-        return {'ok': True, 'message': extract_text(result.content)[:150]}
+        text = extract_text(result.content).strip()
+        if not text:
+            raise EmptyResponseError()
+        return {'ok': True, 'message': text[:150], 'model': config.llm_model, 'protocol': config.llm_protocol}
     except Exception as error:
         report_error('provider', error)
         raise HTTPException(502, friendly_error(error))

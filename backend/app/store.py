@@ -1,4 +1,5 @@
 import json
+import re
 import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
@@ -114,7 +115,13 @@ class Store:
             records = [dict(row) for row in db.execute(query, params)][::-1]
             for record in records:
                 metadata = json.loads(record.pop('metadata', '{}'))
-                record.update({'sources': metadata.get('sources', []), 'tools': metadata.get('tools', [])})
+                record.update(
+                    {
+                        'sources': metadata.get('sources', []),
+                        'context_sources': metadata.get('context_sources', []),
+                        'tools': metadata.get('tools', []),
+                    }
+                )
             return records
 
     def add_message(self, conversation_id: str, role: str, content: str, status: str = 'complete', metadata=None):
@@ -162,6 +169,20 @@ class Store:
             if not db.execute('SELECT id FROM conversations WHERE id=?', (conversation_id,)).fetchone():
                 raise ValueError('来源对话已删除，请重新选择对话。')
             for item in items[:30]:
+                if db.execute(
+                    'SELECT 1 FROM forgotten_messages WHERE message_id=?', (item['source_message_id'],)
+                ).fetchone():
+                    continue
+                source = db.execute(
+                    'SELECT seq,content FROM messages WHERE id=?', (item['source_message_id'],)
+                ).fetchone()
+                if (
+                    not source
+                    or db.execute(
+                        'SELECT 1 FROM memory_blocks WHERE value=? AND through_seq>=?', (item['value'], source['seq'])
+                    ).fetchone()
+                ):
+                    continue
                 record = {**item, 'id': str(uuid4()), 'conversation_id': conversation_id, 'created_at': now()}
                 db.execute(
                     'INSERT INTO memory_candidates(id,conversation_id,key,value,evidence,source_message_id,created_at) VALUES(:id,:conversation_id,:key,:value,:evidence,:source_message_id,:created_at)',
@@ -183,6 +204,18 @@ class Store:
                 ).fetchone()
                 if not candidate:
                     raise ValueError('候选记忆不存在或已经确认，请重新总结。')
+                source = db.execute('SELECT seq FROM messages WHERE id=?', (candidate['source_message_id'],)).fetchone()
+                if (
+                    not source
+                    or db.execute(
+                        'SELECT 1 FROM memory_blocks WHERE value=? AND through_seq>=?', (item['value'], source['seq'])
+                    ).fetchone()
+                ):
+                    raise ValueError('此候选来自已忘记的内容，请用新的用户消息明确重新保存。')
+                if db.execute(
+                    'SELECT 1 FROM forgotten_messages WHERE message_id=?', (candidate['source_message_id'],)
+                ).fetchone():
+                    raise ValueError('此候选来自已忘记的消息。')
                 existing = db.execute('SELECT * FROM memories WHERE key=?', (item['key'],)).fetchone()
                 record = {
                     'id': existing['id'] if existing else str(uuid4()),
@@ -202,6 +235,9 @@ class Store:
 
     def edit_memory(self, memory_id, value):
         with self.connect() as db:
+            previous = db.execute('SELECT * FROM memories WHERE id=?', (memory_id,)).fetchone()
+            if previous and previous['value'] != value:
+                self._block(db, previous['key'], previous['value'], previous['source_message_id'])
             result = db.execute(
                 'UPDATE memories SET value=?,source_message_id=NULL,updated_at=? WHERE id=?', (value, now(), memory_id)
             )
@@ -211,5 +247,123 @@ class Store:
 
     def delete_memory(self, memory_id):
         with self.connect() as db:
+            previous = db.execute('SELECT * FROM memories WHERE id=?', (memory_id,)).fetchone()
+            if previous:
+                self._block(db, previous['key'], previous['value'], previous['source_message_id'])
             result = db.execute('DELETE FROM memories WHERE id=?', (memory_id,))
             return result.rowcount == 1
+
+    @staticmethod
+    def _block(db, key, value, source_message_id=None):
+        boundary = db.execute('SELECT COALESCE(MAX(seq),0) FROM messages').fetchone()[0]
+        db.execute(
+            'INSERT INTO memory_blocks VALUES(?,?,?) ON CONFLICT(key,value) DO UPDATE SET through_seq=excluded.through_seq',
+            (key, value, boundary),
+        )
+        db.execute('DELETE FROM conversation_summaries')
+        source = db.execute('SELECT * FROM messages WHERE id=?', (source_message_id,)).fetchone()
+        if source:
+            following = db.execute(
+                "SELECT MIN(seq) FROM messages WHERE conversation_id=? AND role='user' AND seq>?",
+                (source['conversation_id'], source['seq']),
+            ).fetchone()[0]
+            ids = db.execute(
+                'SELECT id FROM messages WHERE conversation_id=? AND seq>=? AND seq<?',
+                (source['conversation_id'], source['seq'], following or boundary + 1),
+            ).fetchall()
+            db.executemany('INSERT OR IGNORE INTO forgotten_messages VALUES(?)', [(row['id'],) for row in ids])
+
+    def save_fact(self, key, value, evidence, source_message_id):
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            source = db.execute(
+                "SELECT * FROM messages WHERE id=? AND role='user' AND status='complete'", (source_message_id,)
+            ).fetchone()
+            if (
+                not source
+                or evidence not in source['content']
+                or value not in evidence
+                or db.execute('SELECT 1 FROM forgotten_messages WHERE message_id=?', (source_message_id,)).fetchone()
+            ):
+                raise ValueError('没有可核对的用户原话')
+            if db.execute(
+                'SELECT 1 FROM memory_blocks WHERE key=? AND value=? AND through_seq>=?', (key, value, source['seq'])
+            ).fetchone():
+                raise ValueError('此来源已被用户要求忘记')
+            old = db.execute('SELECT * FROM memories WHERE key=?', (key,)).fetchone()
+            if old and old['value'] != value:
+                self._block(db, old['key'], old['value'], old['source_message_id'])
+            record = {
+                'id': old['id'] if old else str(uuid4()),
+                'key': key,
+                'value': value,
+                'source_message_id': source_message_id,
+                'created_at': old['created_at'] if old else now(),
+                'updated_at': now(),
+            }
+            db.execute(
+                'INSERT INTO memories VALUES(:id,:key,:value,:source_message_id,:created_at,:updated_at) ON CONFLICT(key) DO UPDATE SET value=excluded.value,source_message_id=excluded.source_message_id,updated_at=excluded.updated_at',
+                record,
+            )
+            db.execute(
+                'INSERT INTO memory_events VALUES(?,?,?,?,?,?,?)',
+                (str(uuid4()), key, value, source_message_id, evidence, 'save', now()),
+            )
+            return record
+
+    def recall_history(self, query, current_conversation_id, limit=6):
+        terms = re.findall(r'[a-zA-Z0-9]{2,}|[\u4e00-\u9fff]{2,}', query)
+        terms = {
+            part
+            for term in terms
+            for part in ([term] if term.isascii() else [term[i : i + 2] for i in range(len(term) - 1)])
+        }
+        generic = {'记得', '上次', '聊天', '什么', '我们', '那个', '之前', '昨天', '你还', '知道'}
+        terms -= generic
+        with self.connect() as db:
+            blocks = list(db.execute('SELECT * FROM memory_blocks'))
+            sql = "SELECT m.*,c.title FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.conversation_id<>? AND m.status='complete' AND m.id NOT IN (SELECT message_id FROM forgotten_messages)"
+            parameters = [current_conversation_id]
+            if terms and not re.search(r'上个聊天|另一个聊天|上次聊|昨天聊', query):
+                bounded_terms = sorted(terms, key=lambda term: (-len(term), term))[:20]
+                sql += ' AND (' + ' OR '.join('instr(lower(m.content),lower(?))>0' for _ in bounded_terms) + ')'
+                parameters.extend(bounded_terms)
+            sql += ' ORDER BY m.seq DESC LIMIT 200'
+            rows = list(db.execute(sql, parameters))
+        ranked = []
+        for row in rows:
+            if any(row['seq'] <= b['through_seq'] and b['value'] in row['content'] for b in blocks):
+                continue
+            score = sum(term.casefold() in row['content'].casefold() for term in terms)
+            if score or not terms or re.search(r'上个聊天|另一个聊天|上次聊|昨天聊', query):
+                ranked.append((score, row['seq'], row))
+        ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        return [
+            {
+                'message_id': row['id'],
+                'conversation_id': row['conversation_id'],
+                'title': row['title'],
+                'role': row['role'],
+                'time': row['created_at'],
+                'text': row['content'][:1800],
+            }
+            for _, _, row in ranked[:limit]
+        ]
+
+    def update_summary(self, conversation_id):
+        with self.connect() as db:
+            rows = list(
+                db.execute(
+                    "SELECT id,content,seq FROM messages WHERE conversation_id=? AND role='user' AND status='complete' AND id NOT IN (SELECT message_id FROM forgotten_messages) ORDER BY seq DESC LIMIT 12",
+                    (conversation_id,),
+                )
+            )
+            blocks = list(db.execute('SELECT * FROM memory_blocks'))
+            rows = [
+                r for r in rows if not any(r['seq'] <= b['through_seq'] and b['value'] in r['content'] for b in blocks)
+            ]
+            summary = '\n'.join(r['content'][:250] for r in reversed(rows))
+            db.execute(
+                'INSERT INTO conversation_summaries VALUES(?,?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET summary=excluded.summary,source_ids=excluded.source_ids,updated_at=excluded.updated_at',
+                (conversation_id, summary, json.dumps([r['id'] for r in rows]), now()),
+            )

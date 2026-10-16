@@ -10,7 +10,21 @@ from backend.app import config, credentials, main, runtime, tools
 from backend.app.logging_setup import report_error
 from backend.app.migrations import LEGACY_SCHEMA, SCHEMA_VERSION
 from backend.app.routes import chat
+from backend.app.routes import settings as settings_routes
 from backend.app.store import Store
+
+
+def test_connection_check_rejects_empty_model_text(client, monkeypatch):
+    config.save_config(config.ModelConfig(llm_model='test', llm_api_key='test-key'))
+
+    class Model:
+        async def ainvoke(self, _):
+            return AIMessageChunk(content='')
+
+    monkeypatch.setattr(settings_routes, 'build_model', lambda _: Model())
+    response = client.post('/api/providers/test')
+    assert response.status_code == 502
+    assert '没有返回文本' in response.json()['detail']
 
 
 @pytest.fixture

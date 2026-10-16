@@ -15,6 +15,7 @@ class ConversationOut(BaseModel):
 
 
 class SourceOut(BaseModel):
+    usage: str | None = None
     id: str | None = None
     number: int | None = None
     title: str | None = None
@@ -48,6 +49,7 @@ class MessageOut(BaseModel):
     created_at: str
     seq: int | None = None
     sources: list[SourceOut] = Field(default_factory=list)
+    context_sources: list[SourceOut] = Field(default_factory=list)
     tools: list[ToolEventOut] = Field(default_factory=list)
 
 
@@ -74,3 +76,25 @@ class MemoryOut(BaseModel):
     source_message_id: str | None = None
     created_at: str
     updated_at: str
+
+
+class CloudVoiceOut(BaseModel):
+    voice: str
+    name: str
+    model: str
+    created_at: str = ''
+    status: str = 'OK'
+
+
+class CloudVoiceListOut(BaseModel):
+    voices: list[CloudVoiceOut]
+    model: str
+    selected: str
+
+
+class CloudVoiceCreatedOut(BaseModel):
+    voice: str
+    model: str
+    features: dict[str, Any]
+    fallback_mode: bool = False
+    reused: bool = False

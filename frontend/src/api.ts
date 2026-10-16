@@ -3,6 +3,7 @@ import { SseDecoder } from './sse';
 type Schemas = components['schemas'];
 type OptionalFields<T> = { [K in keyof T]?: Exclude<T[K], null> };
 export type ModelSettings = Schemas['SettingsOut'];
+export type CloudVoice = Schemas['CloudVoiceOut'];
 export type Conversation = Schemas['ConversationOut'];
 export type Source = OptionalFields<Schemas['SourceOut']>;
 export type ToolEvent = OptionalFields<Schemas['ToolEventOut']>;
@@ -38,6 +39,7 @@ export interface Provider {
   notice?: string;
 }
 export interface Features {
+  memory?: { auto_save: boolean; recall_history: boolean };
   tools: {
     weather_enabled: boolean;
     search_enabled: boolean;

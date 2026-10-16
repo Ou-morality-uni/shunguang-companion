@@ -240,7 +240,7 @@ export function ChatThread({
                   ))}
                 </div>
                 <div className="welcome-footnote">
-                  <span className="subtle-dot" /> 资料有来处，记忆由你确认
+                  <span className="subtle-dot" /> 资料有来处，记忆随时可管理
                 </div>
               </motion.div>
             ) : (

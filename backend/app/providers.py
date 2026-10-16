@@ -29,8 +29,9 @@ PRESETS = [
 
 
 class ProviderError(Exception):
-    def __init__(self, status_code=502):
+    def __init__(self, status_code=502, *, code='upstream'):
         self.status_code = status_code
+        self.code = code
         super().__init__('Upstream request failed')
 
 

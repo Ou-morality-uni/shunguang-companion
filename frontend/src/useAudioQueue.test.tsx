@@ -10,10 +10,10 @@ vi.mock('./speechStream', async (original) => ({
   streamSpeech: vi.fn(),
 }));
 const settings: Features['tts'] = {
-  provider: 'mimo',
-  base_url: 'https://api.xiaomimimo.com/v1',
-  model: 'mimo-v2.5-tts-voiceclone',
-  voice: '',
+  provider: 'aliyun',
+  base_url: 'https://dashscope.aliyuncs.com',
+  model: 'qwen3-tts-vc-realtime-2026-01-15',
+  voice: 'cloud-voice',
   enabled: true,
   auto_play: true,
   external_reference_enabled: true,
@@ -177,4 +177,29 @@ it('configuration changes abort work and invalidate replay', async () => {
   act(() => result.current.replay());
   expect(result.current.error).toContain('当前配置');
   expect(played).toEqual([]);
+});
+
+it('batches short MiMo sentences and does not prefetch another billed request', async () => {
+  vi.useFakeTimers();
+  const pending = pendingRequests();
+  const mimo = {
+    ...settings,
+    provider: 'mimo',
+    base_url: 'https://api.xiaomimimo.com/v1',
+    model: 'mimo-v2.5-tts-voiceclone',
+    voice: '',
+  };
+  const { result } = renderHook(() => useAudioQueue(mimo));
+  act(() => {
+    result.current.beginReply();
+    result.current.appendReply('第一句。第二句。');
+  });
+  expect(pending).toHaveLength(0);
+  await act(async () => vi.advanceTimersByTimeAsync(2400));
+  expect(pending.map((x) => x.text)).toEqual(['第一句。第二句。']);
+  act(() => result.current.finishReply('第一句。第二句。'));
+  expect(pending).toHaveLength(1);
+  act(() => result.current.stop());
+  expect(pending[0].signal.aborted).toBe(true);
+  await act(async () => pending[0].resolve({ audio_url: '/api/tts/audio/old.wav' }));
 });

@@ -41,30 +41,35 @@ PRESETS = [
     },
     {
         'id': 'aliyun',
-        'name': '阿里云 · Qwen 实时声音复刻',
+        'name': '阿里云百炼 · 云端声音复刻',
         'base_url': 'https://dashscope.aliyuncs.com',
-        'model': 'qwen3-tts-vc-realtime-2026-01-15',
+        'model': 'qwen-audio-3.1-tts-flash',
         'voice': '',
-        'models': ['qwen3-tts-vc-realtime-2026-01-15', 'qwen3-tts-vc-realtime-2025-11-27'],
+        'models': [
+            'qwen-audio-3.1-tts-flash',
+            'qwen-audio-3.0-tts-flash',
+            'qwen-audio-3.0-tts-plus',
+            'qwen3-tts-vc-realtime-2026-01-15',
+        ],
         'reference_supported': True,
         'notice': '一次创建音色，之后使用音色 ID 实时合成。音色与模型、地域及账号必须匹配。',
-    },
-    {
-        'id': 'volcengine',
-        'name': '火山引擎 · 豆包声音复刻 2.0',
-        'base_url': 'https://openspeech.bytedance.com',
-        'model': 'seed-tts-2.0-standard',
-        'voice': '',
-        'models': ['seed-tts-2.0-standard'],
-        'reference_supported': True,
-        'notice': '先在火山控制台完成声音复刻，填写已就绪的 speaker ID；使用新版 API Key 鉴权。',
     },
 ]
 
 
 class VoiceError(Exception):
-    def __init__(self, message: str, status=502):
+    def __init__(
+        self, message: str, status=502, *, code='voice_error', stage='synthesis', request_id=None, retry_safe=False
+    ):
         self.message, self.status = message, status
+        self.code, self.stage = code, stage
+        self.retry_safe = retry_safe
+        self.request_id = (
+            request_id if isinstance(request_id, str) and re.fullmatch(r'[a-zA-Z0-9_-]{1,80}', request_id) else None
+        )
+
+    def diagnostic(self):
+        return {'message': self.message, 'code': self.code, 'stage': self.stage, 'request_id': self.request_id}
 
 
 async def validate_origin(base_url: str, provider: str):
@@ -78,16 +83,11 @@ async def validate_origin(base_url: str, provider: str):
         or parsed.fragment
     ):
         raise VoiceError('语音地址必须是无账号和查询参数的 HTTPS 地址。', 422)
-    if provider in ('aliyun', 'volcengine'):
-        allowed = (
-            base_url == 'https://openspeech.bytedance.com'
-            if provider == 'volcengine'
-            else (
-                base_url in ('https://dashscope.aliyuncs.com', 'https://dashscope-intl.aliyuncs.com')
-                or bool(
-                    re.fullmatch(r'https://[a-zA-Z0-9-]+\.(?:cn-beijing|ap-southeast-1)\.maas\.aliyuncs\.com', base_url)
-                )
-            )
+    if provider == 'volcengine':
+        raise VoiceError('火山语音已移除，请选择小米或百炼。', 422)
+    if provider == 'aliyun':
+        allowed = base_url in ('https://dashscope.aliyuncs.com', 'https://dashscope-intl.aliyuncs.com') or bool(
+            re.fullmatch(r'https://[a-zA-Z0-9-]+\.(?:cn-beijing|ap-southeast-1)\.maas\.aliyuncs\.com', base_url)
         )
         if not allowed:
             raise VoiceError('请填写该语音厂商的官方地址，不能跨厂商发送密钥。', 422)
@@ -122,16 +122,24 @@ def headers(settings: TTSConfig, secret: str):
 
 def response_error(status):
     if status in (401, 403):
-        raise VoiceError('语音服务鉴权或权限失败，请检查密钥及模型权限。')
+        raise VoiceError(
+            '语音服务鉴权或权限失败，请检查密钥及模型权限。',
+            code='authentication' if status == 401 else 'permission',
+            stage='http',
+        )
     if status == 429:
-        raise VoiceError('语音服务限流或额度不足，请稍后重试。')
+        raise VoiceError(
+            '语音服务请求受限（HTTP 429）。请降低请求频率，并在厂商后台核对额度与限流；当前无法仅凭此状态确定余额不足。',
+            code='rate_limit',
+            stage='http',
+        )
     if status in (400, 404, 422):
         raise VoiceError('语音模型、音色或请求格式不被上游支持，请检查配置。')
     if status >= 300:
         raise VoiceError('语音服务返回错误，未取得可用音频。')
 
 
-async def upstream(settings, secret, method, path, payload=None, maximum=MAX_AUDIO_BYTES):
+async def upstream(settings, secret, method, path, payload=None, maximum=MAX_AUDIO_BYTES, extra_headers=None):
     await validate_origin(settings.base_url, settings.provider)
     try:
         # Retry only connection establishment: no HTTP body has been sent.
@@ -146,14 +154,38 @@ async def upstream(settings, secret, method, path, payload=None, maximum=MAX_AUD
                     trust_env=system_proxy,
                 ) as client:
                     async with client.stream(
-                        method, settings.base_url + path, headers=headers(settings, secret), json=payload
+                        method,
+                        settings.base_url + path,
+                        headers={**headers(settings, secret), **(extra_headers or {})},
+                        json=payload,
                     ) as response:
-                        response_error(response.status_code)
                         result = bytearray()
                         async for chunk in response.aiter_bytes():
                             result.extend(chunk)
                             if len(result) > maximum:
                                 raise VoiceError('语音响应超过允许大小，请缩短文字或参考片段。')
+                        if response.status_code >= 300 and settings.provider == 'aliyun':
+                            from .cloud_voices import provider_error
+
+                            try:
+                                error = provider_error(json.loads(result), 'http')
+                            except (ValueError, TypeError):
+                                error = VoiceError(
+                                    '百炼返回非预期响应，请检查地址和网络。', code='invalid_response', stage='http'
+                                )
+                            if response.status_code in (401, 403, 429):
+                                try:
+                                    response_error(response.status_code)
+                                except VoiceError as status_error:
+                                    error = status_error
+                            error.status = (
+                                response.status_code
+                                if response.status_code in (400, 401, 403, 404, 409, 422, 429)
+                                else 502
+                            )
+                            error.retry_safe = response.status_code in (400, 401, 403, 404, 422)
+                            raise error
+                        response_error(response.status_code)
                         return bytes(result), response.headers.get('content-type', '')
             except (httpx.ConnectError, httpx.ConnectTimeout):
                 if not system_proxy:
@@ -167,7 +199,7 @@ async def upstream(settings, secret, method, path, payload=None, maximum=MAX_AUD
 
 
 async def discover(settings: TTSConfig):
-    if settings.provider in ('aliyun', 'volcengine'):
+    if settings.provider == 'aliyun':
         preset = next(item for item in PRESETS if item['id'] == settings.provider)
         return {
             'models': [{'id': model} for model in preset['models']],
@@ -349,16 +381,8 @@ def inspect_reference(value: str):
         'sha256': digest,
         'duration': duration,
     }
-    with REFERENCE_LOCK:
-        entries = [item for item in reference_index() if item.get('id') != identifier]
-        entries.append(record)
-        reference_root().mkdir(parents=True, exist_ok=True)
-        temporary = reference_root() / 'index.tmp'
-        temporary.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding='utf-8')
-        os.replace(temporary, reference_root() / 'index.json')
     return {
         **record,
-        'url': f'/api/voice/references/{identifier}/file',
         'notice': '已选择并验证本机参考音频。克隆使用该文件完整音频，不截取片段、不使用预置音色；保存配置后生效。',
     }
 
@@ -486,44 +510,6 @@ def preview(reference_id, start, end):
         **store_audio(prepare_reference(reference_id, start, end)),
         'kind': 'reference_preview',
         'notice': '这是本机参考录音片段试听，不是动态合成。',
-    }
-
-
-def upload_reference(name, audio_format, encoded, text=''):
-    if audio_format not in ('wav', 'mp3') or len(encoded) > 8_000_000:
-        raise VoiceError('本机参考上传支持不超过 6 MB 的 WAV 或 MP3。', 422)
-    try:
-        data = base64.b64decode(encoded, validate=True)
-    except ValueError:
-        raise VoiceError('参考音频编码不正确。', 422)
-    if not data or len(data) > MAX_REFERENCE_BYTES:
-        raise VoiceError('参考音频为空或超过 6 MB。', 422)
-    duration = validate_audio(data, audio_format)
-    reference_id = uuid.uuid4().hex
-    root = reference_root()
-    root.mkdir(parents=True, exist_ok=True)
-    (root / (reference_id + '.' + audio_format)).write_bytes(data)
-    record = {
-        'id': reference_id,
-        'name': name[:100],
-        'path': display_reference_path((root / (reference_id + '.' + audio_format)).resolve()),
-        'format': audio_format,
-        'bytes': len(data),
-        'sha256': hashlib.sha256(data).hexdigest(),
-        'text': text[:2000],
-        'duration': duration,
-    }
-    with REFERENCE_LOCK:
-        entries = reference_index()
-        entries.append(record)
-        path = root / 'index.json'
-        temp = path.with_suffix('.tmp')
-        temp.write_text(json.dumps(entries, ensure_ascii=False, indent=2), encoding='utf-8')
-        os.replace(temp, path)
-    return {
-        **record,
-        'url': f'/api/voice/references/{reference_id}/file',
-        'notice': '仅保存到运行电脑，尚未发送外部服务。',
     }
 
 

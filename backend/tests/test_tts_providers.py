@@ -2,7 +2,6 @@
 
 import asyncio
 import base64
-import io
 import json
 import wave
 
@@ -17,7 +16,7 @@ from backend.app import tts_providers as tts
 PCM = b'\x01\x00' * 2400
 
 
-def settings(provider='volcengine', **changes):
+def settings(provider='aliyun', **changes):
     return feature_config.TTSConfig(
         **{
             'enabled': True,
@@ -40,62 +39,11 @@ def fake_http(monkeypatch, handler):
     )
 
 
-def test_volc_protocol_and_audio_before_completion(monkeypatch):
-    closed = []
-
-    class Chunks(httpx.AsyncByteStream):
-        async def __aiter__(self):
-            # Split a JSON frame mid-token; audio must arrive before terminal response.
-            data = json.dumps({'code': 0, 'data': base64.b64encode(PCM).decode()}).encode() + b'\n'
-            yield data[:9]
-            yield data[9:]
-            yield b'{"code":20000000,"message":"OK"}'
-
-        async def aclose(self):
-            closed.append(True)
-
-    def handler(request):
-        assert request.url.path == '/api/v3/tts/unidirectional'
-        assert request.headers['X-Api-Key'] == 'test-only-key'
-        assert request.headers['X-Api-Resource-Id'] == 'seed-icl-2.0'
-        body = json.loads(request.content)
-        assert body['req_params']['speaker'] == 'registered-test-voice'
-        assert body['req_params']['audio_params'] == {'format': 'pcm', 'sample_rate': 24000}
-        assert 'audio' not in body and 'reference' not in request.content.decode()
-        return httpx.Response(200, stream=Chunks())
-
-    fake_http(monkeypatch, handler)
-
-    async def run():
-        stream = tts.stream_events(settings(), '你好')
-        first = await anext(stream)
-        assert first['event'] == 'audio' and not closed
-        assert base64.b64decode(first['data']['pcm']) == PCM
-        result = await anext(stream)
-        assert result['event'] == 'done'
-        with wave.open(io.BytesIO(voice.audio_path(result['data']['audio_id'] + '.wav').read_bytes())) as wav:
-            assert wav.readframes(2400) == PCM
-        await stream.aclose()
-
-    asyncio.run(run())
-    assert closed
-
-
-@pytest.mark.parametrize(
-    'body',
-    [
-        b'{"code":45000000,"message":"private-provider-debug"}\n',
-        b'{"code":0,"data":"invalid-base64!"}\n',
-        b'{"code":0,"data":"AQA="}\n',  # No terminal event: don't cache partial speech.
-        b'not json\n',
-    ],
-)
-def test_incomplete_or_error_stream_is_not_cached(monkeypatch, body):
-    fake_http(monkeypatch, lambda request: httpx.Response(200, content=body))
-    with pytest.raises(voice.VoiceError) as failure:
-        asyncio.run(voice.synthesize(settings(), '你好'))
-    assert 'private-provider-debug' not in str(failure.value)
-    assert not list(config.DATA_DIR.glob('audio/*.wav'))
+def test_removed_volcengine_cannot_synthesize_or_be_selected():
+    assert 'volcengine' not in tts.PROVIDERS
+    assert {x['id'] for x in voice.PRESETS} == {'mimo', 'aliyun'}
+    with pytest.raises(voice.VoiceError):
+        asyncio.run(voice.synthesize(settings('volcengine'), '你好'))
 
 
 def test_aliyun_websocket_handshake_and_voice_id_only(monkeypatch):
@@ -150,7 +98,7 @@ def test_stream_cancellation_closes_provider_and_never_caches(monkeypatch):
         finally:
             closed.append(True)
 
-    monkeypatch.setattr(tts.PROVIDERS['volcengine'], 'pcm', pcm)
+    monkeypatch.setattr(tts.PROVIDERS['aliyun'], 'pcm', pcm)
 
     async def run():
         stream = tts.stream_events(settings(), '你好')
@@ -204,7 +152,7 @@ def test_http_stream_route_and_safe_error_event(monkeypatch):
         yield PCM
         raise voice.VoiceError('额度不足')
 
-    monkeypatch.setattr(tts.PROVIDERS['volcengine'], 'pcm', pcm)
+    monkeypatch.setattr(tts.PROVIDERS['aliyun'], 'pcm', pcm)
     app = FastAPI()
     app.include_router(services.router)
     with TestClient(app) as client:
@@ -260,3 +208,47 @@ def test_disconnected_nonstream_request_cancels_synthesis(monkeypatch):
     with pytest.raises(HTTPException) as error:
         asyncio.run(services.tts_synthesize(services.SynthesisRequest(text='你好'), Disconnected()))
     assert error.value.status_code == 499 and cancelled
+
+
+@pytest.mark.parametrize(
+    'frames',
+    [
+        ['{"type":"session.updated"}', '{"type":"session.finished"}'],
+        ['{"type":"session.updated"}', '{"type":"response.audio.delta","delta":"invalid!"}'],
+        [
+            '{"type":"session.updated"}',
+            '{"type":"error","error":{"code":"invalid_api_key","message":"private-secret"}}',
+        ],
+    ],
+)
+def test_bad_aliyun_frames_never_cache_incomplete_audio(monkeypatch, frames):
+    class Socket:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            pass
+
+        async def send(self, data):
+            pass
+
+        def __aiter__(self):
+            return self.events()
+
+        async def events(self):
+            for frame in frames:
+                yield frame
+
+    monkeypatch.setattr(tts, 'NoRedirectConnect', lambda *args, **kwargs: Socket())
+    with pytest.raises(voice.VoiceError) as error:
+        asyncio.run(voice.synthesize(settings(), '你好'))
+    assert 'private-secret' not in error.value.message
+    assert not list(config.DATA_DIR.glob('audio/*.wav'))
+
+
+def test_model_not_exist_close_is_distinguished_from_network_failure():
+    from websockets.exceptions import ConnectionClosedError
+    from websockets.frames import Close
+
+    error = tts.connection_error(ConnectionClosedError(Close(1007, 'Model not exist.'), None))
+    assert error.code == 'model_unavailable'

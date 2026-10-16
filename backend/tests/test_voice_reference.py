@@ -45,7 +45,8 @@ def test_relative_absolute_selection_and_protected_reference_route(local):
     assert selected.status_code == 200
     info = selected.json()
     assert info['path'] == relative and info['sha256'] == hashlib.sha256(sample()).hexdigest()
-    assert client.get(info['url']).content == sample()
+    assert 'url' not in info
+    assert not (config.DATA_DIR / 'voice-references').exists()
     assert client.post('/api/voice/reference/inspect', json={'path': str(path)}).json()['id'] == info['id']
     external = temp / 'outside.WAV'
     external.write_bytes(sample())
@@ -61,15 +62,10 @@ def test_relative_absolute_selection_and_protected_reference_route(local):
     )
 
 
-def test_upload_returns_usable_path_and_selected_file_is_cloned(local, monkeypatch):
+def test_path_is_used_without_copy_and_selected_file_is_cloned(local, monkeypatch):
     client, path, temp = local
-    uploaded = client.post(
-        '/api/voice/references/upload',
-        json={'name': 'new.wav', 'format': 'wav', 'audio_base64': base64.b64encode(sample()).decode()},
-    ).json()
-    assert uploaded['path'].startswith('data/voice-references/')
-    inspected = client.post('/api/voice/reference/inspect', json={'path': uploaded['path']}).json()
-    assert inspected['sha256'] == uploaded['sha256']
+    uploaded = client.post('/api/voice/reference/inspect', json={'path': str(path)}).json()
+    assert not (config.DATA_DIR / 'voice-references').exists()
     calls = []
 
     async def upstream(settings, secret, method, endpoint, payload, **kwargs):

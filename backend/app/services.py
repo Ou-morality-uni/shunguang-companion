@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
 from . import feature_config, reminders, tools, voice
+from .schemas import CloudVoiceCreatedOut, CloudVoiceListOut
 
 router = APIRouter()
 SYNTHESIS_SLOTS = asyncio.Semaphore(2)
@@ -19,6 +20,7 @@ class FeaturePatch(BaseModel):
     tools: dict | None = None
     tts: dict | None = None
     reminders: dict | None = None
+    memory: dict | None = None
 
 
 @router.get('/api/features')
@@ -45,6 +47,17 @@ def features_patch(payload: FeaturePatch):
 @router.get('/api/tts/presets')
 def tts_presets():
     return voice.PRESETS
+
+
+@router.get('/api/tts/profile')
+def tts_profile(provider: str, base_url: str):
+    try:
+        profile = feature_config.saved_tts_profile(provider, base_url.rstrip('/'))
+        if not profile:
+            return {'tts': None}
+        return {'tts': feature_config.public(feature_config.FeatureConfig(tts=profile))['tts']}
+    except (OSError, ValueError, RuntimeError):
+        raise HTTPException(503, '已保存的厂商语音配置暂时无法读取。')
 
 
 class DiscoveryRequest(BaseModel):
@@ -139,7 +152,7 @@ async def tts_stream(payload: SynthesisRequest):
                 async for event in stream:
                     yield f'event: {event["event"]}\ndata: {json.dumps(event["data"])}\n\n'
         except voice.VoiceError as error:
-            yield f'event: error\ndata: {json.dumps({"message": error.message})}\n\n'
+            yield f'event: error\ndata: {json.dumps(error.diagnostic())}\n\n'
         except Exception:
             yield 'event: error\ndata: {"message":"语音流中断，文字聊天仍可使用。"}\n\n'
 
@@ -155,19 +168,67 @@ async def tts_stream(payload: SynthesisRequest):
 
 class VoiceRegistration(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    name: str = Field(default='shunguang', pattern=r'^[A-Za-z0-9_]{1,16}$')
+    name: str = Field(default='叶瞬光', min_length=1, max_length=60)
+    audio_base64: str | None = Field(default=None, max_length=8_000_000)
+    format: str = Field(default='mp3', pattern=r'^(mp3|wav)$')
 
 
-@router.post('/api/tts/register')
-async def tts_register(payload: VoiceRegistration):
-    from .tts_providers import register_aliyun
+@router.post('/api/tts/check')
+async def tts_check():
+    from .cloud_voices import settings_now
+    from .tts_providers import check_model
 
     try:
-        return await register_aliyun(feature_config.load().tts, payload.name)
+        return await check_model(settings_now())
+    except voice.VoiceError as error:
+        return {'ok': False, **error.diagnostic()}
+
+
+@router.post('/api/tts/register', response_model=CloudVoiceCreatedOut)
+async def tts_register(payload: VoiceRegistration):
+    from . import cloud_voices
+
+    try:
+        return await cloud_voices.create(payload.name.strip(), payload.audio_base64, payload.format)
     except voice.VoiceError as error:
         raise HTTPException(error.status, error.message)
     except Exception:
-        raise HTTPException(502, '音色创建未能确认成功，请先在厂商控制台查询，避免重复创建。')
+        raise HTTPException(502, '音色创建未能确认成功，请先刷新云端音色列表，避免重复创建。')
+
+
+@router.get('/api/tts/voices', response_model=CloudVoiceListOut)
+async def tts_voices():
+    from . import cloud_voices
+
+    try:
+        return await cloud_voices.list_voices()
+    except voice.VoiceError as error:
+        raise HTTPException(error.status, error.message)
+
+
+class VoiceSelection(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    voice: str = Field(min_length=1, max_length=150, pattern=r'^[A-Za-z0-9_-]+$')
+
+
+@router.post('/api/tts/voices/select')
+async def select_voice(payload: VoiceSelection):
+    from . import cloud_voices
+
+    try:
+        return await cloud_voices.choose(payload.voice)
+    except voice.VoiceError as error:
+        raise HTTPException(error.status, error.message)
+
+
+@router.post('/api/tts/voices/delete')
+async def delete_voice(payload: VoiceSelection):
+    from . import cloud_voices
+
+    try:
+        return await cloud_voices.delete(payload.voice)
+    except voice.VoiceError as error:
+        raise HTTPException(error.status, error.message)
 
 
 @router.get('/api/tts/audio/{name}')
@@ -241,14 +302,7 @@ class ReferenceUpload(BaseModel):
 
 @router.post('/api/voice/references/upload', status_code=201)
 async def reference_upload(payload: ReferenceUpload):
-    try:
-        return await asyncio.to_thread(
-            voice.upload_reference, payload.name, payload.format, payload.audio_base64, payload.text
-        )
-    except voice.VoiceError as error:
-        raise HTTPException(error.status, error.message)
-    except OSError:
-        raise HTTPException(503, '参考音频无法保存到本机。')
+    raise HTTPException(410, '本地参考音频归档已停用。小米请填写本机路径；百炼请在创建音色时临时提交 MP3。')
 
 
 @router.get('/api/reminders/poll')
