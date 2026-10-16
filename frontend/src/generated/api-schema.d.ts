@@ -920,6 +920,7 @@ export interface components {
              * @enum {string}
              */
             status: "complete" | "streaming" | "interrupted" | "error";
+            sticker?: components["schemas"]["StickerOut"] | null;
             /** Tools */
             tools?: components["schemas"]["ToolEventOut"][];
         };
@@ -1061,6 +1062,22 @@ export interface components {
             verification_status?: string | null;
             /** Version */
             version?: string | null;
+        };
+        /** StickerOut */
+        StickerOut: {
+            /** Caption */
+            caption: string;
+            /** Id */
+            id: string;
+            /**
+             * Persona
+             * @constant
+             */
+            persona: "red";
+            /** Scene */
+            scene: string;
+            /** Url */
+            url: string;
         };
         /** SynthesisRequest */
         SynthesisRequest: {

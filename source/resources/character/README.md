@@ -1,6 +1,10 @@
 # 角色资料与视觉资源
 
-默认聊天头像为 `avatar.png`，保持原指定图片。`stickers/` 附带全部23张表情，`visual-assets.json`记录原20张表情和头像元数据；另外3张图片独立保留。`gallery.html`浏览原20张表情。
+默认聊天头像为 `avatar.png`，保持原指定图片。`stickers/` 附带全部53张表情：原20张、初期预览3张，以及2026-10-16新增的红色人格日常表情30张。`visual-assets.json`记录头像与表情资源元数据。
+
+`stickers/gallery.html`浏览原20张表情；`stickers/daily-gallery.html`浏览新增30张日常表情。新增图片采用`21-red-daily-*.png`至`50-red-daily-*.png`命名，`stickers/daily-index.json`记录文字与文件名的对应关系，供应用选择表情使用。未保存生成提示词。
+
+`stickers/reactions.json`登记44张红色人格图片的情绪/场景标签，用于每条新完成回复的自动表情附件。没有合适场景时选择中性陪伴图；白色人格不进入自动兜底池。增加图片需要同时登记文件、人格和场景，扩展说明见 `docs/chat-stickers.md`。
 
 `raw/<SHA256>/<原文件名>`保留角色原文和历史版本；`manifest.json`保存内容哈希、来源类型、导入时间和核实状态。同名文件的多个版本保留，检索区分历史版本。
 

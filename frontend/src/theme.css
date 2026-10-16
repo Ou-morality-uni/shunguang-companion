@@ -1248,6 +1248,21 @@ h1 em {
   padding: 13px 16px;
   color: #edcac2;
 }
+.message-sticker {
+  margin-top: 14px;
+  width: min(160px, 100%);
+}
+.message-sticker img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 1;
+  object-fit: contain;
+}
+.sticker-fallback {
+  color: var(--muted);
+  font-size: 14px;
+}
 .message-actions {
   display: flex;
   margin-top: 9px;

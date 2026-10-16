@@ -437,6 +437,16 @@
             "title": "Status",
             "type": "string"
           },
+          "sticker": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StickerOut"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "tools": {
             "items": {
               "$ref": "#/components/schemas/ToolEventOut"
@@ -840,6 +850,40 @@
           }
         },
         "title": "SourceOut",
+        "type": "object"
+      },
+      "StickerOut": {
+        "properties": {
+          "caption": {
+            "title": "Caption",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "persona": {
+            "const": "red",
+            "title": "Persona",
+            "type": "string"
+          },
+          "scene": {
+            "title": "Scene",
+            "type": "string"
+          },
+          "url": {
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "url",
+          "caption",
+          "persona",
+          "scene"
+        ],
+        "title": "StickerOut",
         "type": "object"
       },
       "SynthesisRequest": {

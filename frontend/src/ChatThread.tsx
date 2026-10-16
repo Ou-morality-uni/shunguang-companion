@@ -28,6 +28,7 @@ import { avatarUrl, type Message, type Source, type ToolEvent } from './api';
 import { Sources, ToolFeedback } from './Evidence';
 import { useCompanionAudio } from './useAudioQueue';
 import { ResourceImage } from './ResourceImage';
+import { MessageSticker } from './MessageSticker';
 import { MAX_MESSAGE_LENGTH } from './generated/limits';
 const MarkdownText = () => <MarkdownTextPrimitive defer smooth />;
 const MessagesContext = createContext<Message[]>([]);
@@ -75,6 +76,9 @@ function ChatMessage() {
               </span>
             )}
           </div>
+          {!user && record?.status === 'complete' && record.sticker && (
+            <MessageSticker key={record.sticker.id} sticker={record.sticker} />
+          )}
           <ToolFeedback tools={record?.tools} />
           <Sources sources={record?.sources} />
           <ActionBarPrimitive.Root className="message-actions">

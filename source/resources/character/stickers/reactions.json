@@ -1,0 +1,447 @@
+{
+  "schema_version": 1,
+  "scenes": {
+    "neutral": "通用回应、平静交流；没有贴切表情时安静陪伴",
+    "listen": "倾听心事、认真听对方说，避免打断或调侃",
+    "comfort": "对方难过、失落、焦虑时温柔安慰，不抢走对方情绪",
+    "encourage": "鼓励努力、支持尝试，不对失败强行庆祝",
+    "celebrate": "对方明确分享成功或好消息，替对方高兴",
+    "thanks": "叶瞬光向对方表达感谢",
+    "affection": "双方轻松亲近、表达喜欢或想抱抱",
+    "shy": "叶瞬光被夸赞、害羞或轻微心动",
+    "moved": "叶瞬光被对方的关心感动",
+    "playful": "双方轻松开心、开玩笑，没有人正在难过",
+    "morning": "明确的早安或起床场景",
+    "night": "明确的晚安、睡前告别或提醒早点休息",
+    "welcome": "对方刚刚回来，欢迎重逢",
+    "apology": "叶瞬光为自己刚才的言行道歉",
+    "water": "这一轮明确提醒对方喝水",
+    "meal_question": "叶瞬光正在问对方是否吃饭",
+    "meal_reminder": "这一轮明确提醒对方记得吃饭",
+    "snack": "轻松分享美食、给对方一口吃的",
+    "rest": "劝对方歇一下、放松，不是催促继续工作",
+    "tired": "体谅对方忙碌劳累，说辛苦啦",
+    "patience": "宽慰着急或受挫的对方，陪他慢慢来",
+    "reassure": "告诉对方没关系，不必自责",
+    "agree": "轻松答应、认可一项提议",
+    "thinking": "叶瞬光正在认真思考、斟酌问题",
+    "curious": "想听或看看对方分享的事情",
+    "travel": "对方出门、旅途或通勤，祝一路平安",
+    "rain": "这一轮明确提醒对方带伞、防雨",
+    "cold": "这一轮明确提醒对方添衣保暖",
+    "sleepy": "叶瞬光自己困了、打哈欠的轻松场景",
+    "start": "一起开始一件事、陪伴行动",
+    "care": "明确叮嘱对方照顾自己、保重",
+    "wait": "确实请对方暂等，不暗示后台会自行继续工作",
+    "sad": "叶瞬光自己轻微委屈；不能用于对方正倾诉痛苦时撒娇"
+  },
+  "items": [
+    {
+      "id": "01-red-thanks",
+      "file": "01-red-thanks.png",
+      "caption": "谢谢",
+      "persona": "red",
+      "scenes": [
+        "thanks"
+      ]
+    },
+    {
+      "id": "02-red-shy",
+      "file": "02-red-shy.png",
+      "caption": "戳手手",
+      "persona": "red",
+      "scenes": [
+        "shy"
+      ]
+    },
+    {
+      "id": "03-red-hug",
+      "file": "03-red-hug.png",
+      "caption": "抱抱",
+      "persona": "red",
+      "scenes": [
+        "comfort",
+        "affection"
+      ]
+    },
+    {
+      "id": "04-red-cheer",
+      "file": "04-red-cheer.png",
+      "caption": "加油",
+      "persona": "red",
+      "scenes": [
+        "encourage"
+      ]
+    },
+    {
+      "id": "05-red-heart",
+      "file": "05-red-heart.png",
+      "caption": "比心",
+      "persona": "red",
+      "scenes": [
+        "affection"
+      ]
+    },
+    {
+      "id": "06-red-morning",
+      "file": "06-red-morning.png",
+      "caption": "早安",
+      "persona": "red",
+      "scenes": [
+        "morning"
+      ]
+    },
+    {
+      "id": "07-red-night",
+      "file": "07-red-night.png",
+      "caption": "晚安",
+      "persona": "red",
+      "scenes": [
+        "night"
+      ]
+    },
+    {
+      "id": "08-red-sorry",
+      "file": "08-red-sorry.png",
+      "caption": "对不起",
+      "persona": "red",
+      "scenes": [
+        "apology"
+      ]
+    },
+    {
+      "id": "09-red-welcome",
+      "file": "09-red-welcome.png",
+      "caption": "欢迎回来",
+      "persona": "red",
+      "scenes": [
+        "welcome"
+      ]
+    },
+    {
+      "id": "10-red-pat",
+      "file": "10-red-pat.png",
+      "caption": "摸摸头",
+      "persona": "red",
+      "scenes": [
+        "comfort"
+      ]
+    },
+    {
+      "id": "11-red-moved",
+      "file": "11-red-moved.png",
+      "caption": "感动",
+      "persona": "red",
+      "scenes": [
+        "moved",
+        "thanks"
+      ]
+    },
+    {
+      "id": "12-red-hehe",
+      "file": "12-red-hehe.png",
+      "caption": "嘿嘿",
+      "persona": "red",
+      "scenes": [
+        "playful"
+      ]
+    },
+    {
+      "id": "ye-shunguang-sad",
+      "file": "ye-shunguang-sad.png",
+      "caption": "委屈",
+      "persona": "red",
+      "scenes": [
+        "sad"
+      ]
+    },
+    {
+      "id": "ye-shunguang-thumbs-up",
+      "file": "ye-shunguang-thumbs-up.png",
+      "caption": "赞",
+      "persona": "red",
+      "scenes": [
+        "celebrate",
+        "encourage"
+      ]
+    },
+    {
+      "id": "21-red-daily-here",
+      "file": "21-red-daily-here.png",
+      "caption": "在呢",
+      "persona": "red",
+      "scenes": [
+        "playful"
+      ]
+    },
+    {
+      "id": "22-red-daily-listening",
+      "file": "22-red-daily-listening.png",
+      "caption": "你说，我听着",
+      "persona": "red",
+      "scenes": [
+        "neutral",
+        "listen"
+      ]
+    },
+    {
+      "id": "23-red-daily-yes",
+      "file": "23-red-daily-yes.png",
+      "caption": "好呀",
+      "persona": "red",
+      "scenes": [
+        "agree"
+      ]
+    },
+    {
+      "id": "24-red-daily-wait",
+      "file": "24-red-daily-wait.png",
+      "caption": "等我一下",
+      "persona": "red",
+      "scenes": [
+        "wait"
+      ]
+    },
+    {
+      "id": "25-red-daily-water",
+      "file": "25-red-daily-water.png",
+      "caption": "喝口水吧",
+      "persona": "red",
+      "scenes": [
+        "water"
+      ]
+    },
+    {
+      "id": "26-red-daily-meal-question",
+      "file": "26-red-daily-meal-question.png",
+      "caption": "吃饭了吗",
+      "persona": "red",
+      "scenes": [
+        "meal_question"
+      ]
+    },
+    {
+      "id": "27-red-daily-share-bite",
+      "file": "27-red-daily-share-bite.png",
+      "caption": "给你一口",
+      "persona": "red",
+      "scenes": [
+        "snack"
+      ]
+    },
+    {
+      "id": "28-red-daily-take-break",
+      "file": "28-red-daily-take-break.png",
+      "caption": "歇一会儿",
+      "persona": "red",
+      "scenes": [
+        "rest"
+      ]
+    },
+    {
+      "id": "29-red-daily-hard-work",
+      "file": "29-red-daily-hard-work.png",
+      "caption": "辛苦啦",
+      "persona": "red",
+      "scenes": [
+        "tired"
+      ]
+    },
+    {
+      "id": "30-red-daily-take-time",
+      "file": "30-red-daily-take-time.png",
+      "caption": "慢慢来",
+      "persona": "red",
+      "scenes": [
+        "patience",
+        "encourage"
+      ]
+    },
+    {
+      "id": "31-red-daily-its-okay",
+      "file": "31-red-daily-its-okay.png",
+      "caption": "没关系的",
+      "persona": "red",
+      "scenes": [
+        "reassure",
+        "comfort"
+      ]
+    },
+    {
+      "id": "32-red-daily-already-great",
+      "file": "32-red-daily-already-great.png",
+      "caption": "已经很棒啦",
+      "persona": "red",
+      "scenes": [
+        "encourage"
+      ]
+    },
+    {
+      "id": "33-red-daily-sit-together",
+      "file": "33-red-daily-sit-together.png",
+      "caption": "陪你坐会儿",
+      "persona": "red",
+      "scenes": [
+        "neutral",
+        "listen",
+        "comfort"
+      ]
+    },
+    {
+      "id": "34-red-daily-let-me-see",
+      "file": "34-red-daily-let-me-see.png",
+      "caption": "让我看看",
+      "persona": "red",
+      "scenes": [
+        "curious"
+      ]
+    },
+    {
+      "id": "35-red-daily-safe-trip",
+      "file": "35-red-daily-safe-trip.png",
+      "caption": "路上小心",
+      "persona": "red",
+      "scenes": [
+        "travel"
+      ]
+    },
+    {
+      "id": "36-red-daily-umbrella",
+      "file": "36-red-daily-umbrella.png",
+      "caption": "带伞了吗",
+      "persona": "red",
+      "scenes": [
+        "rain"
+      ]
+    },
+    {
+      "id": "37-red-daily-warm-clothes",
+      "file": "37-red-daily-warm-clothes.png",
+      "caption": "穿暖一点",
+      "persona": "red",
+      "scenes": [
+        "cold"
+      ]
+    },
+    {
+      "id": "38-red-daily-sleepy",
+      "file": "38-red-daily-sleepy.png",
+      "caption": "困了……",
+      "persona": "red",
+      "scenes": [
+        "sleepy"
+      ]
+    },
+    {
+      "id": "39-red-daily-okay",
+      "file": "39-red-daily-okay.png",
+      "caption": "好哒",
+      "persona": "red",
+      "scenes": [
+        "agree"
+      ]
+    },
+    {
+      "id": "40-red-daily-nodding",
+      "file": "40-red-daily-nodding.png",
+      "caption": "嗯嗯！",
+      "persona": "red",
+      "scenes": [
+        "agree"
+      ]
+    },
+    {
+      "id": "41-red-daily-thinking",
+      "file": "41-red-daily-thinking.png",
+      "caption": "想一想哦",
+      "persona": "red",
+      "scenes": [
+        "thinking"
+      ]
+    },
+    {
+      "id": "42-red-daily-wake-up",
+      "file": "42-red-daily-wake-up.png",
+      "caption": "起床啦～",
+      "persona": "red",
+      "scenes": [
+        "morning"
+      ]
+    },
+    {
+      "id": "43-red-daily-rest-early",
+      "file": "43-red-daily-rest-early.png",
+      "caption": "早点休息呀",
+      "persona": "red",
+      "scenes": [
+        "night"
+      ]
+    },
+    {
+      "id": "44-red-daily-remember-meal",
+      "file": "44-red-daily-remember-meal.png",
+      "caption": "记得吃饭哦",
+      "persona": "red",
+      "scenes": [
+        "meal_reminder"
+      ]
+    },
+    {
+      "id": "45-red-daily-lets-begin",
+      "file": "45-red-daily-lets-begin.png",
+      "caption": "一起开始吧",
+      "persona": "red",
+      "scenes": [
+        "start"
+      ]
+    },
+    {
+      "id": "46-red-daily-come-back",
+      "file": "46-red-daily-come-back.png",
+      "caption": "回来啦～",
+      "persona": "red",
+      "scenes": [
+        "welcome"
+      ]
+    },
+    {
+      "id": "47-red-daily-take-care",
+      "file": "47-red-daily-take-care.png",
+      "caption": "照顾好自己呀",
+      "persona": "red",
+      "scenes": [
+        "care"
+      ]
+    },
+    {
+      "id": "48-red-daily-great-job",
+      "file": "48-red-daily-great-job.png",
+      "caption": "你好棒！",
+      "persona": "red",
+      "scenes": [
+        "celebrate",
+        "encourage"
+      ]
+    },
+    {
+      "id": "49-red-daily-by-your-side",
+      "file": "49-red-daily-by-your-side.png",
+      "caption": "在呢，陪着你",
+      "persona": "red",
+      "scenes": [
+        "neutral",
+        "listen",
+        "comfort"
+      ]
+    },
+    {
+      "id": "50-red-daily-end-of-day",
+      "file": "50-red-daily-end-of-day.png",
+      "caption": "今天也辛苦啦",
+      "persona": "red",
+      "scenes": [
+        "tired"
+      ]
+    }
+  ]
+}

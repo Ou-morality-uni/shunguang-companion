@@ -120,6 +120,7 @@ class Store:
                         'sources': metadata.get('sources', []),
                         'context_sources': metadata.get('context_sources', []),
                         'tools': metadata.get('tools', []),
+                        'sticker': metadata.get('sticker'),
                     }
                 )
             return records

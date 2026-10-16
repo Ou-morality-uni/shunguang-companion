@@ -8,7 +8,7 @@ from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, ToolMessage
 from pydantic import BaseModel, Field, field_validator
 
-from .. import runtime
+from .. import runtime, stickers
 from ..constants import CHAT_TIMEOUT, HISTORY_WINDOW, MAX_MESSAGE_LENGTH, MAX_TOOL_CALLS, MAX_TOOL_ROUNDS
 from ..llm import EmptyResponseError, build_messages, build_model, extract_text, friendly_error
 from ..logging_setup import report_error
@@ -159,6 +159,7 @@ async def chat(payload: ChatRequest):
             from ..feature_config import load_features
 
             features = await io(load_features)
+            sticker_catalog = await io(stickers.load_catalog)
             schemas = tools.schemas(features) + memory.schemas(features.memory)
             decision = await io(retrieval_router.route, payload.content)
             metadata['retrieval'] = {'domain': decision['domain'], 'candidate_count': 0, 'context_count': 0}
@@ -203,6 +204,7 @@ async def chat(payload: ChatRequest):
                 '用户事实与实际记忆操作结果在参考数据中；不承诺没有成功写入的记忆。日常不要复述技术说明。工具可用列表：'
                 + ','.join(t.get('name', t.get('function', {}).get('name', '')) for t in schemas)
                 + '。工具关闭时不得假称查过天气或网页；需要实时信息请使用可用工具。一次回复最多4次工具调用。TTS和休息提醒由网页设置及播放控件管理，不能通过聊天声称改变设置或创建后台通知。'
+                + stickers.instruction(sticker_catalog)
             )
             history = await io(
                 build_messages,
@@ -213,8 +215,11 @@ async def chat(payload: ChatRequest):
                 {'memory_action': memory_result, 'shared_history': recalled},
             )
             count, last_save = 0, time.monotonic()
+            sticker_hint = ''
             async with asyncio.timeout(CHAT_TIMEOUT):
                 for round_index in range(MAX_TOOL_ROUNDS):
+                    decoration = stickers.ReplyDecoration()
+                    round_text = ''
                     current = (
                         model.bind_tools(schemas)
                         if schemas
@@ -226,13 +231,19 @@ async def chat(payload: ChatRequest):
                     accumulated = None
                     async for chunk in cancellable_chunks(current, history, stop):
                         accumulated = chunk if accumulated is None else accumulated + chunk
-                        delta = extract_text(chunk.content)
+                        delta = decoration.push(extract_text(chunk.content))
                         if delta:
+                            round_text += delta
                             text += delta
                             yield event('delta', {'text': delta})
                             if time.monotonic() - last_save >= 0.4:
                                 await io(runtime.store.update_message, assistant['id'], text, 'streaming', metadata)
                                 last_save = time.monotonic()
+                    tail = decoration.finish()
+                    if tail:
+                        round_text += tail
+                        text += tail
+                        yield event('delta', {'text': tail})
                     if stop.is_set():
                         result = await io(
                             runtime.store.update_message,
@@ -246,8 +257,9 @@ async def chat(payload: ChatRequest):
                         return
                     calls = getattr(accumulated, 'tool_calls', []) if accumulated else []
                     if not calls:
+                        sticker_hint = decoration.hint
                         break
-                    history.append(AIMessage(content=extract_text(accumulated.content), tool_calls=calls))
+                    history.append(AIMessage(content=round_text, tool_calls=calls))
                     allowed_names = {t.get('name', t.get('function', {}).get('name')) for t in schemas}
                     for call in calls:
                         if stop.is_set():
@@ -284,6 +296,7 @@ async def chat(payload: ChatRequest):
             if not text.strip():
                 raise EmptyResponseError()
             metadata['sources'] = retrieval_router.cited_sources(text, metadata['context_sources'])
+            metadata['sticker'] = stickers.choose(sticker_catalog, sticker_hint, stored_history, assistant['id'])
             await io(runtime.store.update_summary, conversation_id)
             result = await io(runtime.store.update_message, assistant['id'], text, 'complete', metadata)
             persisted = True

@@ -5,6 +5,7 @@ type Schemas = components['schemas'];
 type OptionalFields<T> = { [K in keyof T]?: Exclude<T[K], null> };
 export type ModelSettings = Schemas['SettingsOut'];
 export type CloudVoice = Schemas['CloudVoiceOut'];
+export type Sticker = Schemas['StickerOut'];
 export type Conversation = Schemas['ConversationOut'];
 export type Source = OptionalFields<Schemas['SourceOut']>;
 export type ToolEvent = OptionalFields<Schemas['ToolEventOut']>;

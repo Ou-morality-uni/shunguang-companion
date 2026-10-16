@@ -11,8 +11,15 @@
   },
   "stickers": {
     "path": "stickers/",
-    "count": 20,
-    "red_persona_count": 12,
-    "white_persona_count": 8
+    "count": 53,
+    "red_persona_count": 44,
+    "white_persona_count": 9,
+    "daily_collection": {
+      "count": 30,
+      "persona": "red",
+      "index": "stickers/daily-index.json",
+      "gallery": "stickers/daily-gallery.html",
+      "filename_pattern": "*-red-daily-*.png"
+    }
   }
 }

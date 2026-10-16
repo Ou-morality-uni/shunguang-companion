@@ -40,6 +40,14 @@ class ToolEventOut(BaseModel):
     arguments: Any = None
 
 
+class StickerOut(BaseModel):
+    id: str
+    url: str
+    caption: str
+    persona: Literal['red']
+    scene: str
+
+
 class MessageOut(BaseModel):
     id: str
     conversation_id: str
@@ -51,6 +59,7 @@ class MessageOut(BaseModel):
     sources: list[SourceOut] = Field(default_factory=list)
     context_sources: list[SourceOut] = Field(default_factory=list)
     tools: list[ToolEventOut] = Field(default_factory=list)
+    sticker: StickerOut | None = None
 
 
 class SettingsOut(BaseModel):

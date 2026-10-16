@@ -1,0 +1,158 @@
+{
+  "collection": "叶瞬光红色人格日常陪伴",
+  "date": "2026-10-16",
+  "persona": "red",
+  "count": 30,
+  "items": [
+    {
+      "id": 21,
+      "caption": "在呢",
+      "file": "21-red-daily-here.png"
+    },
+    {
+      "id": 22,
+      "caption": "你说，我听着",
+      "file": "22-red-daily-listening.png"
+    },
+    {
+      "id": 23,
+      "caption": "好呀",
+      "file": "23-red-daily-yes.png"
+    },
+    {
+      "id": 24,
+      "caption": "等我一下",
+      "file": "24-red-daily-wait.png"
+    },
+    {
+      "id": 25,
+      "caption": "喝口水吧",
+      "file": "25-red-daily-water.png"
+    },
+    {
+      "id": 26,
+      "caption": "吃饭了吗",
+      "file": "26-red-daily-meal-question.png"
+    },
+    {
+      "id": 27,
+      "caption": "给你一口",
+      "file": "27-red-daily-share-bite.png"
+    },
+    {
+      "id": 28,
+      "caption": "歇一会儿",
+      "file": "28-red-daily-take-break.png"
+    },
+    {
+      "id": 29,
+      "caption": "辛苦啦",
+      "file": "29-red-daily-hard-work.png"
+    },
+    {
+      "id": 30,
+      "caption": "慢慢来",
+      "file": "30-red-daily-take-time.png"
+    },
+    {
+      "id": 31,
+      "caption": "没关系的",
+      "file": "31-red-daily-its-okay.png"
+    },
+    {
+      "id": 32,
+      "caption": "已经很棒啦",
+      "file": "32-red-daily-already-great.png"
+    },
+    {
+      "id": 33,
+      "caption": "陪你坐会儿",
+      "file": "33-red-daily-sit-together.png"
+    },
+    {
+      "id": 34,
+      "caption": "让我看看",
+      "file": "34-red-daily-let-me-see.png"
+    },
+    {
+      "id": 35,
+      "caption": "路上小心",
+      "file": "35-red-daily-safe-trip.png"
+    },
+    {
+      "id": 36,
+      "caption": "带伞了吗",
+      "file": "36-red-daily-umbrella.png"
+    },
+    {
+      "id": 37,
+      "caption": "穿暖一点",
+      "file": "37-red-daily-warm-clothes.png"
+    },
+    {
+      "id": 38,
+      "caption": "困了……",
+      "file": "38-red-daily-sleepy.png"
+    },
+    {
+      "id": 39,
+      "caption": "好哒",
+      "file": "39-red-daily-okay.png"
+    },
+    {
+      "id": 40,
+      "caption": "嗯嗯！",
+      "file": "40-red-daily-nodding.png"
+    },
+    {
+      "id": 41,
+      "caption": "想一想哦",
+      "file": "41-red-daily-thinking.png"
+    },
+    {
+      "id": 42,
+      "caption": "起床啦～",
+      "file": "42-red-daily-wake-up.png"
+    },
+    {
+      "id": 43,
+      "caption": "早点休息呀",
+      "file": "43-red-daily-rest-early.png"
+    },
+    {
+      "id": 44,
+      "caption": "记得吃饭哦",
+      "file": "44-red-daily-remember-meal.png"
+    },
+    {
+      "id": 45,
+      "caption": "一起开始吧",
+      "file": "45-red-daily-lets-begin.png"
+    },
+    {
+      "id": 46,
+      "caption": "回来啦～",
+      "file": "46-red-daily-come-back.png"
+    },
+    {
+      "id": 47,
+      "caption": "照顾好自己呀",
+      "file": "47-red-daily-take-care.png"
+    },
+    {
+      "id": 48,
+      "caption": "你好棒！",
+      "file": "48-red-daily-great-job.png"
+    },
+    {
+      "id": 49,
+      "caption": "在呢，陪着你",
+      "file": "49-red-daily-by-your-side.png"
+    },
+    {
+      "id": 50,
+      "caption": "今天也辛苦啦",
+      "file": "50-red-daily-end-of-day.png"
+    }
+  ]
+}

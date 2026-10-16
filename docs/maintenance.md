@@ -19,6 +19,8 @@
 
 `services.py` 的语音、工具和提醒路由继续复用公共访问保护。检索继续使用现有模型；语音新增多厂商适配，见 [TTS 接入与选型](tts.md)。
 
+聊天表情由 `stickers.py`、图片场景清单和前端 `MessageSticker` 管理；沿用消息 metadata 保存，不新增数据库表或独立模型请求。扩展方式见 [聊天表情附件](chat-stickers.md)。
+
 ## 开发检查
 
 使用 Python 3.11+、Node.js 22。在项目根目录、激活虚拟环境后运行：

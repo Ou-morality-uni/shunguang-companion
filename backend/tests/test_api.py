@@ -113,6 +113,7 @@ def test_stream_failure_is_visible_sanitized_and_retryable(client, monkeypatch):
     records = client.get(f'/api/conversations/{cid}/messages').json()
     assert records[-1]['status'] == 'error'
     assert records[-1]['content'] == '开始回复'
+    assert records[-1]['sticker'] is None
     assert cid not in runtime.busy
 
 
@@ -153,7 +154,72 @@ def test_stream_closed_early_records_interruption(client, monkeypatch):
     asyncio.run(run())
     assert runtime.store.messages(cid)[-1]['status'] == 'interrupted'
     assert runtime.store.messages(cid)[-1]['content'] == '部分回复'
+    assert runtime.store.messages(cid)[-1]['sticker'] is None
     assert cid not in runtime.busy
+
+
+@pytest.mark.parametrize('hint,scene', [('comfort', 'comfort'), ('unknown_scene', 'neutral'), ('', 'neutral')])
+def test_each_completed_reply_gets_one_persistent_sticker_without_spoken_controls(client, monkeypatch, hint, scene):
+    enable_model(monkeypatch)
+    calls = []
+
+    class Model:
+        async def astream(self, history):
+            calls.append(history)
+            assert any('[[sticker:' in message.content for message in history if message.type == 'system')
+            raw = '我在，慢慢说。' + (f'[[sticker:{hint}]]' if hint else '')
+            for char in raw:
+                yield AIMessageChunk(content=char)
+
+    monkeypatch.setattr(chat_routes, 'build_model', lambda _: Model())
+    cid = conversation(client)
+    previous = None
+    for _ in range(2):
+        response = client.post('/api/chat', json={'conversation_id': cid, 'content': '今天有点难过，想和你说说'})
+        assert '[[sticker:' not in response.text
+        complete = frames(response)[-1]
+        assert complete['status'] == 'complete' and complete['content'] == '我在，慢慢说。'
+        assert complete['sticker']['scene'] == scene and complete['sticker']['persona'] == 'red'
+        assert complete['sticker']['id'] != previous
+        previous = complete['sticker']['id']
+        reloaded = client.get(f'/api/conversations/{cid}/messages').json()[-1]
+        assert reloaded['sticker'] == complete['sticker']
+        reopened = Store(runtime.store.path)
+        reopened.initialize()
+        assert reopened.messages(cid)[-1]['sticker'] == complete['sticker']
+    assert len(calls) == 2  # No second model request just to select a sticker.
+
+
+def test_tool_round_sticker_control_is_hidden_and_final_reply_controls_the_scene(client, monkeypatch):
+    from backend.app import tools
+
+    enable_model(monkeypatch)
+    monkeypatch.setattr(tools, 'schemas', lambda _: [{'name': 'weather'}])
+
+    async def execute(*args):
+        return {'ok': False, 'error': 'test-only unavailable'}
+
+    class Model:
+        def bind_tools(self, schemas):
+            return self
+
+        async def astream(self, history):
+            if history[-1].type == 'tool':
+                assert history[-2].content == '先看看。'
+                yield AIMessageChunk(content='没查到，我陪你聊会儿。[[sticker:comfort]]')
+            else:
+                yield AIMessageChunk(
+                    content='先看看。[[sticker:thinking]]',
+                    tool_calls=[{'name': 'weather', 'id': 'check', 'args': {'city': '长春'}}],
+                )
+
+    monkeypatch.setattr(tools, 'execute', execute)
+    monkeypatch.setattr(chat_routes, 'build_model', lambda _: Model())
+    response = client.post('/api/chat', json={'content': '今天有点难过，长春天气怎么样'})
+    assert '[[sticker:' not in response.text
+    result = frames(response)[-1]
+    assert result['sticker']['scene'] == 'comfort'
+    assert result['content'] == '先看看。没查到，我陪你聊会儿。'
 
 
 def test_langchain_model_constructs_without_network(client, monkeypatch):
