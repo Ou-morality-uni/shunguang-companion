@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { request, type Features } from './api';
-import { PcmPlayback, SpeechSegmenter, streamSpeech } from './speechStream';
+import { liveSpeech, PcmPlayback, SpeechSegmenter, streamSpeech, supportsLiveSpeech } from './speechStream';
 
 type Clip = { text: string; label: string };
 type PlaybackGroup = { signature: string; clips: Clip[]; startedAt: number; firstAudioMs?: number };
@@ -9,7 +9,20 @@ type SpeechJob = {
   chunks: Uint8Array[];
   onAudio?: (bytes: Uint8Array) => void;
 };
-type QueueItem = Clip & { group: PlaybackGroup; job?: SpeechJob };
+type QueueItem = Clip & { group: PlaybackGroup; job?: SpeechJob; live?: boolean };
+type ReplyPlayback = { group: PlaybackGroup } & (
+  | { mode: 'whole' }
+  | { mode: 'segmented'; segmenter: SpeechSegmenter; received: number }
+  | {
+      mode: 'live';
+      segmenter: SpeechSegmenter;
+      received: string;
+      input?: ReturnType<typeof liveSpeech>;
+      item?: QueueItem;
+    }
+);
+// The existing /tts/stream and /tts/synthesize contracts accept at most 3000 code points.
+const WHOLE_REPLY_LIMIT = 3000;
 class PlaybackError extends Error {
   constructor(
     public kind: 'load' | 'blocked',
@@ -86,7 +99,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
   const gain = useRef<GainNode | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const activeGroup = useRef<PlaybackGroup | null>(null);
-  const reply = useRef<{ segmenter: SpeechSegmenter; group: PlaybackGroup; received: number } | null>(null);
+  const reply = useRef<ReplyPlayback | null>(null);
   const flushTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const resolvePlayback = useRef<(() => void) | null>(null);
   const [playing, setPlaying] = useState(false),
@@ -188,8 +201,9 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     if (token !== generation.current) return;
     if (context.current!.state !== 'running')
       throw new PlaybackError('blocked', '浏览器暂未允许播放，请点击消息的播放按钮重试。');
-    const speed = settingsRef.current?.speed ?? 1;
-    const player = new PcmPlayback(context.current!, analyserRef.current!, speed);
+    // Qwen-Audio already applies the configured rate upstream.
+    const speed = item.live ? 1 : (settingsRef.current?.speed ?? 1);
+    const player = new PcmPlayback(context.current!, analyserRef.current!, speed, item.live ? 0.35 : 0);
     pcmPlayer.current = player;
     const job = item.job!;
     job.onAudio = (bytes) => {
@@ -203,10 +217,14 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     };
     job.chunks.splice(0).forEach(job.onAudio);
     const timer = window.setInterval(() => {
-      if (player.startedAt !== null)
+      if (player.startedAt !== null) {
+        markFirstAudio(item.group, Math.max(0, player.startedAt - context.current!.currentTime) * 1000);
+        setPlaying(true);
+        setDuration(player.seconds);
         setProgress(
           Math.min(player.seconds, Math.max(0, context.current!.currentTime - player.startedAt) * speed),
         );
+      }
     }, 100);
     try {
       const url = await job.promise;
@@ -280,7 +298,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
           const key = cacheKey(item),
             cached = cache.current.get(key);
           last.current = item.group;
-          if (!cached && settingsRef.current?.capabilities?.streaming_audio) {
+          if (!cached && (item.live || settingsRef.current?.capabilities?.streaming_audio)) {
             await playStream(item, token);
             continue;
           }
@@ -349,6 +367,12 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
   function enqueue(text: string, itemLabel = '叶瞬光的回应') {
     text = text.trim();
     if (!text || !ready()) return;
+    if (settingsRef.current?.provider === 'aliyun') {
+      if (!validWholeReply(text)) return;
+      void prepareGraph().catch(() => {});
+      addChunks([text], group(), itemLabel);
+      return;
+    }
     if (text.length > 12000) {
       setError('这条回复较长，请复制所需段落；单次播放最多 12000 字。');
       return;
@@ -365,15 +389,35 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     setFirstAudioMs(null);
     if (!settings?.enabled || !settings.auto_play || !ready()) return;
     void prepareGraph().catch(() => {});
-    reply.current = {
-      segmenter: new SpeechSegmenter(settingsRef.current?.provider === 'mimo' ? 70 : 0),
-      group: group(),
-      received: 0,
-    };
+    reply.current =
+      settingsRef.current?.provider === 'aliyun'
+        ? supportsLiveSpeech(settingsRef.current.model)
+          ? { mode: 'live', group: group(), segmenter: new SpeechSegmenter(40, true), received: '' }
+          : { mode: 'whole', group: group() }
+        : {
+            mode: 'segmented',
+            segmenter: new SpeechSegmenter(settingsRef.current?.provider === 'mimo' ? 70 : 0),
+            group: group(),
+            received: 0,
+          };
   }
   function appendReply(text: string) {
     const current = reply.current;
-    if (!current) return;
+    if (!current || current.mode === 'whole') return;
+    if (current.mode === 'live') {
+      current.received += text;
+      if (!validWholeReply(current.received)) {
+        stop();
+        return;
+      }
+      feedLive(current, current.segmenter.push(text));
+      if (!flushTimer.current)
+        flushTimer.current = setTimeout(() => {
+          flushTimer.current = null;
+          if (reply.current === current) feedLive(current, current.segmenter.push('', true));
+        }, 600);
+      return;
+    }
     current.received += text.length;
     if (current.received > 12000) {
       stop();
@@ -395,11 +439,65 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     if (!current) return;
     if (flushTimer.current) clearTimeout(flushTimer.current);
     flushTimer.current = null;
+    reply.current = null;
+    if (current.mode === 'live') {
+      if (!text.startsWith(current.received) || !validWholeReply(text)) {
+        stop();
+        setError('最终文字发生变化或超出朗读上限，已停止语音；可手动播放完整回复。');
+        return;
+      }
+      feedLive(current, current.segmenter.push(text.slice(current.received.length), true));
+      if (current.item) current.item.text = text;
+      current.input?.finish();
+      return;
+    }
+    if (current.mode === 'whole') {
+      text = text.trim();
+      if (text && validWholeReply(text)) addChunks([text], current.group);
+      return;
+    }
     // Some backends return only the final record. Never read the whole answer twice.
     if (!current.received && text.length <= 12000)
       addChunks(current.segmenter.push(text, true), current.group);
     else addChunks(current.segmenter.push('', true), current.group);
-    reply.current = null;
+  }
+  function feedLive(current: Extract<ReplyPlayback, { mode: 'live' }>, parts: string[]) {
+    if (!parts.length) return;
+    if (!current.input) {
+      const token = generation.current;
+      const abort = new AbortController();
+      requestAborts.current.add(abort);
+      const job: SpeechJob = { chunks: [], promise: Promise.resolve(null) };
+      const item: QueueItem = { text: '', label: '叶瞬光的回应', group: current.group, job, live: true };
+      current.item = item;
+      current.group.clips.push(item);
+      current.input = liveSpeech(abort.signal, (bytes) => {
+        if (token !== generation.current) return;
+        if (job.onAudio) job.onAudio(bytes);
+        else job.chunks.push(bytes);
+      });
+      job.promise = current.input.promise
+        .then((value) => {
+          if (token !== generation.current || current.group.signature !== currentSignature.current)
+            return null;
+          const url = new URL(value, window.location.origin);
+          if (url.origin !== window.location.origin || !url.pathname.startsWith('/api/tts/audio/'))
+            throw new Error('语音服务返回了不可用的音频地址。');
+          remember(cacheKey(item), url.href);
+          return url.href;
+        })
+        .finally(() => requestAborts.current.delete(abort));
+      void job.promise.catch(() => {});
+      queue.current.push(item);
+      setQueued(queue.current.length);
+      void drain();
+    }
+    parts.forEach((part) => current.input!.push(part));
+  }
+  function validWholeReply(text: string) {
+    if (Array.from(text).length <= WHOLE_REPLY_LIMIT) return true;
+    setError(`百炼单条朗读最多 ${WHOLE_REPLY_LIMIT} 个字符；这条回复过长，请选择较短的内容播放。`);
+    return false;
   }
   function stop() {
     generation.current++;
@@ -428,11 +526,15 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
       setError('请先播放一条当前配置生成的语音。');
       return;
     }
+    if (group.clips.some((clip) => !clip.text.trim())) {
+      setError('这条语音尚未完整生成，请在回复完成后点击消息的播放按钮。');
+      return;
+    }
     stop();
     group.startedAt = performance.now();
     group.firstAudioMs = undefined;
     void prepareGraph().catch(() => {});
-    queue.current.push(...group.clips.map((clip) => ({ ...clip, group })));
+    queue.current.push(...group.clips.map(({ text, label }) => ({ text, label, group })));
     setQueued(queue.current.length);
     setError('');
     void drain();

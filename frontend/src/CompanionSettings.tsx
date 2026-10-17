@@ -28,6 +28,7 @@ import { MemorySpace, VoiceConsole, type Panel } from './Spaces';
 import { useCompanionAudio } from './useAudioQueue';
 import { ToolFeedback } from './Evidence';
 import { CloudVoiceManager } from './CloudVoiceManager';
+import { supportsLiveSpeech } from './speechStream';
 
 const categories = [
   { id: 'model', label: '模型连接', icon: Cpu },
@@ -814,7 +815,13 @@ export function CompanionSettings({
                   />
                   <Toggle
                     label="自动朗读新回复"
-                    description="回复生成时按句朗读，提前准备下一句。开始新回复或停止时会清空旧语音。"
+                    description={
+                      tts.provider === 'aliyun'
+                        ? supportsLiveSpeech(tts.model)
+                          ? '文字生成时持续追加到同一个百炼任务，短暂预缓冲后连续播放。开始新回复或停止时会清空旧语音。'
+                          : '当前兼容模型等待整条回复完成后朗读。开始新回复或停止时会清空旧语音。'
+                        : '回复生成时合并短句朗读。开始新回复或停止时会清空旧语音。'
+                    }
                     checked={!!tts.auto_play}
                     onChange={(auto_play) => setTts({ auto_play })}
                   />
