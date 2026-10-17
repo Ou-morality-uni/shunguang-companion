@@ -20,6 +20,8 @@ async def pcm(settings, text):
 
     task_id = str(uuid.uuid4())
     started = False
+    sender = None
+    finished_input = False
     async with aliyun_socket(settings, '/api-ws/v1/inference') as ws:
 
         async def send(action, payload):
@@ -57,33 +59,64 @@ async def pcm(settings, text):
                 'input': {},
             },
         )
-        async for raw in ws:
-            if isinstance(raw, bytes):
-                if not started or text is None:
-                    raise voice.VoiceError('百炼返回了非预期音频。', code='invalid_response')
-                yield raw
-                continue
-            event = json.loads(raw)
-            header = event.get('header', {})
-            if header.get('task_id') != task_id:
-                raise voice.VoiceError('百炼返回的任务 ID 不匹配。', code='invalid_response')
-            kind = header.get('event')
-            if kind == 'task-failed':
-                raise provider_error({'code': header.get('error_code'), 'message': header.get('error_message')}, 'task')
-            if kind == 'task-started' and not started:
-                started = True
-                if text is not None:
-                    await send('continue-task', {'input': {'text': text}})
+
+        async def send_fragments():
+            nonlocal finished_input
+            try:
+                async for fragment in text:
+                    await send('continue-task', {'input': {'text': fragment}})
                 await send('finish-task', {'input': {}})
-                if text is None:
-                    # A task has accepted this model. An empty finish may be
-                    # rejected as "no valid text"; that is not a model failure.
+                finished_input = True
+            except Exception:
+                await ws.close()
+                raise
+
+        async def receive():
+            nonlocal started, sender, finished_input
+            async for raw in ws:
+                if isinstance(raw, bytes):
+                    if not started or text is None:
+                        raise voice.VoiceError('百炼返回了非预期音频。', code='invalid_response')
+                    yield raw
+                    continue
+                event = json.loads(raw)
+                header = event.get('header', {})
+                if header.get('task_id') != task_id:
+                    raise voice.VoiceError('百炼返回的任务 ID 不匹配。', code='invalid_response')
+                kind = header.get('event')
+                if kind == 'task-failed':
+                    raise provider_error(
+                        {'code': header.get('error_code'), 'message': header.get('error_message')}, 'task'
+                    )
+                if kind == 'task-started' and not started:
+                    started = True
+                    if text is not None and not isinstance(text, str):
+                        sender = asyncio.create_task(send_fragments())
+                    else:
+                        if text is not None:
+                            await send('continue-task', {'input': {'text': text}})
+                        await send('finish-task', {'input': {}})
+                        finished_input = True
+                    if text is None:
+                        return
+                elif kind == 'task-finished':
+                    if not started or not finished_input:
+                        raise voice.VoiceError('百炼任务在文字提交完成前结束。', code='incomplete')
+                    if sender:
+                        await sender
                     return
-            elif kind == 'task-finished':
-                if not started:
-                    raise voice.VoiceError('百炼未确认任务启动。', code='incomplete')
-                return
-        raise voice.VoiceError('百炼任务提前结束，音频不完整。', code='incomplete')
+            if sender and sender.done():
+                await sender
+            raise voice.VoiceError('百炼任务提前结束，音频不完整。', code='incomplete')
+
+        try:
+            async with aclosing(receive()) as stream:
+                async for chunk in stream:
+                    yield chunk
+        finally:
+            if sender:
+                sender.cancel()
+                await asyncio.gather(sender, return_exceptions=True)
 
 
 async def check_model(settings):

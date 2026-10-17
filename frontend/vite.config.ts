@@ -15,5 +15,5 @@ export default defineConfig({
     if (path.includes('/radix-ui/') || path.includes('/@radix-ui/')) return 'radix';
     if (/\/(react-markdown|remark-|rehype-|micromark|mdast-|hast-|unist-|unified|vfile)/.test(path)) return 'markdown';
   } } } },
-  server: { proxy: { '/api': 'http://127.0.0.1:8000' } },
+  server: { proxy: { '/api': { target: 'http://127.0.0.1:8000', ws: true } } },
 });

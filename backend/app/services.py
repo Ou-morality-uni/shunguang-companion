@@ -2,13 +2,13 @@
 
 import asyncio
 import json
-from contextlib import aclosing
+from contextlib import aclosing, suppress
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
-from . import feature_config, reminders, tools, voice
+from . import access, feature_config, reminders, tools, voice
 from .schemas import CloudVoiceCreatedOut, CloudVoiceListOut
 
 router = APIRouter()
@@ -164,6 +164,75 @@ async def tts_stream(payload: SynthesisRequest):
             'X-Accel-Buffering': 'no',
         },
     )
+
+
+@router.websocket('/api/tts/live')
+async def tts_live(socket: WebSocket):
+    """One browser connection maps to one Qwen-Audio task, never one task per sentence."""
+    from . import aliyun_audio, tts_providers
+
+    # HTTP middleware does not run for WebSockets. Reuse its host, origin, peer
+    # and session checks with the equivalent HTTP scheme, including LAN cookies.
+    request = Request({**socket.scope, 'type': 'http', 'scheme': 'https' if socket.url.scheme == 'wss' else 'http'})
+
+    async def permitted(_):
+        return JSONResponse({})
+
+    if (await access.guard(request, permitted)).status_code != 200:
+        await socket.close(code=1008)
+        return
+    await socket.accept()
+    try:
+        settings = feature_config.load().tts
+        if settings.provider != 'aliyun' or settings.model not in tts_providers.AUDIO_MODELS:
+            raise voice.VoiceError('当前模型不支持持续文本输入，请使用完整回复播放。', 422)
+        tts_providers.validate(settings, '连接检查')
+        await voice.validate_origin(settings.base_url, settings.provider)
+
+        async def fragments():
+            total = 0
+            while True:
+                # Leave headroom below the provider's 23-second text idle limit.
+                raw = await asyncio.wait_for(socket.receive_text(), timeout=18)
+                if len(raw) > 20000:
+                    raise voice.VoiceError('语音文本帧过大。', 422)
+                value = json.loads(raw)
+                if value == {'type': 'finish'} and total:
+                    return
+                if not isinstance(value, dict) or set(value) != {'type', 'text'} or value['type'] != 'text':
+                    raise voice.VoiceError('语音文本事件无效。', 422)
+                text = value['text']
+                if not isinstance(text, str) or not text:
+                    raise voice.VoiceError('语音文本不能为空。', 422)
+                total += len(text)
+                if total > 3000:
+                    raise voice.VoiceError('单条语音最多3000个字符，已停止继续朗读。', 422)
+                yield text
+
+        pcm = bytearray()
+        async with asyncio.timeout(settings.timeout), SYNTHESIS_SLOTS:
+            async with aclosing(aliyun_audio.pcm(settings, fragments())) as stream:
+                async for chunk in stream:
+                    pcm.extend(chunk)
+                    if len(pcm) > voice.MAX_AUDIO_BYTES:
+                        raise voice.VoiceError('语音响应过大，请缩短文字。')
+                    for offset in range(0, len(chunk), 24000):
+                        await socket.send_bytes(chunk[offset : offset + 24000])
+            result = await tts_providers.save_pcm(settings, pcm)
+            await socket.send_json({'type': 'done', **result})
+    except WebSocketDisconnect:
+        pass
+    except Exception as error:
+        diagnostic = (
+            error.diagnostic()
+            if isinstance(error, voice.VoiceError)
+            else {'message': '连续语音中断或等待文字超时，文字聊天仍可使用。'}
+        )
+        with suppress(WebSocketDisconnect, RuntimeError, OSError):
+            await socket.send_json({'type': 'error', **diagnostic})
+    finally:
+        with suppress(WebSocketDisconnect, RuntimeError, OSError):
+            await socket.close()
 
 
 class VoiceRegistration(BaseModel):
