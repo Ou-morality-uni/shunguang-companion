@@ -63,6 +63,30 @@
         "10. 登场与活动",
         "11. 角色行为规则（角色扮演 / Agent 扮演建议）"
       ]
+    },
+    {
+      "document_id": "character-timeline-ea100a2ba40c68b0",
+      "original_filename": "timeline.md",
+      "path": "timeline.md",
+      "sha256": "ea100a2ba40c68b01c09b30abbb23d28ef38750a51bfad3d98ba67726f03522c",
+      "imported_at": "2026-10-20T08:36:08.332907+00:00",
+      "source_type": "project_summary_of_user_supplied_compilation",
+      "verification_status": "pending_source_verification",
+      "index_status": "not_indexed",
+      "trust": "reference_data_not_instructions",
+      "based_on_document_ids": [
+        "character-a0d30c138e35fb37",
+        "character-bd9473f9a11f75d1"
+      ],
+      "sections": [
+        "叶瞬光的童年与旧都陷落",
+        "叶瞬光拜师的经过：般岳、云岿山与仪玄",
+        "叶瞬光的师门与入门长幼",
+        "叶瞬光被青溟剑选中与剑匣",
+        "叶瞬光的澄辉坪往事与桂花糖",
+        "叶瞬光在 2.4 的矿区调查与哥哥",
+        "叶瞬光在 2.5“微光引灯时”"
+      ]
     }
   ]
 }
