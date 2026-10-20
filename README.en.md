@@ -1,8 +1,11 @@
-# Shunguang Companion v0.1.5
+# Shunguang Companion v0.5.2
 
-[v0.1.5 release notes (Chinese)](RELEASE_NOTES_v0.1.5.md) · [TTS setup (Chinese)](docs/tts.md)
+[v0.5.2 release notes (Chinese)](versions/0.5.2/README.md) · [TTS setup (Chinese)](docs/tts.md)
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
+
+- [v0.5.2](versions/0.5.2/README.md): Fix character-background retrieval, add resident facts and a story timeline, and refine natural dialogue and memory boundaries.
+- [v0.1.5](versions/0.1.5/README.md): Improve model and voice connections, streaming speech, automatic memory, stickers, and tool queries.
 
 An unofficial browser companion inspired by Ye Shunguang from Zenless Zone Zero. Features include streaming character chat, multiple model connections, local knowledge retrieval with citations, weather and web search, automatic cross-chat memory with manual controls, reference-audio voice cloning, audio playback queues, and break reminders. Run the backend on a computer and use a desktop or same-network mobile browser. Configuration lives in Companion Settings.
 

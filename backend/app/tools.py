@@ -530,7 +530,7 @@ async def web_search(args: SearchArgs, settings):
             'format': 'json',
             'utf8': 1,
         },
-        headers={'User-Agent': 'ShunguangCompanion/0.1.5 (https://github.com/Ou-morality-uni/shunguang-companion)'},
+        headers={'User-Agent': 'ShunguangCompanion/0.5.2 (https://github.com/Ou-morality-uni/shunguang-companion)'},
     )
     if result.get('error'):
         raise ToolServiceError('upstream_business', 'Wikipedia 返回业务错误，请调整查询或稍后重试。')

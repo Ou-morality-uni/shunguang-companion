@@ -370,7 +370,7 @@ export default function App() {
               </div>
               <div className="version">
                 <span className="version-dot" />
-                瞬光伴行 WEB<span>v0.1.5</span>
+                瞬光伴行 WEB<span>v0.5.2</span>
               </div>
             </div>
           </aside>

@@ -1,8 +1,11 @@
-# 瞬光伴行 v0.1.5
+# 瞬光伴行 v0.5.2
 
-[v0.1.5 更新说明](RELEASE_NOTES_v0.1.5.md) · [语音配置与选型](docs/tts.md)
+[v0.5.2 更新说明](versions/0.5.2/README.md) · [语音配置与选型](docs/tts.md)
 
 [English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
+
+- [v0.5.2](versions/0.5.2/README.md)：修复角色身世与拜师检索，新增常驻角色事实及剧情年表，优化自然表达与记忆边界。
+- [v0.1.5](versions/0.1.5/README.md)：完善模型与语音连接、流式朗读、自动记忆、表情及工具查询。
 
 以《绝区零》叶瞬光为原型的非官方陪伴 Web 应用。支持角色对话、流式回复与停止、多模型连接、角色与世界知识检索及引用、天气与网页搜索、自动跨会话记忆与手动管理、参考音频声音克隆、播放队列和休息提醒。电脑运行后端，电脑或同一 Wi-Fi 的手机通过浏览器使用；所有配置集中在“陪伴设置”。
 
@@ -133,6 +136,6 @@ Required Notice: 瞬光伴行 — https://github.com/Ou-morality-uni/shunguang-c
 
 ## 开发与长期维护
 
-模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](RELEASE_NOTES_v0.1.5.md)。
+模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](versions/0.5.2/README.md)。
 
 开发环境安装 `backend/requirements-dev.txt` 后，可用 `python scripts/dev.py verify` 统一运行检查；接口变化后用 `python scripts/dev.py contracts` 更新契约。生产安装继续使用运行时锁文件。数据库升级会先自动备份旧库；升级后不要用旧程序直接打开新库。
