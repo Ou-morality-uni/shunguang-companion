@@ -57,6 +57,74 @@ class Store:
         with self.connect() as db:
             return [dict(row) for row in db.execute('SELECT * FROM conversations ORDER BY updated_at DESC')]
 
+    def list_workspaces(self):
+        with self.connect() as db:
+            return [dict(row) for row in db.execute('SELECT * FROM workspaces ORDER BY created_at')]
+
+    def get_workspace(self, workspace_id):
+        with self.connect() as db:
+            row = db.execute('SELECT * FROM workspaces WHERE id=?', (workspace_id,)).fetchone()
+            return dict(row) if row else None
+
+    def grant_workspace(self, path, identity):
+        with self.connect() as db:
+            row = db.execute('SELECT id FROM workspaces WHERE path=?', (path,)).fetchone()
+            workspace_id = row['id'] if row else str(uuid4())
+            db.execute(
+                """INSERT INTO workspaces VALUES (?,?,?,1,?)
+                ON CONFLICT(path) DO UPDATE SET enabled=1,identity=excluded.identity""",
+                (workspace_id, path, identity, now()),
+            )
+        return self.get_workspace(workspace_id)
+
+    def revoke_workspace(self, workspace_id):
+        with self.connect() as db:
+            return db.execute('UPDATE workspaces SET enabled=0 WHERE id=?', (workspace_id,)).rowcount == 1
+
+    def create_file_task(self, workspace_id, title, steps, status):
+        task_id = str(uuid4())
+        with self.connect() as db:
+            db.execute(
+                'INSERT INTO file_tasks VALUES (?,?,?,?,?,?,?,?)',
+                (task_id, workspace_id, title, status, json.dumps(steps, ensure_ascii=False), '', now(), now()),
+            )
+        return self.get_file_task(task_id)
+
+    def get_file_task(self, task_id):
+        with self.connect() as db:
+            row = db.execute('SELECT * FROM file_tasks WHERE id=?', (task_id,)).fetchone()
+            if not row:
+                return None
+            record = dict(row)
+            record['steps'] = json.loads(record['steps'])
+            return record
+
+    def list_file_tasks(self, limit=50):
+        with self.connect() as db:
+            rows = db.execute('SELECT * FROM file_tasks ORDER BY created_at DESC LIMIT ?', (limit,))
+            return [{**dict(row), 'steps': json.loads(row['steps'])} for row in rows]
+
+    def save_file_task(self, record):
+        record['updated_at'] = now()
+        with self.connect() as db:
+            db.execute(
+                'UPDATE file_tasks SET status=?,steps=?,error=?,updated_at=? WHERE id=?',
+                (
+                    record['status'],
+                    json.dumps(record['steps'], ensure_ascii=False),
+                    record['error'],
+                    record['updated_at'],
+                    record['id'],
+                ),
+            )
+
+    def interrupt_file_tasks(self):
+        with self.connect() as db:
+            db.execute(
+                "UPDATE file_tasks SET status='interrupted',error=?,updated_at=? WHERE status IN ('queued','running','restoring')",
+                ('服务已重启。请检查操作记录，按需恢复；不会自动重放文件操作。', now()),
+            )
+
     def create_conversation(self):
         record = {'id': str(uuid4()), 'title': '新的对话', 'created_at': now(), 'updated_at': now()}
         with self.connect() as db:

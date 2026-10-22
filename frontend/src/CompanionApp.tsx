@@ -9,6 +9,7 @@ import {
   Compass,
   Cpu,
   Flower2,
+  FolderOpen,
   Heart,
   LoaderCircle,
   Menu,
@@ -30,12 +31,14 @@ import { AudioContextValue, useAudioQueue } from './useAudioQueue';
 import { useConversation } from './useConversation';
 import { ConversationHistory } from './ConversationHistory';
 import { ResourceImage } from './ResourceImage';
+import { WorkSpace } from './WorkSpace';
 
 const pages = [
   { key: 'chat', label: '陪伴对话', icon: MessageSquare },
   { key: 'memory', label: '记忆空间', icon: Heart },
   { key: 'world', label: '世界档案', icon: Compass },
   { key: 'reminders', label: '温柔提醒', icon: Bell },
+  { key: 'work', label: '工作台', icon: FolderOpen },
 ] as const;
 function preference(key: string, defaultValue: boolean) {
   try {
@@ -325,7 +328,7 @@ export default function App() {
               开启新的对话
             </Button>
             <div className="nav-section-label">
-              相伴的日常<span>01 — 04</span>
+              相伴的日常<span>01 — 05</span>
             </div>
             <nav aria-label="功能导航">
               {pages.map(({ key, label, icon: Icon }) => (
@@ -370,7 +373,7 @@ export default function App() {
               </div>
               <div className="version">
                 <span className="version-dot" />
-                瞬光伴行 WEB<span>v0.5.2</span>
+                瞬光伴行 WEB<span>v0.5.3</span>
               </div>
             </div>
           </aside>
@@ -463,6 +466,8 @@ export default function App() {
                         />
                       ) : page === 'world' ? (
                         <WorldArchive />
+                      ) : page === 'work' ? (
+                        <WorkSpace />
                       ) : (
                         <ReminderSpace
                           features={features}

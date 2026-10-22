@@ -30,7 +30,7 @@ import {
 import { Sources } from './Evidence';
 import { useCompanionAudio } from './useAudioQueue';
 
-export type Page = 'chat' | 'memory' | 'world' | 'reminders';
+export type Page = 'chat' | 'memory' | 'world' | 'reminders' | 'work';
 export type Panel = 'model' | 'voice' | 'effects' | 'tools' | 'memory' | 'reminders' | null;
 function PageHeading({
   eyebrow,

@@ -78,6 +78,43 @@ class CapabilitiesOut(BaseModel):
     max_message_length: int = MAX_MESSAGE_LENGTH
 
 
+class WorkspaceOut(BaseModel):
+    id: str
+    path: str
+    enabled: bool
+    created_at: str
+
+
+class FileStepOut(BaseModel):
+    action: Literal['list', 'read', 'write', 'move', 'delete']
+    path: str
+    destination: str | None = None
+    state: str
+    result: dict[str, Any] | None = None
+
+
+class FileTaskOut(BaseModel):
+    id: str
+    workspace_id: str
+    title: str
+    status: Literal[
+        'queued',
+        'running',
+        'waiting_approval',
+        'complete',
+        'failed',
+        'cancelled',
+        'interrupted',
+        'restoring',
+        'restored',
+    ]
+    steps: list[FileStepOut]
+    error: str
+    created_at: str
+    updated_at: str
+    can_restore: bool
+
+
 class MemoryOut(BaseModel):
     id: str
     key: str

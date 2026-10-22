@@ -5,6 +5,7 @@ import asyncio
 from fastapi import HTTPException
 
 from . import config
+from .filework import FileWork
 from .store import Store
 
 store = Store(config.DATA_DIR / 'companion.sqlite3')
@@ -12,6 +13,7 @@ busy: set[str] = set()
 stops: dict[str, asyncio.Event] = {}
 finished: dict[str, asyncio.Future[bool]] = {}
 mutation_lock = asyncio.Lock()
+work: FileWork | None = None
 
 
 def require_conversation(conversation_id):

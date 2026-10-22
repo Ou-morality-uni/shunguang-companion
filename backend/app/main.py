@@ -11,8 +11,9 @@ from fastapi.staticfiles import StaticFiles
 from . import access, runtime
 from .config import ROOT
 from .constants import MAX_MESSAGE_LENGTH, VERSION
+from .filework import FileWork
 from .logging_setup import report_error, setup_logging
-from .routes import chat, knowledge, memories, settings
+from .routes import chat, knowledge, memories, settings, work
 from .schemas import CapabilitiesOut
 from .services import router as services_router
 
@@ -22,7 +23,12 @@ async def lifespan(app):
     setup_logging()
     runtime.mutation_lock = asyncio.Lock()
     await asyncio.to_thread(runtime.store.initialize)
-    yield
+    runtime.work = await asyncio.to_thread(FileWork, runtime.store)
+    try:
+        yield
+    finally:
+        await asyncio.to_thread(runtime.work.close)
+        runtime.work = None
 
 
 app = FastAPI(title='瞬光伴行 API', version=VERSION, lifespan=lifespan)
@@ -45,7 +51,7 @@ def capabilities():
     return {'max_message_length': MAX_MESSAGE_LENGTH}
 
 
-for router in (settings.router, chat.router, memories.router, knowledge.router, services_router):
+for router in (settings.router, chat.router, memories.router, knowledge.router, work.router, services_router):
     app.include_router(router)
 
 dist = ROOT / 'frontend' / 'dist'

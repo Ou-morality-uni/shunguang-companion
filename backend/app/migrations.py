@@ -1,6 +1,6 @@
 """Ordered, transactional upgrades from the pre-versioned database (version 0)."""
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 
 
 def migrate(db):
@@ -48,6 +48,19 @@ def migrate(db):
             FOREIGN KEY(conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
         )""")
         db.execute('PRAGMA user_version=3')
+    if version < 4:
+        db.execute("""CREATE TABLE workspaces (
+            id TEXT PRIMARY KEY, path TEXT NOT NULL UNIQUE, identity TEXT NOT NULL,
+            enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL
+        )""")
+        db.execute("""CREATE TABLE file_tasks (
+            id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, title TEXT NOT NULL,
+            status TEXT NOT NULL, steps TEXT NOT NULL, error TEXT NOT NULL DEFAULT '',
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(id)
+        )""")
+        db.execute('CREATE INDEX file_tasks_recent ON file_tasks(created_at)')
+        db.execute('PRAGMA user_version=4')
 
 
 LEGACY_SCHEMA = """

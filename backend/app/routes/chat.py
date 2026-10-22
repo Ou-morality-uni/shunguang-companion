@@ -3,17 +3,19 @@ import json
 import re
 import time
 
-from fastapi import APIRouter, HTTPException, Query, Response
+from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
 from langchain_core.messages import AIMessage, ToolMessage
 from pydantic import BaseModel, Field, field_validator
 
 from .. import runtime, stickers
 from ..constants import CHAT_TIMEOUT, HISTORY_WINDOW, MAX_MESSAGE_LENGTH, MAX_TOOL_CALLS, MAX_TOOL_ROUNDS
+from ..filework import local_request
 from ..llm import EmptyResponseError, build_messages, build_model, extract_text, friendly_error
 from ..logging_setup import report_error
 from ..runtime import require_config, require_conversation
 from ..schemas import ConversationOut, MessageOut
+from ..tool_registry import ToolRegistry
 
 router = APIRouter()
 
@@ -73,6 +75,22 @@ def event(name: str, data: dict) -> str:
     return f'event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n'
 
 
+def tool_content(result):
+    text = json.dumps(result, ensure_ascii=False)
+    if len(text) <= 16000:
+        return text
+    return json.dumps(
+        {
+            'ok': result.get('ok', False),
+            'truncated': True,
+            'task_id': result.get('task', {}).get('id'),
+            'message': '工具结果过长，以下只是部分预览。不能将未返回的内容当作已读资料；文件任务完整结果可在工作台查看。',
+            'preview': text[:12000],
+        },
+        ensure_ascii=False,
+    )
+
+
 async def cancellable_chunks(model, history, stop):
     iterator = model.astream(history).__aiter__()
     pending = None
@@ -125,7 +143,7 @@ async def stop_chat(conversation_id: str):
 
 
 @router.post('/api/chat')
-async def chat(payload: ChatRequest):
+async def chat(payload: ChatRequest, request: Request = None):
     config = await asyncio.to_thread(require_config)
     model = await asyncio.to_thread(build_model, config)
     # Reserve before yielding to I/O. Deletion shares the gate; never discard a live lock.
@@ -155,12 +173,19 @@ async def chat(payload: ChatRequest):
             assistant = await io(runtime.store.add_message, conversation_id, 'assistant', '', 'streaming')
             stored_history = await io(runtime.store.messages, conversation_id, HISTORY_WINDOW + 1)
             yield event('user', user_message)
-            from .. import memory, rag, retrieval_router, tools
+            from .. import memory, rag, retrieval_router
             from ..feature_config import load_features
 
             features = await io(load_features)
             sticker_catalog = await io(stickers.load_catalog)
-            schemas = tools.schemas(features) + memory.schemas(features.memory)
+            registry = ToolRegistry(
+                features,
+                runtime.store,
+                user_message,
+                stored_history,
+                work=runtime.work if local_request(request) else None,
+            )
+            schemas = registry.definitions
             decision = await io(retrieval_router.route, payload.content)
             metadata['retrieval'] = {'domain': decision['domain'], 'candidate_count': 0, 'context_count': 0}
             try:
@@ -270,14 +295,10 @@ async def chat(payload: ChatRequest):
                         yield event('tool', state)
                         if count > MAX_TOOL_CALLS or name not in allowed_names:
                             result = {'ok': False, 'error': '工具未启用或调用次数已达上限。'}
-                        elif name in ('remember_user_fact', 'recall_conversations'):
-                            result = await io(
-                                memory.execute, name, args, runtime.store, user_message, features.memory, stored_history
-                            )
                         else:
                             try:
                                 result = await interruptible(
-                                    asyncio.wait_for(tools.execute(name, args), timeout=25), stop
+                                    asyncio.wait_for(registry.execute(name, args), timeout=25), stop
                                 )
                             except StopRequested:
                                 raise
@@ -290,9 +311,7 @@ async def chat(payload: ChatRequest):
                         }
                         metadata['tools'].append(state)
                         yield event('tool', state)
-                        history.append(
-                            ToolMessage(content=json.dumps(result, ensure_ascii=False)[:16000], tool_call_id=call['id'])
-                        )
+                        history.append(ToolMessage(content=tool_content(result), tool_call_id=call['id']))
             if not text.strip():
                 raise EmptyResponseError()
             metadata['sources'] = retrieval_router.cited_sources(text, metadata['context_sources'])
