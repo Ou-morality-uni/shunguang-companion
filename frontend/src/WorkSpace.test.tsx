@@ -11,6 +11,7 @@ afterEach(() => {
 
 const workspace = { id: 'w1', path: 'D:\\work', enabled: true, created_at: '2026-10-22T00:00:00Z' };
 const pending: FileTask = {
+  origin: 'workbench',
   id: 't1',
   workspace_id: 'w1',
   title: '删除旧文件',

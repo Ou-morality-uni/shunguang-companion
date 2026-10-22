@@ -1,6 +1,6 @@
 """Ordered, transactional upgrades from the pre-versioned database (version 0)."""
 
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 
 
 def migrate(db):
@@ -61,6 +61,15 @@ def migrate(db):
         )""")
         db.execute('CREATE INDEX file_tasks_recent ON file_tasks(created_at)')
         db.execute('PRAGMA user_version=4')
+    if version < 5:
+        db.execute("ALTER TABLE file_tasks ADD COLUMN origin TEXT NOT NULL DEFAULT 'workbench'")
+        db.execute("""CREATE TABLE work_events (
+            seq INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL,
+            kind TEXT NOT NULL, text TEXT NOT NULL, created_at TEXT NOT NULL,
+            FOREIGN KEY(task_id) REFERENCES file_tasks(id)
+        )""")
+        db.execute('CREATE INDEX work_events_task ON work_events(task_id,seq)')
+        db.execute('PRAGMA user_version=5')
 
 
 LEGACY_SCHEMA = """

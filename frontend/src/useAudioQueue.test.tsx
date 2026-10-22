@@ -79,6 +79,67 @@ function pendingRequests() {
   return pending;
 }
 
+it('filters manual and whole reply speech while retaining displayed text unchanged', async () => {
+  const pending = pendingRequests();
+  const { result } = renderHook(() => useAudioQueue(settings));
+  const text = '说明。\n```json\n{"private_code": true}\n```\n结果。';
+  act(() => {
+    result.current.beginReply();
+    result.current.appendReply(text);
+    result.current.finishReply(text);
+  });
+  await waitFor(() => expect(pending).toHaveLength(1));
+  expect(pending[0].text).toContain('结果。');
+  expect(pending[0].text).not.toContain('private_code');
+  act(() => result.current.stop());
+  await act(async () => pending[0].resolve({ audio_url: '/api/tts/audio/stale.wav' }));
+  act(() => result.current.enqueue('```\nonly boxed text\n```'));
+  expect(pending).toHaveLength(1);
+});
+
+it('keeps task cues independent of reply autoplay and suppresses stale or muted work speech', async () => {
+  const pending = pendingRequests();
+  const { result } = renderHook(() => useAudioQueue({ ...settings, auto_play: false, work_prompts: true }));
+  const event = {
+    task_id: 't1',
+    kind: 'start',
+    text: '我先看看这份资料。',
+    created_at: new Date().toISOString(),
+  };
+  act(() => result.current.enqueueWork({ ...event, created_at: new Date(Date.now() - 60000).toISOString() }));
+  expect(pending).toHaveLength(0);
+  act(() => result.current.enqueueWork(event));
+  await waitFor(() => expect(pending).toHaveLength(1));
+  act(() => result.current.cancelWork('t1'));
+  expect(pending[0].signal.aborted).toBe(true);
+  await act(async () => pending[0].resolve({ audio_url: '/api/tts/audio/cancelled.wav' }));
+  expect(played).toHaveLength(0);
+  act(() => result.current.toggleMute());
+  act(() => result.current.enqueueWork(event));
+  expect(pending).toHaveLength(1);
+});
+
+it('withholds code fence prefixes before flushing text to a live TTS socket', async () => {
+  vi.useFakeTimers();
+  const push = vi.fn();
+  vi.mocked(liveSpeech).mockReturnValue({ push, finish: vi.fn(), promise: new Promise(() => {}) });
+  const { result } = renderHook(() => useAudioQueue({ ...settings, model: 'qwen-audio-3.1-tts-flash' }));
+  act(() => {
+    result.current.beginReply();
+    result.current.appendReply('先说说明。\n`');
+  });
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  act(() => result.current.appendReply('``python\nprivate_code()\n``'));
+  await act(async () => vi.advanceTimersByTimeAsync(600));
+  act(() => {
+    result.current.appendReply('`\n后面的说明。');
+    result.current.finishReply('先说说明。\n```python\nprivate_code()\n```\n后面的说明。');
+  });
+  expect(push.mock.calls.map((call) => call[0]).join('')).toContain('后面的说明。');
+  expect(push.mock.calls.map((call) => call[0]).join('')).not.toMatch(/private_code|python|`/);
+  act(() => result.current.stop());
+});
+
 it('submits each Aliyun reply whole and plays queued replies in order', async () => {
   const pending = pendingRequests();
   const { result } = renderHook(() => useAudioQueue(settings));

@@ -32,6 +32,7 @@ import { useConversation } from './useConversation';
 import { ConversationHistory } from './ConversationHistory';
 import { ResourceImage } from './ResourceImage';
 import { WorkSpace } from './WorkSpace';
+import { useWorkEvents } from './useWorkEvents';
 
 const pages = [
   { key: 'chat', label: '陪伴对话', icon: MessageSquare },
@@ -102,6 +103,7 @@ export default function App() {
     abortRef,
     stopReply,
   } = chat;
+  useWorkEvents(!loading && !authRequired, audio, busy);
   async function refreshMemory() {
     try {
       const data = await request<Memory[]>('/memories');
@@ -373,7 +375,7 @@ export default function App() {
               </div>
               <div className="version">
                 <span className="version-dot" />
-                瞬光伴行 WEB<span>v0.5.3</span>
+                瞬光伴行 WEB<span>v0.5.4</span>
               </div>
             </div>
           </aside>
@@ -467,7 +469,7 @@ export default function App() {
                       ) : page === 'world' ? (
                         <WorldArchive />
                       ) : page === 'work' ? (
-                        <WorkSpace />
+                        <WorkSpace onModelSettings={() => openPanel('model')} />
                       ) : (
                         <ReminderSpace
                           features={features}

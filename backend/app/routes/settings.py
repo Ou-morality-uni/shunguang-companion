@@ -35,6 +35,7 @@ class SettingsUpdate(BaseModel):
     max_tokens: int = Field(default=1800, ge=128, le=8192)
     provider: str = Field(default='custom', max_length=40)
     protocol: Literal['openai', 'anthropic'] = 'openai'
+    vision: Literal['unknown', 'supported', 'unsupported'] | None = None
 
 
 class DiscoveryRequest(BaseModel):
@@ -94,6 +95,14 @@ def update_settings(payload: SettingsUpdate):
                     'llm_api_key': SecretStr(secret),
                     'llm_provider': payload.provider,
                     'llm_protocol': payload.protocol,
+                    'llm_vision': payload.vision
+                    if payload.vision is not None
+                    else (
+                        current.llm_vision
+                        if (current.llm_base_url, current.llm_model, current.llm_protocol)
+                        == (payload.base_url.rstrip('/'), payload.model.strip(), payload.protocol)
+                        else 'unknown'
+                    ),
                 }
             )
         except ValidationError:

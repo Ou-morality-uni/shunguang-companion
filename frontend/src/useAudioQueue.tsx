@@ -1,15 +1,17 @@
 import { createContext, useContext, useEffect, useRef, useState } from 'react';
 import { request, type Features } from './api';
 import { liveSpeech, PcmPlayback, SpeechSegmenter, streamSpeech, supportsLiveSpeech } from './speechStream';
+import { SpokenTextFilter, spokenText } from './spokenText';
 
-type Clip = { text: string; label: string };
+type Clip = { text: string; label: string; taskId?: string; expiresAt?: number };
 type PlaybackGroup = { signature: string; clips: Clip[]; startedAt: number; firstAudioMs?: number };
 type SpeechJob = {
   promise: Promise<string | null>;
   chunks: Uint8Array[];
   onAudio?: (bytes: Uint8Array) => void;
+  abort?: AbortController;
 };
-type QueueItem = Clip & { group: PlaybackGroup; job?: SpeechJob; live?: boolean };
+type QueueItem = Clip & { group: PlaybackGroup; job?: SpeechJob; live?: boolean; cancelled?: boolean };
 type ReplyPlayback = { group: PlaybackGroup } & (
   | { mode: 'whole' }
   | { mode: 'segmented'; segmenter: SpeechSegmenter; received: number }
@@ -49,6 +51,8 @@ export type AudioController = {
   stop: () => void;
   replay: () => void;
   toggleMute: () => void;
+  enqueueWork: (event: { task_id: string; kind: string; text: string; created_at: string }) => void;
+  cancelWork: (taskId: string) => void;
 };
 export const AudioContextValue = createContext<AudioController | null>(null);
 export const useCompanionAudio = () => useContext(AudioContextValue)!;
@@ -78,6 +82,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
           settings.has_api_key,
           settings.enabled,
           settings.auto_play,
+          settings.work_prompts,
           settings.muted,
           settings.timeout,
         ]
@@ -90,6 +95,8 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
   const context = useRef<AudioContext | null>(null);
   const source = useRef<MediaElementAudioSourceNode | null>(null);
   const queue = useRef<QueueItem[]>([]);
+  const activeItem = useRef<QueueItem | null>(null);
+  const replyText = useRef({ filter: new SpokenTextFilter(), raw: '', safe: '', offset: 0 });
   const last = useRef<PlaybackGroup | null>(null);
   const cache = useRef(new Map<string, string>());
   const working = useRef(false),
@@ -157,6 +164,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
   }
   async function synthesize(item: QueueItem, token: number, onAudio?: (bytes: Uint8Array) => void) {
     const abort = new AbortController();
+    if (item.job) item.job.abort = abort;
     requestAborts.current.add(abort);
     try {
       const result = onAudio
@@ -166,7 +174,8 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
             body: JSON.stringify({ text: item.text }),
             signal: abort.signal,
           });
-      if (token !== generation.current || item.group.signature !== currentSignature.current) return null;
+      if (token !== generation.current || item.cancelled || item.group.signature !== currentSignature.current)
+        return null;
       const url = new URL(result.audio_url, window.location.origin);
       if (url.origin !== window.location.origin || !url.pathname.startsWith('/api/tts/audio/')) {
         throw new Error('语音服务返回了不可用的音频地址。');
@@ -178,7 +187,14 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     }
   }
   function prepare(item: QueueItem | undefined, token: number) {
-    if (!item || item.job || cache.current.has(cacheKey(item))) return;
+    if (
+      !item ||
+      item.cancelled ||
+      (item.expiresAt && item.expiresAt < Date.now()) ||
+      item.job ||
+      cache.current.has(cacheKey(item))
+    )
+      return;
     const job: SpeechJob = { chunks: [], promise: Promise.resolve(null) };
     item.job = job;
     const streamed = !!settingsRef.current?.capabilities?.streaming_audio;
@@ -187,7 +203,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
       token,
       streamed
         ? (bytes) => {
-            if (token !== generation.current) return;
+            if (token !== generation.current || item.cancelled) return;
             if (job.onAudio) job.onAudio(bytes);
             else job.chunks.push(bytes);
           }
@@ -198,7 +214,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
   }
   async function playStream(item: QueueItem, token: number) {
     await prepareGraph();
-    if (token !== generation.current) return;
+    if (token !== generation.current || item.cancelled) return;
     if (context.current!.state !== 'running')
       throw new PlaybackError('blocked', '浏览器暂未允许播放，请点击消息的播放按钮重试。');
     // Qwen-Audio already applies the configured rate upstream.
@@ -207,7 +223,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     pcmPlayer.current = player;
     const job = item.job!;
     job.onAudio = (bytes) => {
-      if (token !== generation.current) return;
+      if (token !== generation.current || item.cancelled) return;
       player.push(bytes);
       if (player.startedAt !== null) {
         markFirstAudio(item.group, Math.max(0, player.startedAt - context.current!.currentTime) * 1000);
@@ -228,7 +244,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     }, 100);
     try {
       const url = await job.promise;
-      if (url && token === generation.current) await player.finish();
+      if (url && token === generation.current && !item.cancelled) await player.finish();
     } finally {
       clearInterval(timer);
       job.onAudio = undefined;
@@ -236,12 +252,12 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
       if (pcmPlayer.current === player) pcmPlayer.current = null;
     }
   }
-  async function play(url: string, token: number) {
+  async function play(url: string, token: number, item?: QueueItem) {
     const el = audio();
     el.src = url;
     el.playbackRate = settingsRef.current?.speed ?? 1;
     await prepareGraph();
-    if (token !== generation.current) return;
+    if (token !== generation.current || item?.cancelled) return;
     await new Promise<void>((resolve, reject) => {
       resolvePlayback.current = resolve;
       el.onended = () => resolve();
@@ -283,7 +299,15 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     try {
       while (queue.current.length && token === generation.current) {
         const item = queue.current.shift()!;
-        if (item.group.signature !== currentSignature.current) continue;
+        if (
+          item.group.signature !== currentSignature.current ||
+          item.cancelled ||
+          (item.expiresAt && item.expiresAt < Date.now())
+        ) {
+          item.job?.abort?.abort();
+          continue;
+        }
+        activeItem.current = item;
         activeGroup.current = item.group;
         prepare(item, token);
         if (settingsRef.current?.provider !== 'mimo') prepare(queue.current[0], token);
@@ -307,7 +331,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
           remember(key, url);
           last.current = item.group;
           try {
-            await play(url, token);
+            await play(url, token, item);
           } catch (failure) {
             // A removed cached file may be recreated once. Autoplay or network errors
             // never trigger another billed synthesis automatically.
@@ -320,16 +344,18 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
             ) {
               cache.current.delete(key);
               const replacement = await synthesize(item, token);
-              if (replacement && token === generation.current) await play(replacement, token);
+              if (replacement && token === generation.current) await play(replacement, token, item);
             } else throw failure;
           }
         } catch (failure) {
           if (token === generation.current && (failure as Error).name !== 'AbortError') {
-            stop();
+            if (!item.taskId) stop();
+            else pcmPlayer.current?.stop();
             setError((failure as Error).message);
           }
         } finally {
           resolvePlayback.current = null;
+          activeItem.current = null;
           setPlaying(false);
         }
       }
@@ -354,9 +380,14 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
   function group(): PlaybackGroup {
     return { signature: currentSignature.current, clips: [], startedAt: performance.now() };
   }
-  function addChunks(chunks: string[], playback: PlaybackGroup, label = '叶瞬光的回应') {
+  function addChunks(
+    chunks: string[],
+    playback: PlaybackGroup,
+    label = '叶瞬光的回应',
+    metadata: { taskId?: string; expiresAt?: number } = {},
+  ) {
     if (playback.signature !== currentSignature.current) return;
-    const clips = chunks.map((text) => ({ text, label }));
+    const clips = chunks.map((text) => ({ text, label, ...metadata }));
     playback.clips.push(...clips);
     queue.current.push(...clips.map((clip) => ({ ...clip, group: playback })));
     setQueued(queue.current.length);
@@ -365,7 +396,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     void drain();
   }
   function enqueue(text: string, itemLabel = '叶瞬光的回应') {
-    text = text.trim();
+    text = spokenText(text).trim();
     if (!text || !ready()) return;
     if (settingsRef.current?.provider === 'aliyun') {
       if (!validWholeReply(text)) return;
@@ -386,24 +417,31 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
   }
   function beginReply() {
     stop();
+    replyText.current = { filter: new SpokenTextFilter(), raw: '', safe: '', offset: 0 };
     setFirstAudioMs(null);
-    if (!settings?.enabled || !settings.auto_play || !ready()) return;
+    if (!settings?.enabled || !settings.auto_play || muted || !ready()) return;
     void prepareGraph().catch(() => {});
-    reply.current =
-      settingsRef.current?.provider === 'aliyun'
-        ? supportsLiveSpeech(settingsRef.current.model)
-          ? { mode: 'live', group: group(), segmenter: new SpeechSegmenter(40, true), received: '' }
-          : { mode: 'whole', group: group() }
-        : {
-            mode: 'segmented',
-            segmenter: new SpeechSegmenter(settingsRef.current?.provider === 'mimo' ? 70 : 0),
-            group: group(),
-            received: 0,
-          };
+    reply.current = newReply();
+  }
+  function newReply(): ReplyPlayback {
+    return settingsRef.current?.provider === 'aliyun'
+      ? supportsLiveSpeech(settingsRef.current.model)
+        ? { mode: 'live', group: group(), segmenter: new SpeechSegmenter(40, true), received: '' }
+        : { mode: 'whole', group: group() }
+      : {
+          mode: 'segmented',
+          segmenter: new SpeechSegmenter(settingsRef.current?.provider === 'mimo' ? 70 : 0),
+          group: group(),
+          received: 0,
+        };
   }
   function appendReply(text: string) {
     const current = reply.current;
-    if (!current || current.mode === 'whole') return;
+    if (!current) return;
+    replyText.current.raw += text;
+    text = replyText.current.filter.push(text);
+    replyText.current.safe += text;
+    if (current.mode === 'whole' || !text) return;
     if (current.mode === 'live') {
       current.received += text;
       if (!validWholeReply(current.received)) {
@@ -437,6 +475,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
   function finishReply(text: string) {
     const current = reply.current;
     if (!current) return;
+    text = spokenText(text).slice(replyText.current.offset);
     if (flushTimer.current) clearTimeout(flushTimer.current);
     flushTimer.current = null;
     reply.current = null;
@@ -459,7 +498,71 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     // Some backends return only the final record. Never read the whole answer twice.
     if (!current.received && text.length <= 12000)
       addChunks(current.segmenter.push(text, true), current.group);
-    else addChunks(current.segmenter.push('', true), current.group);
+    else addChunks(current.segmenter.push(text.slice(current.received), true), current.group);
+  }
+  function pauseReply() {
+    const current = reply.current;
+    if (!current) return;
+    if (flushTimer.current) clearTimeout(flushTimer.current);
+    flushTimer.current = null;
+    if (current.mode === 'live') {
+      feedLive(current, current.segmenter.push('', true));
+      if (current.item) current.item.text = current.received;
+      current.input?.finish();
+    } else if (current.mode === 'segmented') addChunks(current.segmenter.push('', true), current.group);
+    else {
+      const text = replyText.current.safe.slice(replyText.current.offset).trim();
+      if (text && validWholeReply(text)) addChunks([text], current.group);
+    }
+    replyText.current.offset = replyText.current.safe.length;
+    reply.current = newReply();
+  }
+  function cancelWork(taskId: string) {
+    queue.current = queue.current.filter((item) => {
+      if (item.taskId !== taskId) return true;
+      item.cancelled = true;
+      item.job?.abort?.abort();
+      return false;
+    });
+    setQueued(queue.current.length);
+    const item = activeItem.current;
+    if (item?.taskId === taskId) {
+      item.cancelled = true;
+      item.job?.abort?.abort();
+      pcmPlayer.current?.stop();
+      element.current?.pause();
+      resolvePlayback.current?.();
+    }
+  }
+  function enqueueWork(event: { task_id: string; kind: string; text: string; created_at: string }) {
+    const age = Date.now() - new Date(event.created_at).getTime();
+    const terminal = ['complete', 'partial', 'failed', 'cancelled', 'restored'].includes(event.kind);
+    if (terminal) cancelWork(event.task_id);
+    if (!settingsRef.current?.enabled || muted || age > 30000) return;
+    if (
+      event.kind === 'summary' ? !settingsRef.current.auto_play : settingsRef.current.work_prompts === false
+    )
+      return;
+    if (!ready()) return;
+    pauseReply();
+    void prepareGraph().catch(() => {});
+    const text = spokenText(event.text).trim();
+    if (settingsRef.current.provider === 'aliyun' && !validWholeReply(text)) return;
+    if (text.length > 12000) return;
+    const chunks =
+      settingsRef.current.provider === 'aliyun' ? [text] : new SpeechSegmenter(70).push(text, true);
+    addChunks(
+      chunks.filter(Boolean),
+      group(),
+      event.kind === 'summary' ? '瞬光的资料整理' : '瞬光的工作提示',
+      {
+        taskId: event.task_id,
+        expiresAt:
+          event.kind === 'summary'
+            ? undefined
+            : Date.now() + (terminal || event.kind === 'authorization' ? 30000 : 8000),
+      },
+    );
   }
   function feedLive(current: Extract<ReplyPlayback, { mode: 'live' }>, parts: string[]) {
     if (!parts.length) return;
@@ -540,12 +643,11 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     void drain();
   }
   function toggleMute() {
-    setMuted((value) => {
-      const next = !value;
-      audio().muted = next;
-      if (gain.current) gain.current.gain.value = next ? 0 : 1;
-      return next;
-    });
+    const next = !muted;
+    setMuted(next);
+    audio().muted = next;
+    if (gain.current) gain.current.gain.value = next ? 0 : 1;
+    if (next) stop();
   }
   useEffect(() => {
     setMuted(!!settings?.muted);
@@ -603,5 +705,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     stop,
     replay,
     toggleMute,
+    enqueueWork,
+    cancelWork,
   };
 }

@@ -3,19 +3,24 @@ import { FolderOpen, Plus, RefreshCw, RotateCcw, Square, X } from 'lucide-react'
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { request, type FileTask, type FileTaskInput, type Workspace } from './api';
+import { DocumentResult, UploadDocuments, VisionApproval } from './DocumentControls';
 
 type Step = FileTaskInput['steps'][number];
-const actions: Record<Step['action'], string> = {
+const actions: Record<string, string> = {
   list: '列出目录',
   read: '读取文本',
   write: '创建／修改文本',
   move: '移动／改名',
   delete: '申请删除',
+  read_document: '阅读文档／代码／图片',
+  upload: '上传副本',
+  summarize: '整理总结',
 };
 const statuses: Record<FileTask['status'], string> = {
   queued: '排队中',
   running: '执行中',
   waiting_approval: '等待删除授权',
+  waiting_vision: '等待图像识别授权',
   complete: '已完成',
   failed: '已停止：发生错误',
   cancelled: '已取消',
@@ -25,7 +30,7 @@ const statuses: Record<FileTask['status'], string> = {
 };
 const active = new Set(['queued', 'running', 'restoring']);
 
-export function WorkSpace() {
+export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void }) {
   const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [tasks, setTasks] = useState<FileTask[]>([]);
   const [folder, setFolder] = useState('');
@@ -34,6 +39,7 @@ export function WorkSpace() {
   const [steps, setSteps] = useState<Step[]>([{ action: 'list', path: '.' }]);
   const [notice, setNotice] = useState('');
   const [busy, setBusy] = useState(false);
+  const [instruction, setInstruction] = useState('总结这些资料的主要内容，并标注来源位置。');
   const sequence = useRef(0);
 
   async function refresh(signal?: AbortSignal) {
@@ -98,13 +104,22 @@ export function WorkSpace() {
       <div className="page-heading">
         <span className="eyebrow">LET’S WORK TOGETHER</span>
         <h1>手边的事，一起理顺。</h1>
-        <p>先授权本机工作文件夹。你可以在这里安排文件操作，也可以回到对话中交给瞬光。</p>
+        <p>上传资料副本，或授权本机工作文件夹。你可以在这里安排阅读与总结，也可以回到对话中交给瞬光。</p>
       </div>
       {notice && (
         <div className="settings-notice" role="status">
           {notice}
         </div>
       )}
+      <UploadDocuments
+        onModelSettings={onModelSettings}
+        onUploaded={(workspace, uploaded) => {
+          setChosen(workspace.id);
+          setSteps(uploaded);
+          setTitle('阅读上传资料');
+          void refresh();
+        }}
+      />
       <section className="work-card glass" aria-label="工作文件夹授权">
         <h3>
           <FolderOpen size={18} /> 工作文件夹
@@ -167,15 +182,21 @@ export function WorkSpace() {
       <section className="work-card glass" aria-label="安排文件任务">
         <h3>安排文件任务</h3>
         <p className="space-note">
-          本版支持已有目录内的普通文件操作和 UTF-8 文本。单文件最多 20 MiB，单任务最多 50
-          步；办公文档阅读及命令执行按后续版本接入。
+          支持六类资料阅读和基础文件操作。文档按所选范围提取，保留来源位置；未读、截断和未识别内容会注明。Office
+          成品制作与命令执行按后续版本接入。
         </p>
         <form
           onSubmit={(event) => {
             event.preventDefault();
             void perform(
-              () => post('/work/tasks', { workspace_id: chosen, title, steps }),
-              '任务已提交，请查看下方记录；包含删除时须先授权。',
+              () =>
+                post('/work/tasks', {
+                  workspace_id: chosen,
+                  title,
+                  steps,
+                  ...(steps.some((step) => step.action === 'read_document') ? { instruction } : {}),
+                }),
+              '任务已提交，请查看下方记录；包含删除或替代图像识别时会等待授权。',
             );
           }}
         >
@@ -217,11 +238,13 @@ export function WorkSpace() {
                     });
                   }}
                 >
-                  {Object.entries(actions).map(([value, label]) => (
-                    <option key={value} value={value}>
-                      {label}
-                    </option>
-                  ))}
+                  {Object.entries(actions)
+                    .filter(([value]) => !['upload', 'summarize'].includes(value))
+                    .map(([value, label]) => (
+                      <option key={value} value={value}>
+                        {label}
+                      </option>
+                    ))}
                 </select>
               </label>
               <label className="field">
@@ -234,6 +257,50 @@ export function WorkSpace() {
                   placeholder="例如 资料/说明.txt；列根目录填 ."
                 />
               </label>
+              {step.action === 'read_document' && (
+                <>
+                  <div className="field-row">
+                    <label className="field">
+                      起始位置 {index + 1}
+                      <Input
+                        type="number"
+                        min={1}
+                        max={1000000}
+                        value={step.start ?? 1}
+                        onChange={(event) => update(index, { ...step, start: Number(event.target.value) })}
+                      />
+                    </label>
+                    <label className="field">
+                      读取数量 {index + 1}
+                      <Input
+                        type="number"
+                        min={1}
+                        max={50}
+                        value={step.limit ?? 20}
+                        onChange={(event) => update(index, { ...step, limit: Number(event.target.value) })}
+                      />
+                    </label>
+                  </div>
+                  <p className="space-note">
+                    位置从 1 开始：PDF 按页，Word 按段落／表格块，Excel 按工作表，PPT
+                    按幻灯片，代码按行；图片只处理第一帧。
+                  </p>
+                  <label className="field">
+                    <span>
+                      <input
+                        type="checkbox"
+                        checked={step.visual ?? false}
+                        onChange={(event) => update(index, { ...step, visual: event.target.checked })}
+                      />{' '}
+                      PDF 页面视觉理解（含矢量图表）
+                    </span>
+                    <small>
+                      扫描页和内嵌图片自动按能力处理；勾选后也会识别所选 PDF
+                      页面整体，可能增加模型调用。每次最多 8 幅。
+                    </small>
+                  </label>
+                </>
+              )}
               {step.action === 'move' && (
                 <label className="field">
                   目标相对路径 {index + 1}
@@ -270,6 +337,17 @@ export function WorkSpace() {
               )}
             </div>
           ))}
+          {steps.some((step) => step.action === 'read_document') && (
+            <label className="field">
+              阅读要求（留空只提取，不调用模型总结）
+              <textarea
+                value={instruction}
+                onChange={(event) => setInstruction(event.target.value)}
+                maxLength={4000}
+                rows={3}
+              />
+            </label>
+          )}
           <div className="work-actions">
             <Button
               variant="outline"
@@ -310,11 +388,21 @@ export function WorkSpace() {
               {new Date(task.created_at).toLocaleString()}
             </p>
             {task.error && <p role="status">{task.error}</p>}
+            {!!task.events?.length && (
+              <details>
+                <summary>瞬光的工作提示记录</summary>
+                <ul>
+                  {task.events?.map((event) => (
+                    <li key={String(event.seq)}>{String(event.text)}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
             <ol className="work-results">
               {task.steps.map((step, index) => (
                 <li key={index}>
                   <span>
-                    {actions[step.action]}：{step.path}
+                    {actions[step.action]}：{step.action === 'summarize' ? '本任务已读取的资料' : step.path}
                     {step.destination ? ` → ${step.destination}` : ''}
                   </span>
                   <small>
@@ -326,6 +414,7 @@ export function WorkSpace() {
                         complete: '已完成',
                         restoring: '恢复中',
                         restored: '已恢复',
+                        waiting_vision: '等待图像识别授权',
                       } as Record<string, string>
                     )[step.state] ?? step.state}
                   </small>
@@ -333,6 +422,7 @@ export function WorkSpace() {
                     <details>
                       <summary>查看结果</summary>
                       {typeof step.result.text === 'string' && <pre>{step.result.text}</pre>}
+                      <DocumentResult result={step.result} />
                       {Array.isArray(step.result.entries) && (
                         <ul>
                           {(step.result.entries as Array<{ name: string; directory: boolean }>).map(
@@ -348,6 +438,14 @@ export function WorkSpace() {
                       {step.result.truncated === true && <p>内容较长，当前只显示前一部分。</p>}
                       {typeof step.result.message === 'string' && <p>{step.result.message}</p>}
                     </details>
+                  )}
+                  {step.vision_request && task.status === 'waiting_vision' && (
+                    <VisionApproval
+                      taskId={task.id}
+                      info={step.vision_request}
+                      onChanged={refresh}
+                      onModelSettings={onModelSettings}
+                    />
                   )}
                 </li>
               ))}

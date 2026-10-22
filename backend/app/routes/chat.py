@@ -298,7 +298,10 @@ async def chat(payload: ChatRequest, request: Request = None):
                         else:
                             try:
                                 result = await interruptible(
-                                    asyncio.wait_for(registry.execute(name, args), timeout=25), stop
+                                    asyncio.wait_for(
+                                        registry.execute(name, args), timeout=180 if name == 'workspace_files' else 25
+                                    ),
+                                    stop,
                                 )
                             except StopRequested:
                                 raise
@@ -306,7 +309,11 @@ async def chat(payload: ChatRequest, request: Request = None):
                                 result = {'ok': False, 'error': '工具执行失败或超时，请稍后重试。'}
                         state = {
                             **state,
-                            'status': 'complete' if result.get('ok', False) else 'error',
+                            'status': 'waiting_approval'
+                            if result.get('task', {}).get('status') in ('waiting_approval', 'waiting_vision')
+                            else 'complete'
+                            if result.get('ok', False)
+                            else 'error',
                             'result': result,
                         }
                         metadata['tools'].append(state)

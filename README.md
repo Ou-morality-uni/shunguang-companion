@@ -1,9 +1,10 @@
-# 瞬光伴行 v0.5.3
+# 瞬光伴行 v0.5.4
 
-[v0.5.3 更新说明](versions/0.5.3/README.md) · [语音配置与选型](docs/tts.md)
+[v0.5.4 更新说明](versions/0.5.4/README.md) · [语音配置与选型](docs/tts.md)
 
 [English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.5.4](versions/0.5.4/README.md)：新增六类资料阅读与上传、多文件总结、视觉能力及替代识别授权、自然工作语音和代码块朗读过滤。
 - [v0.5.3](versions/0.5.3/README.md)：新增本机工作台、文件夹授权、文件任务与删除确认，支持操作记录、取消、备份和冲突保护恢复。
 - [v0.5.2](versions/0.5.2/README.md)：修复角色身世与拜师检索，新增常驻角色事实及剧情年表，优化自然表达与记忆边界。
 - [v0.1.5](versions/0.1.5/README.md)：完善模型与语音连接、流式朗读、自动记忆、表情及工具查询。
@@ -137,6 +138,6 @@ Required Notice: 瞬光伴行 — https://github.com/Ou-morality-uni/shunguang-c
 
 ## 开发与长期维护
 
-模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](versions/0.5.3/README.md)。
+模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](versions/0.5.4/README.md)。
 
 开发环境安装 `backend/requirements-dev.txt` 后，可用 `python scripts/dev.py verify` 统一运行检查；接口变化后用 `python scripts/dev.py contracts` 更新契约。生产安装继续使用运行时锁文件。数据库升级会先自动备份旧库；升级后不要用旧程序直接打开新库。

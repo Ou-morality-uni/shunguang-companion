@@ -200,6 +200,27 @@
         "title": "ConversationOut",
         "type": "object"
       },
+      "DocumentUploadOut": {
+        "properties": {
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "task": {
+            "$ref": "#/components/schemas/FileTaskOut"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceOut"
+          }
+        },
+        "required": [
+          "workspace",
+          "path",
+          "task"
+        ],
+        "title": "DocumentUploadOut",
+        "type": "object"
+      },
       "FeaturePatch": {
         "additionalProperties": false,
         "properties": {
@@ -264,7 +285,8 @@
               "read",
               "write",
               "move",
-              "delete"
+              "delete",
+              "read_document"
             ],
             "title": "Action",
             "type": "string"
@@ -294,12 +316,31 @@
             ],
             "title": "Destination"
           },
+          "limit": {
+            "default": 20,
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Limit",
+            "type": "integer"
+          },
           "path": {
             "default": ".",
             "maxLength": 500,
             "minLength": 1,
             "title": "Path",
             "type": "string"
+          },
+          "start": {
+            "default": 1,
+            "maximum": 1000000.0,
+            "minimum": 1.0,
+            "title": "Start",
+            "type": "integer"
+          },
+          "visual": {
+            "default": false,
+            "title": "Visual",
+            "type": "boolean"
           }
         },
         "required": [
@@ -316,7 +357,10 @@
               "read",
               "write",
               "move",
-              "delete"
+              "delete",
+              "read_document",
+              "summarize",
+              "upload"
             ],
             "title": "Action",
             "type": "string"
@@ -351,6 +395,18 @@
           "state": {
             "title": "State",
             "type": "string"
+          },
+          "vision_request": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vision Request"
           }
         },
         "required": [
@@ -375,8 +431,25 @@
             "title": "Error",
             "type": "string"
           },
+          "events": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Events",
+            "type": "array"
+          },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "origin": {
+            "default": "workbench",
+            "enum": [
+              "workbench",
+              "chat"
+            ],
+            "title": "Origin",
             "type": "string"
           },
           "status": {
@@ -384,6 +457,7 @@
               "queued",
               "running",
               "waiting_approval",
+              "waiting_vision",
               "complete",
               "failed",
               "cancelled",
@@ -431,6 +505,12 @@
       "FileTaskRequest": {
         "additionalProperties": false,
         "properties": {
+          "instruction": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Instruction",
+            "type": "string"
+          },
           "steps": {
             "items": {
               "$ref": "#/components/schemas/FileStep"
@@ -846,6 +926,16 @@
           "timeout": {
             "title": "Timeout",
             "type": "number"
+          },
+          "vision": {
+            "default": "unknown",
+            "enum": [
+              "unknown",
+              "supported",
+              "unsupported"
+            ],
+            "title": "Vision",
+            "type": "string"
           }
         },
         "required": [
@@ -925,6 +1015,22 @@
             "minimum": 5.0,
             "title": "Timeout",
             "type": "number"
+          },
+          "vision": {
+            "anyOf": [
+              {
+                "enum": [
+                  "unknown",
+                  "supported",
+                  "unsupported"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vision"
           }
         },
         "required": [
@@ -1265,6 +1371,32 @@
         "title": "ValidationError",
         "type": "object"
       },
+      "VisionApprovalRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "approved": {
+            "title": "Approved",
+            "type": "boolean"
+          },
+          "profile_id": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Profile Id",
+            "type": "string"
+          },
+          "signature": {
+            "default": "",
+            "maxLength": 100,
+            "title": "Signature",
+            "type": "string"
+          }
+        },
+        "required": [
+          "approved"
+        ],
+        "title": "VisionApprovalRequest",
+        "type": "object"
+      },
       "VoiceRegistration": {
         "additionalProperties": false,
         "properties": {
@@ -1456,7 +1588,7 @@
   },
   "info": {
     "title": "瞬光伴行 API",
-    "version": "0.5.3"
+    "version": "0.5.4"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2852,6 +2984,51 @@
         "summary": "Reference File"
       }
     },
+    "/api/work/events": {
+      "get": {
+        "operationId": "events_api_work_events_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 0,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Events"
+      }
+    },
     "/api/work/tasks": {
       "get": {
         "operationId": "tasks_api_work_tasks_get",
@@ -3074,6 +3251,128 @@
           }
         },
         "summary": "Restore"
+      }
+    },
+    "/api/work/tasks/{task_id}/vision": {
+      "post": {
+        "operationId": "vision_decision_api_work_tasks__task_id__vision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VisionApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileTaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Vision Decision"
+      }
+    },
+    "/api/work/upload": {
+      "post": {
+        "operationId": "upload_api_work_upload_post",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentUploadOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Upload"
+      }
+    },
+    "/api/work/vision/probe": {
+      "post": {
+        "operationId": "vision_probe_api_work_vision_probe_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Vision Probe"
+      }
+    },
+    "/api/work/vision/profiles": {
+      "get": {
+        "operationId": "vision_profiles_api_work_vision_profiles_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Vision Profiles"
       }
     },
     "/api/work/workspaces": {

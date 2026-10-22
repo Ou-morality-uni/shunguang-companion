@@ -81,12 +81,12 @@ class Store:
         with self.connect() as db:
             return db.execute('UPDATE workspaces SET enabled=0 WHERE id=?', (workspace_id,)).rowcount == 1
 
-    def create_file_task(self, workspace_id, title, steps, status):
+    def create_file_task(self, workspace_id, title, steps, status, origin='workbench'):
         task_id = str(uuid4())
         with self.connect() as db:
             db.execute(
-                'INSERT INTO file_tasks VALUES (?,?,?,?,?,?,?,?)',
-                (task_id, workspace_id, title, status, json.dumps(steps, ensure_ascii=False), '', now(), now()),
+                'INSERT INTO file_tasks(id,workspace_id,title,status,steps,error,created_at,updated_at,origin) VALUES (?,?,?,?,?,?,?,?,?)',
+                (task_id, workspace_id, title, status, json.dumps(steps, ensure_ascii=False), '', now(), now(), origin),
             )
         return self.get_file_task(task_id)
 
@@ -97,12 +97,22 @@ class Store:
                 return None
             record = dict(row)
             record['steps'] = json.loads(record['steps'])
+            record['events'] = [
+                dict(event)
+                for event in db.execute('SELECT * FROM work_events WHERE task_id=? ORDER BY seq', (task_id,))
+            ]
             return record
 
     def list_file_tasks(self, limit=50):
         with self.connect() as db:
             rows = db.execute('SELECT * FROM file_tasks ORDER BY created_at DESC LIMIT ?', (limit,))
-            return [{**dict(row), 'steps': json.loads(row['steps'])} for row in rows]
+            records = [{**dict(row), 'steps': json.loads(row['steps'])} for row in rows]
+            for record in records:
+                record['events'] = [
+                    dict(event)
+                    for event in db.execute('SELECT * FROM work_events WHERE task_id=? ORDER BY seq', (record['id'],))
+                ]
+            return records
 
     def save_file_task(self, record):
         record['updated_at'] = now()
@@ -124,6 +134,25 @@ class Store:
                 "UPDATE file_tasks SET status='interrupted',error=?,updated_at=? WHERE status IN ('queued','running','restoring')",
                 ('服务已重启。请检查操作记录，按需恢复；不会自动重放文件操作。', now()),
             )
+
+    def add_work_event(self, task_id, kind, text):
+        with self.connect() as db:
+            db.execute(
+                'INSERT INTO work_events(task_id,kind,text,created_at) VALUES (?,?,?,?)', (task_id, kind, text, now())
+            )
+
+    def work_events(self, after=None):
+        with self.connect() as db:
+            latest = db.execute('SELECT COALESCE(MAX(seq),0) FROM work_events').fetchone()[0]
+            rows = (
+                []
+                if after is None
+                else [
+                    dict(row)
+                    for row in db.execute('SELECT * FROM work_events WHERE seq>? ORDER BY seq LIMIT 100', (after,))
+                ]
+            )
+            return {'cursor': rows[-1]['seq'] if rows else latest, 'events': rows}
 
     def create_conversation(self):
         record = {'id': str(uuid4()), 'title': '新的对话', 'created_at': now(), 'updated_at': now()}

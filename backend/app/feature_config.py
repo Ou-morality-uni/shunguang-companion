@@ -35,6 +35,7 @@ class TTSConfig(BaseModel):
     model_config = ConfigDict(extra='forbid')
     enabled: bool = False
     auto_play: bool = False
+    work_prompts: bool = True
     muted: bool = False
     provider: str = 'mimo'
     base_url: str = 'https://api.xiaomimimo.com/v1'

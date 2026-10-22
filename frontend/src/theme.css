@@ -3470,3 +3470,8 @@ select option {
   border-radius: 12px;
   padding: 16px;
 }
+.work-summary {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 12px 0;
+}

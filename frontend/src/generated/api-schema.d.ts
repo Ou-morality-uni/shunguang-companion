@@ -739,6 +739,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/work/events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Events */
+        get: operations["events_api_work_events_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/work/tasks": {
         parameters: {
             query?: never;
@@ -819,6 +836,74 @@ export interface paths {
         put?: never;
         /** Restore */
         post: operations["restore_api_work_tasks__task_id__restore_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/tasks/{task_id}/vision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vision Decision */
+        post: operations["vision_decision_api_work_tasks__task_id__vision_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/upload": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Upload */
+        post: operations["upload_api_work_upload_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/vision/probe": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Vision Probe */
+        post: operations["vision_probe_api_work_vision_probe_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/vision/profiles": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vision Profiles */
+        get: operations["vision_profiles_api_work_vision_profiles_get"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -953,6 +1038,13 @@ export interface components {
             /** Updated At */
             updated_at: string;
         };
+        /** DocumentUploadOut */
+        DocumentUploadOut: {
+            /** Path */
+            path: string;
+            task: components["schemas"]["FileTaskOut"];
+            workspace: components["schemas"]["WorkspaceOut"];
+        };
         /** FeaturePatch */
         FeaturePatch: {
             /** Memory */
@@ -978,16 +1070,31 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "list" | "read" | "write" | "move" | "delete";
+            action: "list" | "read" | "write" | "move" | "delete" | "read_document";
             /** Content */
             content?: string | null;
             /** Destination */
             destination?: string | null;
             /**
+             * Limit
+             * @default 20
+             */
+            limit: number;
+            /**
              * Path
              * @default .
              */
             path: string;
+            /**
+             * Start
+             * @default 1
+             */
+            start: number;
+            /**
+             * Visual
+             * @default false
+             */
+            visual: boolean;
         };
         /** FileStepOut */
         FileStepOut: {
@@ -995,7 +1102,7 @@ export interface components {
              * Action
              * @enum {string}
              */
-            action: "list" | "read" | "write" | "move" | "delete";
+            action: "list" | "read" | "write" | "move" | "delete" | "read_document" | "summarize" | "upload";
             /** Destination */
             destination?: string | null;
             /** Path */
@@ -1006,6 +1113,10 @@ export interface components {
             } | null;
             /** State */
             state: string;
+            /** Vision Request */
+            vision_request?: {
+                [key: string]: unknown;
+            } | null;
         };
         /** FileTaskOut */
         FileTaskOut: {
@@ -1015,13 +1126,23 @@ export interface components {
             created_at: string;
             /** Error */
             error: string;
+            /** Events */
+            events?: {
+                [key: string]: unknown;
+            }[];
             /** Id */
             id: string;
+            /**
+             * Origin
+             * @default workbench
+             * @enum {string}
+             */
+            origin: "workbench" | "chat";
             /**
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "waiting_approval" | "complete" | "failed" | "cancelled" | "interrupted" | "restoring" | "restored";
+            status: "queued" | "running" | "waiting_approval" | "waiting_vision" | "complete" | "failed" | "cancelled" | "interrupted" | "restoring" | "restored";
             /** Steps */
             steps: components["schemas"]["FileStepOut"][];
             /** Title */
@@ -1033,6 +1154,11 @@ export interface components {
         };
         /** FileTaskRequest */
         FileTaskRequest: {
+            /**
+             * Instruction
+             * @default
+             */
+            instruction: string;
             /** Steps */
             steps: components["schemas"]["FileStep"][];
             /**
@@ -1201,6 +1327,12 @@ export interface components {
             temperature: number;
             /** Timeout */
             timeout: number;
+            /**
+             * Vision
+             * @default unknown
+             * @enum {string}
+             */
+            vision: "unknown" | "supported" | "unsupported";
         };
         /** SettingsUpdate */
         SettingsUpdate: {
@@ -1235,6 +1367,8 @@ export interface components {
             temperature: number;
             /** Timeout */
             timeout: number;
+            /** Vision */
+            vision?: ("unknown" | "supported" | "unsupported") | null;
         };
         /** SourceOut */
         SourceOut: {
@@ -1324,6 +1458,21 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /** VisionApprovalRequest */
+        VisionApprovalRequest: {
+            /** Approved */
+            approved: boolean;
+            /**
+             * Profile Id
+             * @default
+             */
+            profile_id: string;
+            /**
+             * Signature
+             * @default
+             */
+            signature: string;
         };
         /** VoiceRegistration */
         VoiceRegistration: {
@@ -2704,6 +2853,37 @@ export interface operations {
             };
         };
     };
+    events_api_work_events_get: {
+        parameters: {
+            query?: {
+                after?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     tasks_api_work_tasks_get: {
         parameters: {
             query?: never;
@@ -2881,6 +3061,112 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vision_decision_api_work_tasks__task_id__vision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VisionApprovalRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    upload_api_work_upload_post: {
+        parameters: {
+            query: {
+                name: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentUploadOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    vision_probe_api_work_vision_probe_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    vision_profiles_api_work_vision_profiles_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
                 };
             };
         };

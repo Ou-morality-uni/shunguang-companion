@@ -25,6 +25,7 @@ class ModelConfig(BaseModel):
     llm_provider: str = Field(default='custom', max_length=40)
     llm_max_tokens: int = Field(default=1800, ge=128, le=8192)
     llm_protocol: Literal['openai', 'anthropic'] = 'openai'
+    llm_vision: Literal['unknown', 'supported', 'unsupported'] = 'unknown'
 
     @field_validator('llm_base_url')
     @classmethod
@@ -127,4 +128,5 @@ def public_config(config: ModelConfig) -> dict:
         'configured': bool(config.llm_api_key.get_secret_value() and config.llm_model.strip()),
         'provider': config.llm_provider,
         'protocol': config.llm_protocol,
+        'vision': config.llm_vision,
     }

@@ -38,7 +38,32 @@ def serialize(messages):
             )
         else:
             role = 'user'
-            blocks = [{'type': 'text', 'text': str(message.content)}]
+            if isinstance(message.content, str):
+                blocks = [{'type': 'text', 'text': message.content}]
+            else:
+                blocks = []
+                for block in message.content:
+                    if block.get('type') == 'text':
+                        blocks.append({'type': 'text', 'text': block['text']})
+                    elif block.get('type') == 'image_url':
+                        url = block['image_url']['url']
+                        import re
+
+                        matched = re.fullmatch(r'data:(image/(?:png|jpeg|webp));base64,([A-Za-z0-9+/=]+)', url)
+                        if not matched:
+                            raise ValueError('only bounded inline images are supported')
+                        blocks.append(
+                            {
+                                'type': 'image',
+                                'source': {
+                                    'type': 'base64',
+                                    'media_type': matched[1],
+                                    'data': matched[2],
+                                },
+                            }
+                        )
+                    else:
+                        raise ValueError('unsupported multimodal block')
         if not blocks:
             continue
         if turns and turns[-1]['role'] == role:

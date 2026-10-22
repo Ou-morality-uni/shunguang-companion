@@ -1,11 +1,12 @@
 """Local-only controls. Models cannot grant folders or approve destructive steps."""
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel, ConfigDict, Field
+from starlette.concurrency import run_in_threadpool
 
 from .. import runtime
-from ..filework import FileTaskRequest, WorkError, local_request, public_task
-from ..schemas import FileTaskOut, WorkspaceOut
+from ..filework import MAX_FILE_BYTES, FileTaskRequest, WorkError, local_request, public_task
+from ..schemas import DocumentUploadOut, FileTaskOut, WorkspaceOut
 
 
 def service(request: Request):
@@ -27,6 +28,11 @@ class GrantRequest(BaseModel):
 class ApprovalRequest(BaseModel):
     model_config = ConfigDict(extra='forbid')
     approved: bool
+
+
+class VisionApprovalRequest(ApprovalRequest):
+    profile_id: str = Field(default='', max_length=80)
+    signature: str = Field(default='', max_length=100)
 
 
 def invoke(function, *args):
@@ -82,3 +88,43 @@ def cancel(task_id: str, work=Depends(service)):
 @router.post('/tasks/{task_id}/restore', response_model=FileTaskOut)
 def restore(task_id: str, work=Depends(service)):
     return invoke(work.restore, task_id)
+
+
+@router.post('/upload', response_model=DocumentUploadOut)
+async def upload(request: Request, name: str = Query(min_length=1, max_length=255), work=Depends(service)):
+    content = bytearray()
+    async for chunk in request.stream():
+        content.extend(chunk)
+        if len(content) > MAX_FILE_BYTES:
+            raise HTTPException(413, '每份上传文件最多 20 MiB。')
+    return await run_in_threadpool(invoke, work.upload, name, bytes(content))
+
+
+@router.get('/vision/profiles')
+def vision_profiles():
+    from ..document_models import profiles
+
+    return profiles()
+
+
+@router.post('/vision/probe')
+async def vision_probe():
+    from ..document_models import probe
+    from ..llm import friendly_error
+
+    try:
+        return await probe()
+    except ValueError as error:
+        raise HTTPException(422, str(error))
+    except Exception as error:
+        raise HTTPException(502, friendly_error(error))
+
+
+@router.post('/tasks/{task_id}/vision', response_model=FileTaskOut)
+def vision_decision(task_id: str, payload: VisionApprovalRequest, work=Depends(service)):
+    return invoke(work.approve_vision, task_id, payload.approved, payload.profile_id, payload.signature)
+
+
+@router.get('/events')
+def events(after: int | None = Query(default=None, ge=0), work=Depends(service)):
+    return work.store.work_events(after)

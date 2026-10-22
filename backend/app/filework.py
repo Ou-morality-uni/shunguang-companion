@@ -19,6 +19,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from . import config
+from .work_cues import WorkCues
 
 MAX_FILE_BYTES = 20 * 1024 * 1024
 MAX_TEXT_CHARS = 16000
@@ -38,10 +39,13 @@ class TaskCancelled(Exception):
 
 class FileStep(BaseModel):
     model_config = ConfigDict(extra='forbid')
-    action: Literal['list', 'read', 'write', 'move', 'delete']
+    action: Literal['list', 'read', 'write', 'move', 'delete', 'read_document']
     path: str = Field(default='.', min_length=1, max_length=500)
     destination: str | None = Field(default=None, min_length=1, max_length=500)
     content: str | None = Field(default=None, max_length=200000)
+    start: int = Field(default=1, ge=1, le=1000000)
+    limit: int = Field(default=20, ge=1, le=50)
+    visual: bool = False
 
     @model_validator(mode='after')
     def operation_fields(self):
@@ -57,11 +61,14 @@ class FileTaskRequest(BaseModel):
     workspace_id: str = Field(min_length=1, max_length=80)
     title: str = Field(default='文件任务', min_length=1, max_length=120)
     steps: list[FileStep] = Field(min_length=1, max_length=50)
+    instruction: str = Field(default='', max_length=4000)
 
     @model_validator(mode='after')
     def bounded_content(self):
         if sum(len(step.content or '') for step in self.steps) > 1000000:
             raise ValueError('任务文本总量过大')
+        if self.instruction and not any(step.action == 'read_document' for step in self.steps):
+            raise ValueError('阅读要求需要至少一个文档阅读步骤')
         return self
 
 
@@ -108,7 +115,21 @@ def public_task(record):
     return {
         **record,
         'steps': [
-            {key: value for key, value in step.items() if key not in ('content', 'before', 'after', 'backup')}
+            {
+                key: value
+                for key, value in step.items()
+                if key
+                not in (
+                    'content',
+                    'before',
+                    'after',
+                    'backup',
+                    'read_stamp',
+                    'recognized',
+                    'vision_approval',
+                    'vision_declined',
+                )
+            }
             for step in record['steps']
         ],
         'can_restore': record['status'] in TERMINAL - {'restored'}
@@ -123,6 +144,8 @@ class FileWork:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='file-work')
         self.jobs = {}
         self.closed = False
+        self.upload_root = (store.path.parent / 'attachments').resolve()
+        self.cues = WorkCues(store)
         store.interrupt_file_tasks()
 
     def close(self):
@@ -131,8 +154,11 @@ class FileWork:
             for _, stop in self.jobs.values():
                 stop.set()
         self.pool.shutdown(wait=True)
+        self.cues.close()
 
     def protected(self, path):
+        if path == self.upload_root or self.upload_root in path.parents:
+            return
         protected = [config.DATA_DIR.resolve(), config.ROOT / '.git', config.ROOT / '.codex']
         if any(path == item or item in path.parents for item in protected):
             raise WorkError('应用数据、凭据和内部管理目录不属于工作文件范围。', 403)
@@ -225,9 +251,10 @@ class FileWork:
                 if self.store.get_file_task(task_id)['workspace_id'] == workspace_id:
                     stop.set()
             for task in self.store.list_file_tasks(10000):
-                if task['workspace_id'] == workspace_id and task['status'] == 'waiting_approval':
+                if task['workspace_id'] == workspace_id and task['status'] in ('waiting_approval', 'waiting_vision'):
                     task.update(status='cancelled', error='已撤销文件夹授权。')
                     self.store.save_file_task(task)
+                    self.cues.emit(task, 'cancelled')
 
     def task(self, task_id):
         record = self.store.get_file_task(task_id)
@@ -235,7 +262,7 @@ class FileWork:
             raise WorkError('任务不存在。', 404)
         return record
 
-    def submit(self, payload):
+    def submit(self, payload, origin='workbench'):
         with self.gate:
             self.jobs = {key: job for key, job in self.jobs.items() if not job[0].done()}
             if self.closed or len(self.jobs) >= 8:
@@ -277,8 +304,19 @@ class FileWork:
                         raise WorkError('同一任务不能多次修改同一路径；请拆分任务，避免改名循环或覆盖。', 422)
                     touched.update(keys)
                 steps.append(step)
+            if payload.instruction:
+                steps.append(
+                    {
+                        'action': 'summarize',
+                        'path': '.',
+                        'instruction': payload.instruction,
+                        'state': 'pending',
+                        'before': {},
+                        'after': {},
+                    }
+                )
             status = 'waiting_approval' if any(step.action == 'delete' for step in payload.steps) else 'queued'
-            task = self.store.create_file_task(payload.workspace_id, payload.title, steps, status)
+            task = self.store.create_file_task(payload.workspace_id, payload.title, steps, status, origin)
             if status == 'queued':
                 self.schedule(task['id'])
             return public_task(task)
@@ -313,9 +351,72 @@ class FileWork:
             return public_task(self.task(task_id))
         with self.gate:
             task = self.task(task_id)
-            if task['status'] == 'waiting_approval':
+            if task['status'] in ('waiting_approval', 'waiting_vision'):
                 task.update(status='cancelled', error='用户取消了任务。')
                 self.store.save_file_task(task)
+                self.cues.emit(task, 'cancelled')
+            return public_task(task)
+
+    def upload(self, name, data):
+        from uuid import uuid4
+
+        if not data or len(data) > MAX_FILE_BYTES or Path(name).name != name or '/' in name or '\\' in name:
+            raise WorkError('上传文件名无效、为空或超过 20 MiB。', 422)
+        with self.gate:
+            self.upload_root.mkdir(parents=True, exist_ok=True)
+            workspace = self.grant(str(self.upload_root))
+            root = self.root(workspace['id'])
+            self.path(root, name)
+            name = uuid4().hex[:10] + '-' + name
+            path = self.path(root, name)
+            stamp = {
+                'sha256': hashlib.sha256(data).hexdigest(),
+                'bytes': len(data),
+                'mode': 0o666 if os.name == 'nt' else 0o600,
+            }
+            step = {
+                'action': 'upload',
+                'path': name,
+                'state': 'prepared',
+                'before': {name: None},
+                'after': {name: stamp},
+                'result': {'message': '已保存上传副本；原文件未修改。'},
+            }
+            task = self.store.create_file_task(workspace['id'], '上传文件', [step], 'running')
+            try:
+                self.put(path, data, None)
+                step['state'] = 'applied'
+                task['status'] = 'complete'
+            except OSError:
+                task.update(status='failed', error='上传文件保存失败。')
+                raise
+            finally:
+                self.store.save_file_task(task)
+            return {'workspace': workspace, 'path': name, 'task': public_task(task)}
+
+    def approve_vision(self, task_id, approved, profile_id='', expected_signature=''):
+        from . import document_models
+
+        with self.gate:
+            task = self.task(task_id)
+            if task['status'] != 'waiting_vision':
+                raise WorkError('任务已处理，不能重复授权。')
+            step = next(item for item in task['steps'] if item['state'] == 'waiting_vision')
+            if approved:
+                root = self.root(task['workspace_id'])
+                self.check_state(root, {step['path']: step['read_stamp']})
+                if document_models.selected(profile_id, expected_signature) is None:
+                    raise WorkError('请选择已确认支持视觉的模型；配置变化时需要重新核对授权卡。', 422)
+                step['vision_approval'] = {'profile_id': profile_id, 'signature': expected_signature}
+                step['state'] = 'pending'
+            else:
+                step['vision_declined'] = True
+                step['state'] = 'complete'
+                step['vision_request'] = None
+                step['result']['warnings'].append('用户拒绝了替代识别；已读取的内容保留，未识别图像不作为总结依据。')
+            task.update(status='queued', error='')
+            self.store.save_file_task(task)
+            self.schedule(task_id)
             return public_task(task)
 
     def restore(self, task_id):
@@ -345,7 +446,7 @@ class FileWork:
         if stop.is_set():
             raise TaskCancelled()
         if time.monotonic() > deadline:
-            raise WorkError('文件任务超过 60 秒，已在安全步骤边界停止。')
+            raise WorkError('文件任务超时，已在安全步骤边界停止。')
 
     def check_state(self, root, expected):
         if any(self.fingerprint(self.path(root, name)) != stamp for name, stamp in expected.items()):
@@ -463,15 +564,40 @@ class FileWork:
 
     def run(self, task_id, stop, restore):
         task = self.task(task_id)
-        deadline = time.monotonic() + 60
+        document_task = any(step['action'] in ('read_document', 'summarize') for step in task['steps'])
+        deadline = time.monotonic() + (180 if document_task else 60)
+
+        def check():
+            return self.checkpoint(stop, deadline)
+
         try:
             with self.gate:
                 self.checkpoint(stop, deadline)
                 self.root(task['workspace_id'])
                 task.update(status='restoring' if restore else 'running', error='')
                 self.store.save_file_task(task)
+                if not restore:
+                    self.cues.emit(
+                        task, 'start' if all(item['state'] == 'pending' for item in task['steps']) else 'progress'
+                    )
             indexes = range(len(task['steps']) - 1, -1, -1) if restore else range(len(task['steps']))
             for index in indexes:
+                step = task['steps'][index]
+                if not restore and step['state'] in ('applied', 'complete'):
+                    continue
+                if not restore and step['action'] in ('read_document', 'summarize'):
+                    from . import document_tasks
+
+                    check()
+                    self.root(task['workspace_id'])
+                    if step['action'] == 'read_document':
+                        if not document_tasks.read(self, task, step, check):
+                            return
+                    else:
+                        document_tasks.summarize(self, task, step, check)
+                    step['state'] = 'complete'
+                    self.store.save_file_task(task)
+                    continue
                 with self.gate:
                     self.checkpoint(stop, deadline)
                     root = self.root(task['workspace_id'])
@@ -499,5 +625,15 @@ class FileWork:
             task.update(
                 status='failed', error='文件操作失败，请检查文件占用、磁盘空间和访问权限；已保存的修改可尝试恢复。'
             )
+        except Exception as error:
+            from .logging_setup import report_error
+
+            report_error('file_task', error)
+            task.update(status='failed', error='任务未能完成，已读取的资料保留在记录中；请检查文档格式和模型配置。')
         finally:
             self.store.save_file_task(task)
+            if task['status'] in ('complete', 'failed', 'cancelled', 'restored'):
+                kind = task['status']
+                if kind == 'complete' and any(item.get('result', {}).get('partial') for item in task['steps']):
+                    kind = 'partial'
+                self.cues.emit(task, kind)

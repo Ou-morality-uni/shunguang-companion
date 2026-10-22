@@ -72,6 +72,7 @@ class SettingsOut(BaseModel):
     configured: bool
     provider: str
     protocol: Literal['openai', 'anthropic']
+    vision: Literal['unknown', 'supported', 'unsupported'] = 'unknown'
 
 
 class CapabilitiesOut(BaseModel):
@@ -86,11 +87,12 @@ class WorkspaceOut(BaseModel):
 
 
 class FileStepOut(BaseModel):
-    action: Literal['list', 'read', 'write', 'move', 'delete']
+    action: Literal['list', 'read', 'write', 'move', 'delete', 'read_document', 'summarize', 'upload']
     path: str
     destination: str | None = None
     state: str
     result: dict[str, Any] | None = None
+    vision_request: dict[str, Any] | None = None
 
 
 class FileTaskOut(BaseModel):
@@ -101,6 +103,7 @@ class FileTaskOut(BaseModel):
         'queued',
         'running',
         'waiting_approval',
+        'waiting_vision',
         'complete',
         'failed',
         'cancelled',
@@ -113,6 +116,8 @@ class FileTaskOut(BaseModel):
     created_at: str
     updated_at: str
     can_restore: bool
+    origin: Literal['workbench', 'chat'] = 'workbench'
+    events: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class MemoryOut(BaseModel):
@@ -122,6 +127,12 @@ class MemoryOut(BaseModel):
     source_message_id: str | None = None
     created_at: str
     updated_at: str
+
+
+class DocumentUploadOut(BaseModel):
+    workspace: WorkspaceOut
+    path: str
+    task: FileTaskOut
 
 
 class CloudVoiceOut(BaseModel):

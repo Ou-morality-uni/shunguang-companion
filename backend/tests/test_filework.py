@@ -306,7 +306,7 @@ def test_file_tool_schema_is_compatible_with_existing_provider_conversion(work):
     tool = convert_to_openai_tool(registry.definitions[-1])['function']
     step_schema = tool['parameters']['properties']['steps']['items']
     assert tool['name'] == 'workspace_files'
-    assert step_schema['properties']['action']['enum'] == ['list', 'read', 'write', 'move', 'delete']
+    assert step_schema['properties']['action']['enum'] == ['list', 'read', 'write', 'move', 'delete', 'read_document']
 
 
 def test_large_file_tool_result_stays_valid_json_with_explicit_partial_flag():
@@ -351,6 +351,7 @@ def test_chat_dispatches_local_file_task_and_persists_actual_result(work, monkey
         response = client.post('/api/chat', json={'content': '读取授权目录的 file.txt'})
         assert 'event: done' in response.text and 'real file text' in response.text
         assert 'workspace_files' in bound[0]
+        assert service.store.list_file_tasks()[0]['origin'] == 'chat'
 
 
 def test_cancelled_registry_wait_stops_worker_before_acknowledging(work, monkeypatch):

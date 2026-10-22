@@ -62,6 +62,7 @@ function voiceSignature(value: Features['tts'] | undefined) {
           value.resource_id,
           value.enabled,
           value.auto_play,
+          value.work_prompts,
           value.use_model_key,
           value.speed,
           value.timeout,
@@ -335,6 +336,7 @@ export function CompanionSettings({
           max_tokens: draft.max_tokens,
           api_key: modelKey.trim() || undefined,
           clear_api_key: clearModelKey,
+          vision: draft.vision ?? 'unknown',
         }),
       });
       setDraft(value);
@@ -381,6 +383,7 @@ export function CompanionSettings({
         body = {
           enabled: !!current.enabled,
           auto_play: !!current.auto_play,
+          work_prompts: current.work_prompts !== false,
           muted: !!current.muted,
           provider: current.provider,
           base_url: current.base_url,
@@ -484,6 +487,7 @@ export function CompanionSettings({
       base_url: item.base_url,
       protocol: item.protocol || 'openai',
       model: stored?.model || item.model || '',
+      vision: stored?.vision ?? 'unknown',
       has_api_key: !!stored?.has_api_key,
     });
     setModels([]);
@@ -639,7 +643,11 @@ export function CompanionSettings({
                       aria-label="接口协议"
                       value={draft.protocol || 'openai'}
                       onChange={(e) =>
-                        setDraft({ ...draft, protocol: e.target.value as 'openai' | 'anthropic' })
+                        setDraft({
+                          ...draft,
+                          protocol: e.target.value as 'openai' | 'anthropic',
+                          vision: 'unknown',
+                        })
                       }
                     >
                       <option value="openai">OpenAI 兼容</option>
@@ -658,6 +666,7 @@ export function CompanionSettings({
                         setDraft({
                           ...draft,
                           base_url: e.target.value,
+                          vision: 'unknown',
                           has_api_key: e.target.value === settings?.base_url && !!settings.has_api_key,
                         })
                       }
@@ -717,7 +726,7 @@ export function CompanionSettings({
                       可用模型
                       <select
                         value={models.some((item) => item.id === draft.model) ? draft.model : ''}
-                        onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                        onChange={(e) => setDraft({ ...draft, model: e.target.value, vision: 'unknown' })}
                       >
                         <option value="">选择实际模型</option>
                         {models.map((item) => (
@@ -734,7 +743,7 @@ export function CompanionSettings({
                       aria-label="模型 ID"
                       required
                       value={draft.model}
-                      onChange={(e) => setDraft({ ...draft, model: e.target.value })}
+                      onChange={(e) => setDraft({ ...draft, model: e.target.value, vision: 'unknown' })}
                       maxLength={150}
                     />
                   </label>
@@ -772,6 +781,56 @@ export function CompanionSettings({
                     />
                     <span className="field-hint">更长的输出可能增加费用。请求失败不会自动重试。</span>
                   </label>
+                  <label className="field">
+                    当前模型的图像理解能力
+                    <select
+                      value={draft.vision ?? 'unknown'}
+                      onChange={(event) =>
+                        setDraft({ ...draft, vision: event.target.value as ModelSettings['vision'] })
+                      }
+                    >
+                      <option value="unknown">尚未确认（需要替代识别时询问）</option>
+                      <option value="supported">已确认支持（必要图像直接交给当前模型）</option>
+                      <option value="unsupported">不支持图像输入</option>
+                    </select>
+                    <span className="field-hint">
+                      仅看图能力，不代表支持生图或改图。切换模型、协议或地址后需要重新确认。
+                    </span>
+                  </label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={busy}
+                    onClick={() => {
+                      if (
+                        draft.model !== settings?.model ||
+                        draft.base_url !== settings?.base_url ||
+                        draft.protocol !== settings?.protocol ||
+                        modelKey ||
+                        clearModelKey
+                      ) {
+                        setNotice('请先保存当前模型配置，再测试图像理解。');
+                        return;
+                      }
+                      setBusy(true);
+                      setNotice('正在用测试图片验证当前已保存模型，可能产生服务调用费用。');
+                      void request<{ settings: ModelSettings; message: string }>('/work/vision/probe', {
+                        method: 'POST',
+                      })
+                        .then((result) => {
+                          setDraft(result.settings);
+                          onModelSaved(result.settings);
+                          setNotice(result.message);
+                          return request<Array<ModelSettings & { id: string }>>('/providers/profiles').then(
+                            setProfiles,
+                          );
+                        })
+                        .catch((error: Error) => setNotice(error.message))
+                        .finally(() => setBusy(false));
+                    }}
+                  >
+                    测试图像理解（调用已保存模型）
+                  </Button>
                   <div className="key-note">
                     <ShieldCheck size={19} />
                     <p>调用会把对话和必要上下文发送给你选择的模型服务。密钥只用于该服务，不保存到浏览器。</p>
@@ -824,6 +883,12 @@ export function CompanionSettings({
                     }
                     checked={!!tts.auto_play}
                     onChange={(auto_play) => setTts({ auto_play })}
+                  />
+                  <Toggle
+                    label="工作语音提示"
+                    description="开始、等待授权和完成等真实状态下自然说一句；与正文自动朗读分别控制，静音时不播放。"
+                    checked={tts.work_prompts !== false}
+                    onChange={(work_prompts) => setTts({ work_prompts })}
                   />
                   <label className="field">
                     语音提供商

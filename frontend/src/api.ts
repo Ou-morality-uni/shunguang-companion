@@ -8,7 +8,12 @@ export type CloudVoice = Schemas['CloudVoiceOut'];
 export type Sticker = Schemas['StickerOut'];
 export type Workspace = Schemas['WorkspaceOut'];
 export type FileTask = Schemas['FileTaskOut'];
-export type FileTaskInput = Schemas['FileTaskRequest'];
+type FileStepInput = Omit<Schemas['FileStep'], 'start' | 'limit' | 'visual'> &
+  Partial<Pick<Schemas['FileStep'], 'start' | 'limit' | 'visual'>>;
+export type FileTaskInput = Omit<Schemas['FileTaskRequest'], 'steps' | 'instruction'> & {
+  steps: FileStepInput[];
+  instruction?: string;
+};
 export type Conversation = Schemas['ConversationOut'];
 export type Source = OptionalFields<Schemas['SourceOut']>;
 export type ToolEvent = OptionalFields<Schemas['ToolEventOut']>;
@@ -62,6 +67,7 @@ export interface Features {
     configured?: boolean;
     enabled?: boolean;
     auto_play?: boolean;
+    work_prompts?: boolean;
     muted?: boolean;
     speed?: number;
     timeout?: number;
