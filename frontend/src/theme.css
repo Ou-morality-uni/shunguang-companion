@@ -3475,3 +3475,113 @@ select option {
   overflow-wrap: anywhere;
   margin: 12px 0;
 }
+/* File tasks remain readable inside the conversation at desktop and mobile widths. */
+.chat-file-tasks {
+  width: min(100%, 880px);
+  margin: 0 auto;
+  padding: 12px 24px 24px;
+}
+.chat-file-tasks > details {
+  margin: 8px 0 16px;
+  color: var(--muted);
+}
+.chat-task-card,
+.file-card {
+  min-width: 0;
+  border: 1px solid rgba(175, 143, 117, 0.22);
+  border-radius: 14px;
+  padding: 16px;
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+  background: rgba(52, 32, 42, 0.8);
+}
+.file-card-heading {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.file-card-heading span,
+.attachment-notice {
+  font-size: 12px;
+  color: var(--muted);
+}
+.file-preview {
+  max-height: 65vh;
+  overflow: auto;
+  margin-top: 12px;
+}
+.file-preview img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 60vh;
+  object-fit: contain;
+  margin: 8px auto;
+}
+.file-preview pre,
+.document-markdown pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-width: 100%;
+  overflow-x: auto;
+}
+.document-markdown {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.document-markdown pre {
+  padding: 12px;
+  border-radius: 8px;
+  background: rgba(22, 14, 20, 0.8);
+}
+.document-markdown h1,
+.document-markdown h2,
+.document-markdown h3 {
+  font-size: 1.05em;
+  margin: 18px 0 8px;
+}
+.file-output-folder {
+  padding: 12px 0;
+}
+.file-location {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.composer-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+.attachment-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  border-radius: 8px;
+  background: rgba(175, 143, 117, 0.12);
+  padding: 4px 8px;
+  font-size: 12px;
+}
+.attachment-chip button {
+  display: inline-flex;
+  border: 0;
+  padding: 3px;
+  background: transparent;
+  cursor: pointer;
+}
+.attachment-notice {
+  margin: 6px 12px;
+}
+@media (max-width: 700px) {
+  .chat-file-tasks {
+    padding: 8px 12px 16px;
+  }
+  .chat-task-card,
+  .file-card {
+    padding: 12px;
+  }
+}

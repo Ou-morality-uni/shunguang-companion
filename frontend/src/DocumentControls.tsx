@@ -105,6 +105,9 @@ export function DocumentResult({ result }: { result: Record<string, unknown> }) 
         </ul>
       )}
       {result.partial === true && <p>本次结果包含未读或未识别部分，请以范围和提示为准。</p>}
+      {result.preview_truncated === true && (
+        <p>任务卡仅预览前 30 个内容块；实际阅读范围以任务记录为准，原文可从附件预览或下载查看。</p>
+      )}
     </>
   );
 }
@@ -163,6 +166,7 @@ export function VisionApproval({
       <p>
         {String(info.reason)} {String(info.message)}
       </p>
+      {typeof info.scope === 'string' && <p>{info.scope}</p>}
       <label className="field">
         本任务的替代视觉服务
         <select value={chosen} onChange={(event) => setChosen(event.target.value)}>
@@ -180,7 +184,7 @@ export function VisionApproval({
           {selected.external
             ? '这是外部模型服务，会将图像发送到本机之外。'
             : '这是本机模型服务，不需要将图像发送到外部服务。'}
-          仅本任务所列图像，可能按服务规则计费。
+          {info.scope ? '仅本任务这份文件中授权范围内的图像，' : '仅本任务所列图像，'}可能按服务规则计费。
         </p>
       )}
       {!profiles.length && (

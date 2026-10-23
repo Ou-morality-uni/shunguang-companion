@@ -55,6 +55,14 @@
       },
       "ChatRequest": {
         "properties": {
+          "attachments": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 10,
+            "title": "Attachments",
+            "type": "array"
+          },
           "content": {
             "maxLength": 6000,
             "minLength": 1,
@@ -330,6 +338,22 @@
             "title": "Path",
             "type": "string"
           },
+          "query": {
+            "default": "",
+            "maxLength": 300,
+            "title": "Query",
+            "type": "string"
+          },
+          "scope": {
+            "default": "range",
+            "enum": [
+              "range",
+              "full",
+              "focused"
+            ],
+            "title": "Scope",
+            "type": "string"
+          },
           "start": {
             "default": 1,
             "maximum": 1000000.0,
@@ -423,6 +447,22 @@
             "title": "Can Restore",
             "type": "boolean"
           },
+          "context": {
+            "additionalProperties": true,
+            "title": "Context",
+            "type": "object"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
           "created_at": {
             "title": "Created At",
             "type": "string"
@@ -458,6 +498,8 @@
               "running",
               "waiting_approval",
               "waiting_vision",
+              "waiting_limit",
+              "waiting_output",
               "complete",
               "failed",
               "cancelled",
@@ -694,6 +736,14 @@
       },
       "MessageOut": {
         "properties": {
+          "attachments": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Attachments",
+            "type": "array"
+          },
           "content": {
             "title": "Content",
             "type": "string"
@@ -1588,7 +1638,7 @@
   },
   "info": {
     "title": "瞬光伴行 API",
-    "version": "0.5.4"
+    "version": "0.5.5"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2984,6 +3034,43 @@
         "summary": "Reference File"
       }
     },
+    "/api/work/artifacts/{task_id}": {
+      "get": {
+        "operationId": "download_artifact_api_work_artifacts__task_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Artifact"
+      }
+    },
     "/api/work/events": {
       "get": {
         "operationId": "events_api_work_events_get",
@@ -3029,9 +3116,222 @@
         "summary": "Events"
       }
     },
+    "/api/work/files/{attachment_id}": {
+      "get": {
+        "operationId": "download_attachment_api_work_files__attachment_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Download Attachment"
+      }
+    },
+    "/api/work/files/{attachment_id}/image": {
+      "get": {
+        "operationId": "image_preview_api_work_files__attachment_id__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Image Preview"
+      }
+    },
+    "/api/work/files/{attachment_id}/preview": {
+      "get": {
+        "operationId": "preview_attachment_api_work_files__attachment_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 1000000,
+              "minimum": 1,
+              "title": "Start",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Attachment"
+      }
+    },
+    "/api/work/output": {
+      "get": {
+        "operationId": "output_api_work_output_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Output"
+      },
+      "post": {
+        "operationId": "choose_output_api_work_output_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GrantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Choose Output"
+      }
+    },
     "/api/work/tasks": {
       "get": {
         "operationId": "tasks_api_work_tasks_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "conversation_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "compact",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Compact",
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -3046,6 +3346,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Tasks"
@@ -3212,6 +3522,55 @@
           }
         },
         "summary": "Cancel"
+      }
+    },
+    "/api/work/tasks/{task_id}/continue": {
+      "post": {
+        "operationId": "continue_task_api_work_tasks__task_id__continue_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ApprovalRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileTaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Continue Task"
       }
     },
     "/api/work/tasks/{task_id}/restore": {

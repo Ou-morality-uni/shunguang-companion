@@ -42,24 +42,29 @@ def check_archive(data):
 
 
 class Extraction:
-    def __init__(self, name, start, limit, check, force_visual=False):
+    def __init__(
+        self, name, start, limit, check, force_visual=False, *, full=False, offset=0, image_start=0, row_start=1
+    ):
         self.result = {'file': name, 'blocks': [], 'warnings': [], 'truncated': False, 'next_start': None}
         self.visuals = []
         self.start, self.limit, self.check = start, limit, check
         self.size = 0
         self.force_visual = force_visual
+        self.full, self.offset, self.image_start, self.row_start = full, offset, image_start, row_start
+        self.seen, self.image_count = 0, 0
 
     def window(self, total, unit):
         self.result.update(total_units=total, unit=unit, start=self.start)
         if self.start > max(total, 1):
             raise DocumentError('起始位置超出文档范围。')
         end = min(total, self.start - 1 + self.limit)
-        if self.start > 1:
+        if self.start > 1 and not self.full:
             self.result['truncated'] = True
             self.warn(f'本次从第 {self.start} {unit}开始，之前的范围未读取。')
         if end < total:
             self.result.update(truncated=True, next_start=end + 1)
-            self.warn('只读取指定范围，不能把范围外的内容当作已经读取。')
+            if not self.full:
+                self.warn('只读取指定范围，不能把范围外的内容当作已经读取。')
         return range(self.start - 1, end)
 
     def warn(self, text):
@@ -70,21 +75,39 @@ class Extraction:
         self.check()
         if not text:
             return
+        position = 0
+        if self.full:
+            position = max(0, self.offset - self.seen)
+            self.seen += len(text)
+            text = text[position:]
+            if not text:
+                return
         available = MAX_CONTENT - self.size
         if len(text) > available:
             self.result['truncated'] = True
-            self.result['next_start'] = None
-            self.warn('提取文字已达 60000 字符上限，部分内容未返回；请依据最后返回的位置缩小范围重新读取。')
+            if self.full:
+                self.result['next_offset'] = self.offset + MAX_CONTENT
+            else:
+                self.result['next_start'] = None
+                self.warn('提取文字已达 60000 字符上限，部分内容未返回；请依据最后返回的位置缩小范围重新读取。')
         text = text[: max(0, available)]
         self.size += len(text)
         if text:
-            self.result['blocks'].append({'location': location, 'kind': kind, 'text': text})
+            self.result['blocks'].append(
+                {'location': location, 'kind': kind, 'text': text, **({'text_offset': position} if self.full else {})}
+            )
 
     def image(self, location, data, strict=False):
         self.check()
+        self.image_count += 1
+        if self.full and self.image_count <= self.image_start:
+            return
         if len(self.visuals) >= MAX_VISUALS:
             self.result['truncated'] = True
-            self.warn('本次最多识别 8 幅图像，其余图像尚未识别。')
+            if self.full:
+                self.result['next_image'] = self.image_start + MAX_VISUALS
+            else:
+                self.warn('本次最多识别 8 幅图像，其余图像尚未识别。')
             return
         try:
             encoded = image_bytes(data)
@@ -92,6 +115,7 @@ class Extraction:
             if strict:
                 raise DocumentError('图片格式、尺寸或内容不受支持。')
             self.result['truncated'] = True
+            self.result['unsupported'] = True
             self.warn(f'{location}的图像格式或尺寸不受支持，未识别该图像。')
             return
         self.visuals.append({'location': location, 'data': encoded})
@@ -167,8 +191,19 @@ def excel(data, extraction):
         for index in extraction.window(len(formulas.worksheets), '工作表'):
             sheet, cached = formulas.worksheets[index], values.worksheets[index]
             count = 0
+            first = extraction.row_start if extraction.full else 1
+            last = min(sheet.max_row or 1, first + 99) if extraction.full else 500
+            columns = min(sheet.max_column or 1, 16384) if extraction.full else 100
+            if extraction.full:
+                extraction.result.update(row_start=first, row_end=last, total_rows=sheet.max_row or 1)
+                if last < (sheet.max_row or 1):
+                    extraction.result['next_row'] = last + 1
             for row_number, (row, cached_row) in enumerate(
-                zip(sheet.iter_rows(max_row=500, max_col=100), cached.iter_rows(max_row=500, max_col=100)), 1
+                zip(
+                    sheet.iter_rows(min_row=first, max_row=last, max_col=columns),
+                    cached.iter_rows(min_row=first, max_row=last, max_col=columns),
+                ),
+                first,
             ):
                 extraction.check()
                 cells = []
@@ -182,15 +217,15 @@ def excel(data, extraction):
                     cells.append(f'{cell.coordinate}={text}')
                 if cells:
                     extraction.add(f'工作表「{sheet.title}」第 {row_number} 行', ' | '.join(cells), 'cells')
-                if count >= 5000 or extraction.size >= MAX_CONTENT:
+                if not extraction.full and (count >= 5000 or extraction.size >= MAX_CONTENT):
                     extraction.result['truncated'] = True
                     extraction.warn('工作表读取已达单次 5000 个非空单元格或文字上限。')
                     break
-            if (sheet.max_row or 0) > 500 or (sheet.max_column or 0) > 100:
+            if not extraction.full and ((sheet.max_row or 0) > 500 or (sheet.max_column or 0) > 100):
                 extraction.result['truncated'] = True
                 extraction.warn('每个工作表最多读取前 500 行、100 列，范围外内容未处理。')
         with zipfile.ZipFile(io.BytesIO(data)) as archive:
-            if extraction.start == 1:
+            if extraction.start == 1 and extraction.row_start == 1:
                 for item in archive.namelist():
                     if item.startswith('xl/media/') and not item.endswith('/'):
                         extraction.image(f'工作簿内嵌图片 {Path(item).name}（未定位到单元格）', archive.read(item))
@@ -244,8 +279,22 @@ def powerpoint(data, extraction):
     extraction.warn('提取文字、表格、图表数值和内嵌图片；未渲染整页布局、动画或复杂嵌入对象。')
 
 
-def extract(data, name, start=1, limit=20, check=lambda: None, force_visual=False):
-    extraction = Extraction(name, start, limit, check, force_visual)
+def extract(
+    data,
+    name,
+    start=1,
+    limit=20,
+    check=lambda: None,
+    force_visual=False,
+    *,
+    full=False,
+    offset=0,
+    image_start=0,
+    row_start=1,
+):
+    extraction = Extraction(
+        name, start, limit, check, force_visual, full=full, offset=offset, image_start=image_start, row_start=row_start
+    )
     suffix = Path(name).suffix.lower()
     try:
         if suffix == '.pdf':

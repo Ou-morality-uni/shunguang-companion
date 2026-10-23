@@ -1,7 +1,7 @@
 {
   "name": "shunguang-companion-web",
   "private": true,
-  "version": "0.5.4",
+  "version": "0.5.5",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
@@ -30,6 +30,7 @@
     "radix-ui": "^1.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
+    "react-markdown": "10.1.0",
     "tailwind-merge": "^3.7.0"
   },
   "devDependencies": {

@@ -739,6 +739,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/work/artifacts/{task_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Artifact */
+        get: operations["download_artifact_api_work_artifacts__task_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/work/events": {
         parameters: {
             query?: never;
@@ -750,6 +767,75 @@ export interface paths {
         get: operations["events_api_work_events_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/files/{attachment_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Download Attachment */
+        get: operations["download_attachment_api_work_files__attachment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/files/{attachment_id}/image": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Image Preview */
+        get: operations["image_preview_api_work_files__attachment_id__image_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/files/{attachment_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Attachment */
+        get: operations["preview_attachment_api_work_files__attachment_id__preview_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/output": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Output */
+        get: operations["output_api_work_output_get"];
+        put?: never;
+        /** Choose Output */
+        post: operations["choose_output_api_work_output_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -819,6 +905,23 @@ export interface paths {
         put?: never;
         /** Cancel */
         post: operations["cancel_api_work_tasks__task_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/tasks/{task_id}/continue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Continue Task */
+        post: operations["continue_task_api_work_tasks__task_id__continue_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -973,6 +1076,8 @@ export interface components {
         };
         /** ChatRequest */
         ChatRequest: {
+            /** Attachments */
+            attachments?: string[];
             /** Content */
             content: string;
             /** Conversation Id */
@@ -1086,6 +1191,17 @@ export interface components {
              */
             path: string;
             /**
+             * Query
+             * @default
+             */
+            query: string;
+            /**
+             * Scope
+             * @default range
+             * @enum {string}
+             */
+            scope: "range" | "full" | "focused";
+            /**
              * Start
              * @default 1
              */
@@ -1122,6 +1238,12 @@ export interface components {
         FileTaskOut: {
             /** Can Restore */
             can_restore: boolean;
+            /** Context */
+            context?: {
+                [key: string]: unknown;
+            };
+            /** Conversation Id */
+            conversation_id?: string | null;
             /** Created At */
             created_at: string;
             /** Error */
@@ -1142,7 +1264,7 @@ export interface components {
              * Status
              * @enum {string}
              */
-            status: "queued" | "running" | "waiting_approval" | "waiting_vision" | "complete" | "failed" | "cancelled" | "interrupted" | "restoring" | "restored";
+            status: "queued" | "running" | "waiting_approval" | "waiting_vision" | "waiting_limit" | "waiting_output" | "complete" | "failed" | "cancelled" | "interrupted" | "restoring" | "restored";
             /** Steps */
             steps: components["schemas"]["FileStepOut"][];
             /** Title */
@@ -1224,6 +1346,10 @@ export interface components {
         };
         /** MessageOut */
         MessageOut: {
+            /** Attachments */
+            attachments?: {
+                [key: string]: unknown;
+            }[];
             /** Content */
             content: string;
             /** Context Sources */
@@ -2853,6 +2979,37 @@ export interface operations {
             };
         };
     };
+    download_artifact_api_work_artifacts__task_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     events_api_work_events_get: {
         parameters: {
             query?: {
@@ -2884,7 +3041,104 @@ export interface operations {
             };
         };
     };
-    tasks_api_work_tasks_get: {
+    download_attachment_api_work_files__attachment_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    image_preview_api_work_files__attachment_id__image_get: {
+        parameters: {
+            query?: {
+                page?: number;
+            };
+            header?: never;
+            path: {
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_attachment_api_work_files__attachment_id__preview_get: {
+        parameters: {
+            query?: {
+                start?: number;
+            };
+            header?: never;
+            path: {
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    output_api_work_output_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -2899,7 +3153,72 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    choose_output_api_work_output_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GrantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tasks_api_work_tasks_get: {
+        parameters: {
+            query?: {
+                conversation_id?: string | null;
+                compact?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
                     "application/json": components["schemas"]["FileTaskOut"][];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -3013,6 +3332,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    continue_task_api_work_tasks__task_id__continue_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApprovalRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

@@ -1,6 +1,9 @@
 """Local-only controls. Models cannot grant folders or approve destructive steps."""
 
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi.responses import Response
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
@@ -61,8 +64,17 @@ def revoke(workspace_id: str, work=Depends(service)):
 
 
 @router.get('/tasks', response_model=list[FileTaskOut])
-def tasks(work=Depends(service)):
-    return [public_task(task) for task in work.store.list_file_tasks()]
+def tasks(
+    conversation_id: str | None = Query(default=None, max_length=80), compact: bool = False, work=Depends(service)
+):
+    records = [public_task(task) for task in work.store.list_file_tasks(conversation_id=conversation_id)]
+    if compact:
+        for task in records:
+            for step in task['steps']:
+                result = step.get('result')
+                if result and len(result.get('blocks', [])) > 30:
+                    step['result'] = {**result, 'blocks': result['blocks'][:30], 'preview_truncated': True}
+    return records
 
 
 @router.post('/tasks', status_code=201, response_model=FileTaskOut)
@@ -128,3 +140,102 @@ def vision_decision(task_id: str, payload: VisionApprovalRequest, work=Depends(s
 @router.get('/events')
 def events(after: int | None = Query(default=None, ge=0), work=Depends(service)):
     return work.store.work_events(after)
+
+
+@router.get('/output')
+def output(work=Depends(service)):
+    workspace = work.store.output_workspace()
+    return {
+        'workspace': {key: workspace[key] for key in ('id', 'path', 'enabled', 'created_at')} if workspace else None
+    }
+
+
+@router.post('/output')
+def choose_output(payload: GrantRequest, work=Depends(service)):
+    workspace = invoke(work.grant, payload.path)
+    work.store.set_output_workspace(workspace['id'])
+    return output(work)
+
+
+@router.post('/tasks/{task_id}/continue', response_model=FileTaskOut)
+def continue_task(task_id: str, payload: ApprovalRequest, work=Depends(service)):
+    return invoke(work.continue_task, task_id, payload.approved)
+
+
+def download_response(item, data):
+    return Response(
+        data,
+        media_type='application/octet-stream',
+        headers={
+            'Content-Disposition': "attachment; filename*=UTF-8''" + quote(item['name']),
+            'X-Content-Type-Options': 'nosniff',
+            'Cache-Control': 'no-store',
+        },
+    )
+
+
+@router.get('/files/{attachment_id}')
+def download_attachment(attachment_id: str, work=Depends(service)):
+    from ..work_artifacts import attachment_bytes
+
+    return download_response(*invoke(attachment_bytes, work, attachment_id))
+
+
+@router.get('/artifacts/{task_id}')
+def download_artifact(task_id: str, work=Depends(service)):
+    from ..work_artifacts import artifact_bytes
+
+    return download_response(*invoke(artifact_bytes, work, task_id))
+
+
+@router.get('/files/{attachment_id}/preview')
+def preview_attachment(attachment_id: str, start: int = Query(default=1, ge=1, le=1000000), work=Depends(service)):
+    from .. import document_readers
+    from ..work_artifacts import attachment_bytes
+
+    item, data = invoke(attachment_bytes, work, attachment_id)
+    try:
+        result, _ = document_readers.extract(data, item['name'], start, 5)
+        result['warnings'].append(
+            '这是本机提取的内容预览，未调用聊天或视觉模型；复杂排版与图像解读以原文件及任务结果为准。'
+        )
+        return result
+    except document_readers.DocumentError as error:
+        raise HTTPException(422, str(error))
+
+
+@router.get('/files/{attachment_id}/image')
+def image_preview(attachment_id: str, page: int = Query(default=1, ge=1), work=Depends(service)):
+    import io
+    from pathlib import Path
+
+    from .. import document_readers
+    from ..work_artifacts import attachment_bytes
+
+    item, data = invoke(attachment_bytes, work, attachment_id)
+    try:
+        if Path(item['name']).suffix.lower() == '.pdf':
+            import pypdfium2 as pdfium
+
+            with document_readers.PDF_LOCK, pdfium.PdfDocument(data) as document:
+                if page > len(document):
+                    raise HTTPException(422, '页码超出文档范围。')
+                pdf_page = document[page - 1]
+                bitmap = None
+                try:
+                    width, height = pdf_page.get_size()
+                    bitmap = pdf_page.render(scale=min(1.8, 1600 / max(width, height)))
+                    output = io.BytesIO()
+                    bitmap.to_pil().convert('RGB').save(output, format='JPEG')
+                    data = output.getvalue()
+                finally:
+                    if bitmap:
+                        bitmap.close()
+                    pdf_page.close()
+        else:
+            data = document_readers.image_bytes(data)
+        return Response(
+            data, media_type='image/jpeg', headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
+        )
+    except (OSError, ValueError, document_readers.DocumentError):
+        raise HTTPException(422, '无法生成此文件的图像预览。')

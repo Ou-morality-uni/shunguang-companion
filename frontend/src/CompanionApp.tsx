@@ -275,13 +275,13 @@ export default function App() {
     chat.selectConversation(null);
     navigate('chat');
   }
-  async function send(text: string): Promise<boolean> {
+  async function send(text: string, attachments: string[] = []): Promise<boolean> {
     if (loading) return false;
     if (!settings?.configured) {
       openPanel('model');
       return false;
     }
-    return chat.send(text);
+    return chat.send(text, attachments);
   }
   const title =
     page === 'chat'
@@ -375,7 +375,7 @@ export default function App() {
               </div>
               <div className="version">
                 <span className="version-dot" />
-                瞬光伴行 WEB<span>v0.5.4</span>
+                瞬光伴行 WEB<span>v0.5.5</span>
               </div>
             </div>
           </aside>
@@ -459,6 +459,8 @@ export default function App() {
                           onSettings={() => openPanel('model')}
                           onVoice={() => openPanel('voice')}
                           onTools={() => openPanel('tools')}
+                          onWork={() => navigate('work')}
+                          conversationId={active}
                         />
                       ) : page === 'memory' ? (
                         <MemorySpace

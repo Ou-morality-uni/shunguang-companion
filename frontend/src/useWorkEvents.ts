@@ -13,6 +13,7 @@ export function useWorkEvents(enabled: boolean, audio: AudioController, chatBusy
   useEffect(() => {
     if (!enabled) return;
     const abort = new AbortController();
+    const summaries = new Map<string, WorkEvent>();
     let cursor: number | null = null,
       running = false,
       denied = false;
@@ -30,9 +31,16 @@ export function useWorkEvents(enabled: boolean, audio: AudioController, chatBusy
         const terminal = new Set(
           result.events
             .filter((event) =>
-              ['complete', 'partial', 'failed', 'cancelled', 'restored', 'authorization'].includes(
-                event.kind,
-              ),
+              [
+                'complete',
+                'partial',
+                'failed',
+                'cancelled',
+                'restored',
+                'authorization',
+                'waiting_limit',
+                'waiting_output',
+              ].includes(event.kind),
             )
             .map((event) => event.task_id),
         );
@@ -40,19 +48,22 @@ export function useWorkEvents(enabled: boolean, audio: AudioController, chatBusy
           if (current === null || event.seq <= current) continue;
           if (terminal.has(event.task_id) && ['start', 'progress'].includes(event.kind)) continue;
           audioRef.current.enqueueWork(event);
-          if (['complete', 'partial'].includes(event.kind) && !chatBusyRef.current) {
+          if (
+            ['complete', 'partial'].includes(event.kind) &&
+            Date.now() - new Date(event.created_at).getTime() <= 30000
+          )
+            summaries.set(event.task_id, event);
+          if (['cancelled', 'failed', 'restored'].includes(event.kind)) summaries.delete(event.task_id);
+        }
+        for (const [taskId, event] of summaries) {
+          if (!chatBusyRef.current) {
             try {
-              const task = await request<FileTask>(`/work/tasks/${event.task_id}`, { signal: abort.signal });
-              if (
-                abort.signal.aborted ||
-                chatBusyRef.current ||
-                task.status !== 'complete' ||
-                task.origin === 'chat'
-              )
-                continue;
+              const task = await request<FileTask>(`/work/tasks/${taskId}`, { signal: abort.signal });
+              if (abort.signal.aborted || chatBusyRef.current || task.status !== 'complete') continue;
               const summary = task.steps.find((step) => step.action === 'summarize')?.result?.summary;
               if (typeof summary === 'string')
                 audioRef.current.enqueueWork({ ...event, kind: 'summary', text: summary });
+              summaries.delete(taskId);
             } catch {
               /* The task card retains its result if automatic speech is unavailable. */
             }

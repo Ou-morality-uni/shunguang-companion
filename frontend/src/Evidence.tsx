@@ -61,6 +61,8 @@ export function ToolFeedback({ tools = [] }: { tools?: ToolEvent[] }) {
           web_search: '网页搜索',
           remember_user_fact: '记住这件事',
           recall_conversations: '回忆聊天',
+          workspace_files: '安排文件任务',
+          workspace_task: '查看或取消文件任务',
         };
         return (
           <details key={item.id || index} className={`tool-call ${item.status === 'error' ? 'failed' : ''}`}>

@@ -35,10 +35,11 @@ it('feeds speech deltas before completion and cancels speech on a failed stream'
   const complete = vi.fn();
   const { result } = renderHook(() => useConversation(complete, speech));
   await act(async () => {
-    await result.current.send('你好');
+    await result.current.send('你好', ['attachment-1']);
   });
   expect(events).toEqual(['start', '第一句。', 'cancel']);
   expect(complete).not.toHaveBeenCalled();
+  expect(vi.mocked(streamChat).mock.calls[0][4]).toEqual(['attachment-1']);
 });
 
 it('starting or failing a new chat never creates an empty server conversation', async () => {

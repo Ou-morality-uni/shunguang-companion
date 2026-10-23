@@ -46,6 +46,22 @@ PHRASES = {
     ],
     'cancelled': ['好，先停在这里，已做过的事情可以在记录里查看。', '收到，我先收手，已经完成的部分会留好。'],
     'restored': ['这次修改已经恢复好啦，你再看看。', '好啦，能恢复的内容已经按记录还原了。'],
+    'waiting_limit': [
+        '这份卷宗还有不少线索呢。我把读到的位置记好了，接下来要不要继续，你来定。',
+        '这一轮先整理到这里，已经做好的都留着。剩下的范围写在下面，等你点头我再接着看。',
+        '资料比一开始看起来还多些。我先留好进度，继续之前，咱们核对一下后面的安排。',
+    ],
+    'waiting_output': [
+        '总结已经理好了，还差一个安放它的地方。选好成果文件夹，我就把这份札记存进去。',
+        '内容整理好了，接下来选个保存的位置吧，这份札记我会单独留好。',
+    ],
+    'recognizing': ['这里有些图像线索，我来仔细辨一辨。', '接下来看看这些图表，细节也得照顾到。'],
+    'summarizing': [
+        '读到的线索准备好了，我来把它们串起来。',
+        '接下来整理要点，也把对应的出处留好。',
+        '嗯，我来把这些内容归拢成一份清楚的札记。',
+    ],
+    'saving': ['这份札记整理好了，我把它单独保存下来。', '内容已经备好，接下来把成果收妥。'],
 }
 
 
@@ -58,9 +74,10 @@ class WorkCues:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='work-cue')
         self.closed = False
 
-    def emit(self, task, kind):
+    def emit(self, task, kind, phrases=None):
         with self.lock:
-            choices = [text for text in PHRASES[kind] if text not in self.recent] or PHRASES[kind]
+            bank = phrases or PHRASES[kind]
+            choices = [text for text in bank if text not in self.recent] or bank
             text = secrets.choice(choices)
             self.recent.append(text)
             self.store.add_work_event(task['id'], kind, text)
@@ -68,47 +85,112 @@ class WorkCues:
                 self.started[task['id']] = time.monotonic()
             elif kind == 'progress':
                 self.started.setdefault(task['id'], time.monotonic())
-            elif kind in ('complete', 'partial', 'failed', 'cancelled', 'restored', 'authorization'):
+            elif kind in (
+                'complete',
+                'partial',
+                'failed',
+                'cancelled',
+                'restored',
+                'authorization',
+                'waiting_limit',
+                'waiting_output',
+            ):
                 self.started.pop(task['id'], None)
                 self.generated.discard(task['id'])
 
-    def tick(self, task, check):
+    def stage(self, task, phase):
+        context = task.setdefault('context', {})
+        context['stage'] = phase
+        announced = context.setdefault('announced_stages', [])
+        if phase in announced:
+            return
+        announced.append(phase)
+        self.store.save_file_task(task)
+        if phase == 'reading':
+            return  # The start/resume cue already announces reading.
         task_id = task['id']
         if (
             self.closed
             or task_id in self.generated
             or time.monotonic() - self.started.get(task_id, time.monotonic()) < 8
+            or not feature_config.load().tts.work_prompts
+            or not feature_config.load().tts.enabled
+            or context.setdefault('budget', {}).get('calls', 0) >= 20
         ):
-            return
-        self.generated.add(task_id)
-        if not feature_config.load().tts.work_prompts or not feature_config.load().tts.enabled:
+            self.emit(task, 'progress', PHRASES[phase])
             return
         value = config.load_config()
         if not config.public_config(value)['configured']:
+            self.emit(task, 'progress', PHRASES[phase])
             return
+        self.generated.add(task_id)
+        context['budget']['calls'] = context['budget'].get('calls', 0) + 1
+        self.store.save_file_task(task)
         value = value.model_copy(update={'llm_max_tokens': 128, 'llm_timeout': 8})
 
         def generate():
             try:
                 latest = self.store.get_file_task(task_id)
-                if self.closed or not latest or latest['status'] != 'running':
+                if (
+                    self.closed
+                    or not latest
+                    or latest['status'] != 'running'
+                    or latest['context'].get('stage') != phase
+                ):
                     return
                 messages = build_messages(
                     [],
                     capabilities='你正在处理文件任务，仍未完成。只说一句自然的工作中短提示，不超过40字。不虚构进度、完成状态或人物设定，不使用代码或百分比。',
                 )
-                messages.append(HumanMessage(content='当前真实状态：资料仍在读取、识别或整理中。可以换个自然的说法。'))
-                text = asyncio.run(document_models.invoke(value, messages, check)).strip()
+                messages.append(
+                    HumanMessage(
+                        content='当前真实阶段：'
+                        + {
+                            'recognizing': '开始理解资料中的图像',
+                            'summarizing': '开始综合已读取的资料',
+                            'saving': '开始保存已整理的总结',
+                        }[phase]
+                    )
+                )
+
+                def active():
+                    from .filework import TaskCancelled
+
+                    record = self.store.get_file_task(task_id)
+                    if (
+                        self.closed
+                        or not record
+                        or record['status'] != 'running'
+                        or record['context'].get('stage') != phase
+                    ):
+                        raise TaskCancelled()
+
+                text = asyncio.run(document_models.invoke(value, messages, active)).strip()
                 if not 4 <= len(text) <= 50 or re.search(r'```|[%％]|已经完成|读完了|整理好|https?://', text):
-                    return
+                    raise ValueError('工作提示未满足表达约束')
                 with self.lock:
                     latest = self.store.get_file_task(task_id)
-                    if not self.closed and latest and latest['status'] == 'running':
+                    if (
+                        not self.closed
+                        and latest
+                        and latest['status'] == 'running'
+                        and latest['context'].get('stage') == phase
+                    ):
                         self.store.add_work_event(task_id, 'progress', text)
             except Exception:
-                pass  # Optional wording must never fail the file task or trigger a paid retry.
+                latest = self.store.get_file_task(task_id)
+                if (
+                    not self.closed
+                    and latest
+                    and latest['status'] == 'running'
+                    and latest['context'].get('stage') == phase
+                ):
+                    self.emit(task, 'progress', PHRASES[phase])
 
         self.pool.submit(generate)
+
+    def tick(self, task, check):
+        check()  # Speech follows real stage changes; time alone never adds a progress cue.
 
     def close(self):
         self.closed = True

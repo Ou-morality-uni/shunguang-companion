@@ -8,8 +8,9 @@ export type CloudVoice = Schemas['CloudVoiceOut'];
 export type Sticker = Schemas['StickerOut'];
 export type Workspace = Schemas['WorkspaceOut'];
 export type FileTask = Schemas['FileTaskOut'];
-type FileStepInput = Omit<Schemas['FileStep'], 'start' | 'limit' | 'visual'> &
-  Partial<Pick<Schemas['FileStep'], 'start' | 'limit' | 'visual'>>;
+type FileStepInput = Omit<Schemas['FileStep'], 'start' | 'limit' | 'visual' | 'scope' | 'query'> &
+  Partial<Pick<Schemas['FileStep'], 'start' | 'limit' | 'visual' | 'scope' | 'query'>>;
+export type Attachment = { id: string; name: string; workspace_id: string; path: string; bytes: number };
 export type FileTaskInput = Omit<Schemas['FileTaskRequest'], 'steps' | 'instruction'> & {
   steps: FileStepInput[];
   instruction?: string;
@@ -17,11 +18,15 @@ export type FileTaskInput = Omit<Schemas['FileTaskRequest'], 'steps' | 'instruct
 export type Conversation = Schemas['ConversationOut'];
 export type Source = OptionalFields<Schemas['SourceOut']>;
 export type ToolEvent = OptionalFields<Schemas['ToolEventOut']>;
-export type Message = Omit<Schemas['MessageOut'], 'conversation_id' | 'status' | 'sources' | 'tools'> & {
+export type Message = Omit<
+  Schemas['MessageOut'],
+  'conversation_id' | 'status' | 'sources' | 'tools' | 'attachments'
+> & {
   conversation_id?: string;
   status: Schemas['MessageOut']['status'] | 'running';
   sources?: Source[];
   tools?: ToolEvent[];
+  attachments?: Attachment[];
 };
 export interface Memory {
   id: string;
@@ -174,11 +179,12 @@ export async function streamChat(
   content: string,
   signal: AbortSignal,
   onEvent: (event: string, data: Record<string, unknown>) => void,
+  attachments: string[] = [],
 ) {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversation_id, content }),
+    body: JSON.stringify({ conversation_id, content, ...(attachments.length ? { attachments } : {}) }),
     signal,
   });
   if (!response.ok) {

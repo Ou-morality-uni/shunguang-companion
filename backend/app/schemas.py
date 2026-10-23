@@ -60,6 +60,7 @@ class MessageOut(BaseModel):
     context_sources: list[SourceOut] = Field(default_factory=list)
     tools: list[ToolEventOut] = Field(default_factory=list)
     sticker: StickerOut | None = None
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class SettingsOut(BaseModel):
@@ -104,6 +105,8 @@ class FileTaskOut(BaseModel):
         'running',
         'waiting_approval',
         'waiting_vision',
+        'waiting_limit',
+        'waiting_output',
         'complete',
         'failed',
         'cancelled',
@@ -118,6 +121,8 @@ class FileTaskOut(BaseModel):
     can_restore: bool
     origin: Literal['workbench', 'chat'] = 'workbench'
     events: list[dict[str, Any]] = Field(default_factory=list)
+    conversation_id: str | None = None
+    context: dict[str, Any] = Field(default_factory=dict)
 
 
 class MemoryOut(BaseModel):

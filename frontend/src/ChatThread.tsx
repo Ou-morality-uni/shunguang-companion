@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AssistantRuntimeProvider,
   useExternalStoreRuntime,
@@ -23,8 +23,11 @@ import {
   Sparkles,
   Square,
   Wrench,
+  Paperclip,
+  X,
 } from 'lucide-react';
-import { avatarUrl, type Message, type Source, type ToolEvent } from './api';
+import { avatarUrl, request, type Attachment, type Message, type Source, type ToolEvent } from './api';
+import { AttachmentCard, ChatFileTasks } from './FileTasks';
 import { Sources, ToolFeedback } from './Evidence';
 import { useCompanionAudio } from './useAudioQueue';
 import { ResourceImage } from './ResourceImage';
@@ -80,6 +83,9 @@ function ChatMessage() {
             <MessageSticker key={record.sticker.id} sticker={record.sticker} />
           )}
           <ToolFeedback tools={record?.tools} />
+          {record?.attachments?.map((attachment) => (
+            <AttachmentCard key={attachment.id} attachment={attachment} />
+          ))}
           <Sources sources={record?.sources} />
           <ActionBarPrimitive.Root className="message-actions">
             <ActionBarPrimitive.Copy className="copy-button" aria-label="复制消息">
@@ -112,11 +118,13 @@ type Props = {
   configured: boolean;
   tools?: ToolEvent[];
   sources?: Source[];
-  onSend: (text: string) => Promise<boolean>;
+  onSend: (text: string, attachments?: string[]) => Promise<boolean>;
   onStop: () => void;
   onSettings: () => void;
   onVoice: () => void;
   onTools: () => void;
+  conversationId: string | null;
+  onWork: () => void;
 };
 
 export function ChatThread({
@@ -132,8 +140,59 @@ export function ChatThread({
   onSettings,
   onVoice,
   onTools,
+  conversationId,
+  onWork,
 }: Props) {
   const audio = useCompanionAudio();
+  const [attachments, setAttachments] = useState<Attachment[]>([]),
+    [uploading, setUploading] = useState(false),
+    [uploadNotice, setUploadNotice] = useState('');
+  const fileInput = useRef<HTMLInputElement>(null),
+    uploadAbort = useRef<AbortController | null>(null);
+  useEffect(() => () => uploadAbort.current?.abort(), []);
+  async function upload(files: File[]) {
+    if (busy || uploading || !files.length) return;
+    if (
+      files.length + attachments.length > 10 ||
+      files.some((file) => !file.size || file.size > 20 * 1024 * 1024)
+    ) {
+      setUploadNotice('每条消息最多附加 10 份文件，每份需非空且最多 20 MiB。');
+      return;
+    }
+    const abort = new AbortController();
+    uploadAbort.current = abort;
+    setUploading(true);
+    setUploadNotice('正在保存本机附件副本。');
+    try {
+      for (const file of files) {
+        const result = await request<{ workspace: { id: string }; path: string; task: { id: string } }>(
+          `/work/upload?name=${encodeURIComponent(file.name)}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/octet-stream' },
+            body: file,
+            signal: abort.signal,
+          },
+        );
+        if (abort.signal.aborted) return;
+        setAttachments((items) => [
+          ...items,
+          {
+            id: result.task.id,
+            name: file.name,
+            workspace_id: result.workspace.id,
+            path: result.path,
+            bytes: file.size,
+          },
+        ]);
+      }
+      setUploadNotice('附件副本已保存。写下处理要求并发送后，瞬光才会开始任务。');
+    } catch (error) {
+      if (!abort.signal.aborted) setUploadNotice((error as Error).message);
+    } finally {
+      if (!abort.signal.aborted) setUploading(false);
+    }
+  }
   const threadMessages = useMemo(
     () =>
       partial === null
@@ -162,7 +221,7 @@ export function ChatThread({
     messages: threadMessages,
     isRunning: busy,
     isLoading: loading,
-    isDisabled: loading,
+    isDisabled: loading || uploading,
     convertMessage: (message): ThreadMessageLike => ({
       id: message.id,
       role: message.role,
@@ -184,7 +243,14 @@ export function ChatThread({
         .filter((part) => part.type === 'text')
         .map((part) => part.text)
         .join('\n');
-      if (!(await onSend(text))) runtime.thread.composer.setText(text);
+      if (
+        !(await onSend(
+          text,
+          attachments.map((item) => item.id),
+        ))
+      )
+        runtime.thread.composer.setText(text);
+      else setAttachments([]);
     },
     onCancel: async () => onStop(),
   });
@@ -195,7 +261,18 @@ export function ChatThread({
   return (
     <MessagesContext.Provider value={threadMessages}>
       <AssistantRuntimeProvider runtime={runtime}>
-        <ThreadPrimitive.Root className="thread-root">
+        <ThreadPrimitive.Root
+          className="thread-root"
+          onDragOver={(event) => {
+            if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+          }}
+          onDrop={(event) => {
+            if (event.dataTransfer.files.length) {
+              event.preventDefault();
+              void upload(Array.from(event.dataTransfer.files));
+            }
+          }}
+        >
           <ThreadPrimitive.Viewport
             ref={viewport}
             className={`conversation-scroll ${hasMessages ? '' : 'welcome-scroll'}`}
@@ -255,6 +332,12 @@ export function ChatThread({
                 <ThreadPrimitive.Messages>{() => <ChatMessage />}</ThreadPrimitive.Messages>
               </div>
             )}
+            <ChatFileTasks
+              conversationId={conversationId}
+              onSettings={onSettings}
+              onWork={onWork}
+              attachments={messages.flatMap((message) => message.attachments ?? [])}
+            />
           </ThreadPrimitive.Viewport>
           <div className="composer-area">
             {hasMessages && (
@@ -291,6 +374,38 @@ export function ChatThread({
               </button>
             )}
             <ComposerPrimitive.Root className="composer">
+              <input
+                ref={fileInput}
+                type="file"
+                multiple
+                hidden
+                aria-label="上传聊天附件"
+                disabled={busy || uploading}
+                onChange={(event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  event.target.value = '';
+                  void upload(files);
+                }}
+              />
+              {!!attachments.length && (
+                <div className="composer-attachments">
+                  {attachments.map((item) => (
+                    <span className="attachment-chip" key={item.id}>
+                      {item.name}
+                      <button
+                        type="button"
+                        aria-label={`移除附件 ${item.name}`}
+                        disabled={uploading || busy}
+                        onClick={() =>
+                          setAttachments((items) => items.filter((value) => value.id !== item.id))
+                        }
+                      >
+                        <X size={13} />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
               <ComposerPrimitive.Input
                 id="chat-input"
                 aria-label="给瞬光伴行发送消息"
@@ -301,10 +416,20 @@ export function ChatThread({
                 submitMode="enter"
                 unstable_insertNewlineOnTouchEnter
                 addAttachmentOnPaste={false}
-                disabled={busy}
+                disabled={busy || uploading}
               />
               <div className="composer-bottom">
                 <div className="composer-tools">
+                  <button
+                    type="button"
+                    className="icon-button"
+                    aria-label="添加文件附件"
+                    title="上传文件，也可以拖入聊天"
+                    disabled={busy || uploading}
+                    onClick={() => fileInput.current?.click()}
+                  >
+                    <Paperclip size={17} />
+                  </button>
                   <button
                     type="button"
                     className="icon-button"
@@ -342,6 +467,11 @@ export function ChatThread({
                 </span>
               </div>
             </ComposerPrimitive.Root>
+            {uploadNotice && (
+              <p className="attachment-notice" role="status">
+                {uploadNotice}
+              </p>
+            )}
             <div className="composer-caption">
               <span>Enter 发送 · Shift + Enter 换行</span>
               <span>AI 回复可能有误，请核实重要信息</span>

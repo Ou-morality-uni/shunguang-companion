@@ -37,6 +37,10 @@ class TaskCancelled(Exception):
     pass
 
 
+class WorkPause(Exception):
+    pass
+
+
 class FileStep(BaseModel):
     model_config = ConfigDict(extra='forbid')
     action: Literal['list', 'read', 'write', 'move', 'delete', 'read_document']
@@ -46,6 +50,8 @@ class FileStep(BaseModel):
     start: int = Field(default=1, ge=1, le=1000000)
     limit: int = Field(default=20, ge=1, le=50)
     visual: bool = False
+    scope: Literal['range', 'full', 'focused'] = 'range'
+    query: str = Field(default='', max_length=300)
 
     @model_validator(mode='after')
     def operation_fields(self):
@@ -128,6 +134,9 @@ def public_task(record):
                     'recognized',
                     'vision_approval',
                     'vision_declined',
+                    'current_result',
+                    'cursor',
+                    'notes',
                 )
             }
             for step in record['steps']
@@ -251,7 +260,12 @@ class FileWork:
                 if self.store.get_file_task(task_id)['workspace_id'] == workspace_id:
                     stop.set()
             for task in self.store.list_file_tasks(10000):
-                if task['workspace_id'] == workspace_id and task['status'] in ('waiting_approval', 'waiting_vision'):
+                if task['workspace_id'] == workspace_id and task['status'] in (
+                    'waiting_approval',
+                    'waiting_vision',
+                    'waiting_limit',
+                    'waiting_output',
+                ):
                     task.update(status='cancelled', error='已撤销文件夹授权。')
                     self.store.save_file_task(task)
                     self.cues.emit(task, 'cancelled')
@@ -262,7 +276,7 @@ class FileWork:
             raise WorkError('任务不存在。', 404)
         return record
 
-    def submit(self, payload, origin='workbench'):
+    def submit(self, payload, origin='workbench', conversation_id=None):
         with self.gate:
             self.jobs = {key: job for key, job in self.jobs.items() if not job[0].done()}
             if self.closed or len(self.jobs) >= 8:
@@ -316,7 +330,9 @@ class FileWork:
                     }
                 )
             status = 'waiting_approval' if any(step.action == 'delete' for step in payload.steps) else 'queued'
-            task = self.store.create_file_task(payload.workspace_id, payload.title, steps, status, origin)
+            task = self.store.create_file_task(
+                payload.workspace_id, payload.title, steps, status, origin, conversation_id
+            )
             if status == 'queued':
                 self.schedule(task['id'])
             return public_task(task)
@@ -348,10 +364,11 @@ class FileWork:
             # Signal without taking the file-operation gate: the worker may be
             # finishing an OS operation while the caller waits for cancellation.
             job[1].set()
-            return public_task(self.task(task_id))
+            if not job[0].cancel():
+                return public_task(self.task(task_id))
         with self.gate:
             task = self.task(task_id)
-            if task['status'] in ('waiting_approval', 'waiting_vision'):
+            if task['status'] in ('queued', 'waiting_approval', 'waiting_vision', 'waiting_limit', 'waiting_output'):
                 task.update(status='cancelled', error='用户取消了任务。')
                 self.store.save_file_task(task)
                 self.cues.emit(task, 'cancelled')
@@ -367,6 +384,7 @@ class FileWork:
             workspace = self.grant(str(self.upload_root))
             root = self.root(workspace['id'])
             self.path(root, name)
+            original_name = name
             name = uuid4().hex[:10] + '-' + name
             path = self.path(root, name)
             stamp = {
@@ -380,7 +398,7 @@ class FileWork:
                 'state': 'prepared',
                 'before': {name: None},
                 'after': {name: stamp},
-                'result': {'message': '已保存上传副本；原文件未修改。'},
+                'result': {'message': '已保存上传副本；原文件未修改。', 'name': original_name},
             }
             task = self.store.create_file_task(workspace['id'], '上传文件', [step], 'running')
             try:
@@ -394,9 +412,29 @@ class FileWork:
                 self.store.save_file_task(task)
             return {'workspace': workspace, 'path': name, 'task': public_task(task)}
 
+    def continue_task(self, task_id, approved):
+        self.settle_pause(task_id)
+        with self.gate:
+            task = self.task(task_id)
+            if task['status'] not in ('waiting_limit', 'waiting_output'):
+                raise WorkError('任务当前不在等待继续状态。')
+            if not approved:
+                return self.cancel(task_id)
+            if task['status'] == 'waiting_output':
+                from .work_artifacts import output_root
+
+                output_root(self)
+            task['context'].pop('pause', None)
+            task['context']['budget'] = {}
+            task.update(status='queued', error='')
+            self.store.save_file_task(task)
+            self.schedule(task_id)
+            return public_task(task)
+
     def approve_vision(self, task_id, approved, profile_id='', expected_signature=''):
         from . import document_models
 
+        self.settle_pause(task_id)
         with self.gate:
             task = self.task(task_id)
             if task['status'] != 'waiting_vision':
@@ -411,7 +449,7 @@ class FileWork:
                 step['state'] = 'pending'
             else:
                 step['vision_declined'] = True
-                step['state'] = 'complete'
+                step['state'] = 'complete' if step.get('scope', 'range') == 'range' else 'pending'
                 step['vision_request'] = None
                 step['result']['warnings'].append('用户拒绝了替代识别；已读取的内容保留，未识别图像不作为总结依据。')
             task.update(status='queued', error='')
@@ -432,7 +470,7 @@ class FileWork:
 
     async def wait(self, task_id):
         job = self.jobs.get(task_id)
-        if job:
+        if job and not job[0].cancelled():
             future = asyncio.wrap_future(job[0])
             try:
                 await asyncio.shield(future)
@@ -441,6 +479,18 @@ class FileWork:
                 await asyncio.shield(future)
                 raise
         return public_task(self.task(task_id))
+
+    def settle_pause(self, task_id):
+        job = self.jobs.get(task_id)
+        if (
+            job
+            and not job[0].done()
+            and self.task(task_id)['status'] in ('waiting_vision', 'waiting_limit', 'waiting_output')
+        ):
+            try:
+                job[0].result(timeout=10)
+            except TimeoutError:
+                raise WorkError('任务正在保存暂停记录，请稍后重试。')
 
     def checkpoint(self, stop, deadline):
         if stop.is_set():
@@ -565,7 +615,7 @@ class FileWork:
     def run(self, task_id, stop, restore):
         task = self.task(task_id)
         document_task = any(step['action'] in ('read_document', 'summarize') for step in task['steps'])
-        deadline = time.monotonic() + (180 if document_task else 60)
+        deadline = time.monotonic() + (1800 if document_task else 60)
 
         def check():
             return self.checkpoint(stop, deadline)
@@ -591,7 +641,10 @@ class FileWork:
                     check()
                     self.root(task['workspace_id'])
                     if step['action'] == 'read_document':
-                        if not document_tasks.read(self, task, step, check):
+                        reader = (
+                            document_tasks.read if step.get('scope', 'range') == 'range' else document_tasks.read_all
+                        )
+                        if not reader(self, task, step, check):
                             return
                     else:
                         document_tasks.summarize(self, task, step, check)
@@ -616,7 +669,15 @@ class FileWork:
                     step['result'] = self.operate(root, step)
                     step['state'] = 'applied' if step['before'] else 'complete'
                     self.store.save_file_task(task)
+            if not restore and any(item['action'] == 'summarize' for item in task['steps']):
+                from .work_artifacts import save_summary
+
+                check()
+                if not save_summary(self, task):
+                    return
             task['status'] = 'restored' if restore else 'complete'
+        except WorkPause:
+            task['status'] = 'waiting_limit'
         except TaskCancelled:
             task.update(status='cancelled', error='任务已取消，已完成的修改可在记录中检查并恢复。')
         except WorkError as error:
@@ -631,9 +692,14 @@ class FileWork:
             report_error('file_task', error)
             task.update(status='failed', error='任务未能完成，已读取的资料保留在记录中；请检查文档格式和模型配置。')
         finally:
-            self.store.save_file_task(task)
-            if task['status'] in ('complete', 'failed', 'cancelled', 'restored'):
-                kind = task['status']
-                if kind == 'complete' and any(item.get('result', {}).get('partial') for item in task['steps']):
-                    kind = 'partial'
-                self.cues.emit(task, kind)
+            with self.gate:
+                if stop.is_set() and task['status'] not in TERMINAL:
+                    task.update(status='cancelled', error='任务已取消，已完成部分保留在记录中。')
+                self.store.save_file_task(task)
+                if task['status'] in ('waiting_limit', 'waiting_output'):
+                    self.cues.emit(task, task['status'])
+                if task['status'] in ('complete', 'failed', 'cancelled', 'restored'):
+                    kind = task['status']
+                    if kind == 'complete' and any(item.get('result', {}).get('partial') for item in task['steps']):
+                        kind = 'partial'
+                    self.cues.emit(task, kind)

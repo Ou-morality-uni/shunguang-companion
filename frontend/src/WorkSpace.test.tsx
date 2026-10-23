@@ -50,7 +50,7 @@ it('grants the entered folder and submits a bounded relative-path task', async (
     return Promise.resolve(path === '/work/workspaces' ? (granted ? [workspace] : []) : []);
   });
   render(<WorkSpace />);
-  await waitFor(() => expect(request).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(3));
   fireEvent.change(screen.getByLabelText('本机文件夹完整路径'), { target: { value: 'D:\\work' } });
   fireEvent.click(screen.getByRole('button', { name: '授权此文件夹' }));
   await screen.findByText('工作文件夹已授权。');

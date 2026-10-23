@@ -536,9 +536,18 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
   }
   function enqueueWork(event: { task_id: string; kind: string; text: string; created_at: string }) {
     const age = Date.now() - new Date(event.created_at).getTime();
-    const terminal = ['complete', 'partial', 'failed', 'cancelled', 'restored'].includes(event.kind);
+    const terminal = [
+      'complete',
+      'partial',
+      'failed',
+      'cancelled',
+      'restored',
+      'authorization',
+      'waiting_limit',
+      'waiting_output',
+    ].includes(event.kind);
     if (terminal) cancelWork(event.task_id);
-    if (!settingsRef.current?.enabled || muted || age > 30000) return;
+    if (!settingsRef.current?.enabled || muted || (age > 30000 && event.kind !== 'summary')) return;
     if (
       event.kind === 'summary' ? !settingsRef.current.auto_play : settingsRef.current.work_prompts === false
     )

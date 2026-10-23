@@ -287,9 +287,14 @@ def test_registry_respects_enabled_tools_and_never_allows_model_approval(work):
     features = feature_config.FeatureConfig()
     context = ({'id': 'm', 'conversation_id': 'c', 'content': 'hello'}, [])
     registry = ToolRegistry(features, service.store, *context, work=service)
-    assert {'weather', 'web_search', 'remember_user_fact', 'recall_conversations', 'workspace_files'} == set(
-        registry.handlers
-    )
+    assert {
+        'weather',
+        'web_search',
+        'remember_user_fact',
+        'recall_conversations',
+        'workspace_files',
+        'workspace_task',
+    } == set(registry.handlers)
     assert not asyncio.run(registry.execute('approve_delete', {'approved': True}))['ok']
     features.tools.weather_enabled = False
     features.memory.auto_save = False
@@ -332,8 +337,8 @@ def test_chat_dispatches_local_file_task_and_persists_actual_result(work, monkey
         async def astream(self, history):
             if isinstance(history[-1], ToolMessage):
                 result = json.loads(history[-1].content)
-                assert result['ok'] and result['task']['steps'][0]['result']['text'] == 'real file text'
-                yield AIMessageChunk(content='已经读到了文件内容。')
+                assert result['ok'] and result['background'] and 'steps' not in result['task']
+                yield AIMessageChunk(content='任务已经安排好了，读取结果会显示在任务卡里。')
             else:
                 yield AIMessageChunk(
                     content='',
@@ -349,12 +354,14 @@ def test_chat_dispatches_local_file_task_and_persists_actual_result(work, monkey
     monkeypatch.setattr(chat, 'build_model', lambda _: Model())
     with TestClient(main.app) as client:
         response = client.post('/api/chat', json={'content': '读取授权目录的 file.txt'})
-        assert 'event: done' in response.text and 'real file text' in response.text
+        assert 'event: done' in response.text and '任务卡' in response.text
         assert 'workspace_files' in bound[0]
-        assert service.store.list_file_tasks()[0]['origin'] == 'chat'
+        task = service.store.list_file_tasks()[0]
+        assert task['origin'] == 'chat' and task['conversation_id']
+        assert finished(runtime.work, task)['steps'][0]['result']['text'] == 'real file text'
 
 
-def test_cancelled_registry_wait_stops_worker_before_acknowledging(work, monkeypatch):
+def test_registry_returns_before_background_work_and_task_cancellation_stops_later_steps(work, monkeypatch):
     service, workspace_id, folder = work
     entered, release = Event(), Event()
     original = service.operate
@@ -368,7 +375,7 @@ def test_cancelled_registry_wait_stops_worker_before_acknowledging(work, monkeyp
     registry = ToolRegistry(feature_config.FeatureConfig(), service.store, {}, [], work=service)
 
     async def run():
-        running = asyncio.create_task(
+        result = await asyncio.wait_for(
             registry.execute(
                 'workspace_files',
                 {
@@ -378,15 +385,14 @@ def test_cancelled_registry_wait_stops_worker_before_acknowledging(work, monkeyp
                         {'action': 'write', 'path': 'second.txt', 'content': 'two'},
                     ],
                 },
-            )
+            ),
+            timeout=2,
         )
         assert await asyncio.to_thread(entered.wait, 5)
-        running.cancel()
-        await asyncio.sleep(0)
+        assert result['background'] and result['task']['status'] == 'queued'
+        service.cancel(result['task']['id'])
         release.set()
-        with pytest.raises(asyncio.CancelledError):
-            await running
-        assert service.store.list_file_tasks()[0]['status'] == 'cancelled'
+        assert (await service.wait(result['task']['id']))['status'] == 'cancelled'
         assert not (folder / 'second.txt').exists()
 
     asyncio.run(run())

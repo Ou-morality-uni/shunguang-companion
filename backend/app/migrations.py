@@ -1,6 +1,6 @@
 """Ordered, transactional upgrades from the pre-versioned database (version 0)."""
 
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 
 
 def migrate(db):
@@ -70,6 +70,14 @@ def migrate(db):
         )""")
         db.execute('CREATE INDEX work_events_task ON work_events(task_id,seq)')
         db.execute('PRAGMA user_version=5')
+    if version < 6:
+        db.execute(
+            'ALTER TABLE file_tasks ADD COLUMN conversation_id TEXT REFERENCES conversations(id) ON DELETE SET NULL'
+        )
+        db.execute("ALTER TABLE file_tasks ADD COLUMN context TEXT NOT NULL DEFAULT '{}'")
+        db.execute('CREATE INDEX file_tasks_conversation ON file_tasks(conversation_id,created_at)')
+        db.execute('CREATE TABLE work_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL)')
+        db.execute('PRAGMA user_version=6')
 
 
 LEGACY_SCHEMA = """

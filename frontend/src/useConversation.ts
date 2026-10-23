@@ -88,7 +88,7 @@ export function useConversation(
     }
   }
 
-  async function send(text: string) {
+  async function send(text: string, attachments: string[] = []) {
     text = text.trim();
     if (!text || busyRef.current || historyLoading) return false;
     busyRef.current = true;
@@ -106,46 +106,52 @@ export function useConversation(
       accumulated = '',
       completed = false;
     try {
-      await streamChat(id, text, controller.signal, (kind, data) => {
-        if (kind === 'user') {
-          const message = data as unknown as Message;
-          if (!message.conversation_id) throw new Error('服务没有返回对话标识。');
-          accepted = true;
-          id = message.conversation_id;
-          activeRef.current = id;
-          setActive(id);
-          setMessages((items) => [...items, message]);
-          if (stopRequestedRef.current) void stopReply();
-        }
-        if (kind === 'delta') {
-          accumulated += String(data.text);
-          setPartial(accumulated);
-          if (!stopRequestedRef.current) speechRef.current?.delta(String(data.text));
-        }
-        if (kind === 'sources')
-          setCurrentSources(Array.isArray(data.sources) ? (data.sources as Source[]) : []);
-        if (kind === 'tool')
-          setCurrentTools((items) => {
-            const next = data as ToolEvent;
-            const index = next.id ? items.findIndex((item) => item.id === next.id) : -1;
-            return index < 0 ? [...items, next] : items.map((item, i) => (i === index ? next : item));
-          });
-        if (kind === 'done') {
-          const message = data as unknown as Message;
-          setMessages((items) => [...items, message]);
-          setPartial(null);
-          if (message.status === 'complete' && !stopRequestedRef.current) {
-            completed = true;
-            completeRef.current(message);
-          } else speechRef.current?.cancel();
-        }
-        if (kind === 'error') {
-          speechRef.current?.cancel();
-          setError(String(data.message));
-          setPartial(null);
-          if (data.record) setMessages((items) => [...items, data.record as Message]);
-        }
-      });
+      await streamChat(
+        id,
+        text,
+        controller.signal,
+        (kind, data) => {
+          if (kind === 'user') {
+            const message = data as unknown as Message;
+            if (!message.conversation_id) throw new Error('服务没有返回对话标识。');
+            accepted = true;
+            id = message.conversation_id;
+            activeRef.current = id;
+            setActive(id);
+            setMessages((items) => [...items, message]);
+            if (stopRequestedRef.current) void stopReply();
+          }
+          if (kind === 'delta') {
+            accumulated += String(data.text);
+            setPartial(accumulated);
+            if (!stopRequestedRef.current) speechRef.current?.delta(String(data.text));
+          }
+          if (kind === 'sources')
+            setCurrentSources(Array.isArray(data.sources) ? (data.sources as Source[]) : []);
+          if (kind === 'tool')
+            setCurrentTools((items) => {
+              const next = data as ToolEvent;
+              const index = next.id ? items.findIndex((item) => item.id === next.id) : -1;
+              return index < 0 ? [...items, next] : items.map((item, i) => (i === index ? next : item));
+            });
+          if (kind === 'done') {
+            const message = data as unknown as Message;
+            setMessages((items) => [...items, message]);
+            setPartial(null);
+            if (message.status === 'complete' && !stopRequestedRef.current) {
+              completed = true;
+              completeRef.current(message);
+            } else speechRef.current?.cancel();
+          }
+          if (kind === 'error') {
+            speechRef.current?.cancel();
+            setError(String(data.message));
+            setPartial(null);
+            if (data.record) setMessages((items) => [...items, data.record as Message]);
+          }
+        },
+        attachments,
+      );
     } catch (failure) {
       if ((failure as Error).name !== 'AbortError') setError((failure as Error).message);
     } finally {

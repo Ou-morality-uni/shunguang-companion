@@ -81,12 +81,23 @@ class Store:
         with self.connect() as db:
             return db.execute('UPDATE workspaces SET enabled=0 WHERE id=?', (workspace_id,)).rowcount == 1
 
-    def create_file_task(self, workspace_id, title, steps, status, origin='workbench'):
+    def create_file_task(self, workspace_id, title, steps, status, origin='workbench', conversation_id=None):
         task_id = str(uuid4())
         with self.connect() as db:
             db.execute(
-                'INSERT INTO file_tasks(id,workspace_id,title,status,steps,error,created_at,updated_at,origin) VALUES (?,?,?,?,?,?,?,?,?)',
-                (task_id, workspace_id, title, status, json.dumps(steps, ensure_ascii=False), '', now(), now(), origin),
+                'INSERT INTO file_tasks(id,workspace_id,title,status,steps,error,created_at,updated_at,origin,conversation_id) VALUES (?,?,?,?,?,?,?,?,?,?)',
+                (
+                    task_id,
+                    workspace_id,
+                    title,
+                    status,
+                    json.dumps(steps, ensure_ascii=False),
+                    '',
+                    now(),
+                    now(),
+                    origin,
+                    conversation_id,
+                ),
             )
         return self.get_file_task(task_id)
 
@@ -97,16 +108,24 @@ class Store:
                 return None
             record = dict(row)
             record['steps'] = json.loads(record['steps'])
+            record['context'] = json.loads(record['context'])
             record['events'] = [
                 dict(event)
                 for event in db.execute('SELECT * FROM work_events WHERE task_id=? ORDER BY seq', (task_id,))
             ]
             return record
 
-    def list_file_tasks(self, limit=50):
+    def list_file_tasks(self, limit=50, conversation_id=None):
         with self.connect() as db:
-            rows = db.execute('SELECT * FROM file_tasks ORDER BY created_at DESC LIMIT ?', (limit,))
-            records = [{**dict(row), 'steps': json.loads(row['steps'])} for row in rows]
+            query = 'SELECT * FROM file_tasks'
+            params = []
+            if conversation_id is not None:
+                query += ' WHERE conversation_id=?'
+                params.append(conversation_id)
+            rows = db.execute(query + ' ORDER BY created_at DESC LIMIT ?', (*params, limit))
+            records = [
+                {**dict(row), 'steps': json.loads(row['steps']), 'context': json.loads(row['context'])} for row in rows
+            ]
             for record in records:
                 record['events'] = [
                     dict(event)
@@ -118,14 +137,27 @@ class Store:
         record['updated_at'] = now()
         with self.connect() as db:
             db.execute(
-                'UPDATE file_tasks SET status=?,steps=?,error=?,updated_at=? WHERE id=?',
+                'UPDATE file_tasks SET status=?,steps=?,error=?,updated_at=?,context=? WHERE id=?',
                 (
                     record['status'],
                     json.dumps(record['steps'], ensure_ascii=False),
                     record['error'],
                     record['updated_at'],
+                    json.dumps(record.get('context', {}), ensure_ascii=False),
                     record['id'],
                 ),
+            )
+
+    def output_workspace(self):
+        with self.connect() as db:
+            row = db.execute("SELECT value FROM work_settings WHERE key='output_workspace'").fetchone()
+        return self.get_workspace(row['value']) if row else None
+
+    def set_output_workspace(self, workspace_id):
+        with self.connect() as db:
+            db.execute(
+                "INSERT INTO work_settings VALUES ('output_workspace',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (workspace_id,),
             )
 
     def interrupt_file_tasks(self):
@@ -160,7 +192,7 @@ class Store:
             db.execute('INSERT INTO conversations VALUES (:id,:title,:created_at,:updated_at)', record)
         return record
 
-    def begin_turn(self, conversation_id: str | None, content: str):
+    def begin_turn(self, conversation_id: str | None, content: str, metadata=None):
         with self.connect() as db:
             if conversation_id is None:
                 conversation_id = str(uuid4())
@@ -174,14 +206,14 @@ class Store:
                 'created_at': now(),
             }
             db.execute(
-                'INSERT INTO messages(id,conversation_id,role,content,status,created_at) VALUES (:id,:conversation_id,:role,:content,:status,:created_at)',
-                record,
+                'INSERT INTO messages(id,conversation_id,role,content,status,created_at,metadata) VALUES (:id,:conversation_id,:role,:content,:status,:created_at,:metadata)',
+                {**record, 'metadata': json.dumps(metadata or {}, ensure_ascii=False)},
             )
             db.execute(
                 "UPDATE conversations SET title=CASE WHEN title='新的对话' THEN ? ELSE title END, updated_at=? WHERE id=?",
                 (content[:24], now(), conversation_id),
             )
-            return record
+            return {**record, **(metadata or {})}
 
     def delete_conversation(self, conversation_id: str):
         with self.connect() as db:
@@ -218,6 +250,7 @@ class Store:
                         'context_sources': metadata.get('context_sources', []),
                         'tools': metadata.get('tools', []),
                         'sticker': metadata.get('sticker'),
+                        'attachments': metadata.get('attachments', []),
                     }
                 )
             return records

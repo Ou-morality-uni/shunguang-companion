@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { request, type FileTask, type FileTaskInput, type Workspace } from './api';
 import { DocumentResult, UploadDocuments, VisionApproval } from './DocumentControls';
+import { ArtifactCard, ContinueTask, OutputFolder, taskStatuses } from './FileTasks';
 
 type Step = FileTaskInput['steps'][number];
 const actions: Record<string, string> = {
@@ -15,18 +16,6 @@ const actions: Record<string, string> = {
   read_document: '阅读文档／代码／图片',
   upload: '上传副本',
   summarize: '整理总结',
-};
-const statuses: Record<FileTask['status'], string> = {
-  queued: '排队中',
-  running: '执行中',
-  waiting_approval: '等待删除授权',
-  waiting_vision: '等待图像识别授权',
-  complete: '已完成',
-  failed: '已停止：发生错误',
-  cancelled: '已取消',
-  interrupted: '服务重启后中断',
-  restoring: '恢复中',
-  restored: '已恢复',
 };
 const active = new Set(['queued', 'running', 'restoring']);
 
@@ -120,6 +109,10 @@ export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void })
           void refresh();
         }}
       />
+      <section className="work-card glass" aria-label="成果目录">
+        <h3>成果保存位置</h3>
+        <OutputFolder />
+      </section>
       <section className="work-card glass" aria-label="工作文件夹授权">
         <h3>
           <FolderOpen size={18} /> 工作文件夹
@@ -259,28 +252,54 @@ export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void })
               </label>
               {step.action === 'read_document' && (
                 <>
-                  <div className="field-row">
+                  <label className="field">
+                    阅读方式 {index + 1}
+                    <select
+                      value={step.scope ?? 'range'}
+                      onChange={(event) =>
+                        update(index, { ...step, scope: event.target.value as Step['scope'] })
+                      }
+                    >
+                      <option value="range">仅读指定范围</option>
+                      <option value="full">整份分批阅读</option>
+                      <option value="focused">按关键词定位相关范围</option>
+                    </select>
+                  </label>
+                  {step.scope === 'focused' && (
                     <label className="field">
-                      起始位置 {index + 1}
+                      定位关键词 {index + 1}
                       <Input
-                        type="number"
-                        min={1}
-                        max={1000000}
-                        value={step.start ?? 1}
-                        onChange={(event) => update(index, { ...step, start: Number(event.target.value) })}
+                        value={step.query ?? ''}
+                        maxLength={300}
+                        onChange={(event) => update(index, { ...step, query: event.target.value })}
+                        placeholder="用空格或逗号分隔；统计和排名请选择整份阅读"
                       />
                     </label>
-                    <label className="field">
-                      读取数量 {index + 1}
-                      <Input
-                        type="number"
-                        min={1}
-                        max={50}
-                        value={step.limit ?? 20}
-                        onChange={(event) => update(index, { ...step, limit: Number(event.target.value) })}
-                      />
-                    </label>
-                  </div>
+                  )}
+                  {(step.scope ?? 'range') === 'range' && (
+                    <div className="field-row">
+                      <label className="field">
+                        起始位置 {index + 1}
+                        <Input
+                          type="number"
+                          min={1}
+                          max={1000000}
+                          value={step.start ?? 1}
+                          onChange={(event) => update(index, { ...step, start: Number(event.target.value) })}
+                        />
+                      </label>
+                      <label className="field">
+                        读取数量 {index + 1}
+                        <Input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={step.limit ?? 20}
+                          onChange={(event) => update(index, { ...step, limit: Number(event.target.value) })}
+                        />
+                      </label>
+                    </div>
+                  )}
                   <p className="space-note">
                     位置从 1 开始：PDF 按页，Word 按段落／表格块，Excel 按工作表，PPT
                     按幻灯片，代码按行；图片只处理第一帧。
@@ -381,7 +400,7 @@ export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void })
           <article className="work-card glass" key={task.id} aria-label={`任务：${task.title}`}>
             <div className="work-actions">
               <h3>{task.title}</h3>
-              <span>{statuses[task.status]}</span>
+              <span>{taskStatuses[task.status]}</span>
             </div>
             <p className="space-note">
               {workspaces.find((item) => item.id === task.workspace_id)?.path ?? '工作文件夹'} ·{' '}
@@ -482,6 +501,8 @@ export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void })
                 </div>
               </div>
             )}
+            <ContinueTask task={task} onChanged={refresh} />
+            <ArtifactCard task={task} />
             <div className="work-actions">
               {active.has(task.status) && (
                 <Button

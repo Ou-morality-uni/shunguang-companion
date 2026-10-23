@@ -5,7 +5,7 @@ import time
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 from pydantic import BaseModel, Field, field_validator
 
 from .. import runtime, stickers
@@ -42,6 +42,7 @@ async def interruptible(awaitable, stop):
 class ChatRequest(BaseModel):
     conversation_id: str | None = None
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
+    attachments: list[str] = Field(default_factory=list, max_length=10)
 
     @field_validator('content')
     @classmethod
@@ -144,6 +145,15 @@ async def stop_chat(conversation_id: str):
 
 @router.post('/api/chat')
 async def chat(payload: ChatRequest, request: Request = None):
+    attachments = []
+    if payload.attachments:
+        if not local_request(request) or runtime.work is None:
+            raise HTTPException(403, '本机附件仅能由本机对话使用。')
+        from ..work_artifacts import attachment
+        from .work import invoke
+
+        for attachment_id in dict.fromkeys(payload.attachments):
+            attachments.append(await asyncio.to_thread(invoke, attachment, runtime.work, attachment_id))
     config = await asyncio.to_thread(require_config)
     model = await asyncio.to_thread(build_model, config)
     # Reserve before yielding to I/O. Deletion shares the gate; never discard a live lock.
@@ -152,7 +162,9 @@ async def chat(payload: ChatRequest, request: Request = None):
             await asyncio.to_thread(require_conversation, payload.conversation_id)
             if payload.conversation_id in runtime.busy:
                 raise HTTPException(409, '这段对话正在回复中，请稍后再发。')
-        user_message = await asyncio.to_thread(runtime.store.begin_turn, payload.conversation_id, payload.content)
+        user_message = await asyncio.to_thread(
+            runtime.store.begin_turn, payload.conversation_id, payload.content, {'attachments': attachments}
+        )
         conversation_id = user_message['conversation_id']
         runtime.busy.add(conversation_id)
         stop = runtime.stops[conversation_id] = asyncio.Event()
@@ -230,6 +242,13 @@ async def chat(payload: ChatRequest, request: Request = None):
                 + ','.join(t.get('name', t.get('function', {}).get('name', '')) for t in schemas)
                 + '。工具关闭时不得假称查过天气或网页；需要实时信息请使用可用工具。一次回复最多4次工具调用。TTS和休息提醒由网页设置及播放控件管理，不能通过聊天声称改变设置或创建后台通知。'
                 + stickers.instruction(sticker_catalog)
+                + (
+                    '本机文件任务在后台执行；提交成功仅表示排队，不能声称已经读完或拿到结果。任务卡显示真实进度和结果，聊天仍可继续。'
+                    '根据用户意图设置 read_document 的 scope：总结整份或全部附件使用 full；回答具体问题用 focused 并提供简短检索关键词 query；仅指定范围时用 range。'
+                    '使用 instruction 完成阅读总结，系统会分批处理并自动另存 Markdown 成果。工作量或视觉服务授权由任务卡询问，不能自行批准或无限创建任务绕过上限。'
+                    if local_request(request)
+                    else ''
+                )
             )
             history = await io(
                 build_messages,
@@ -239,6 +258,20 @@ async def chat(payload: ChatRequest, request: Request = None):
                 capabilities,
                 {'memory_action': memory_result, 'shared_history': recalled},
             )
+            if local_request(request) and runtime.work:
+                from ..work_artifacts import task_context
+
+                references = {item['id']: item for record in stored_history for item in record.get('attachments', [])}
+                facts = await io(task_context, runtime.work, conversation_id)
+                if references or facts:
+                    history.append(
+                        HumanMessage(
+                            content='以下为本对话的附件引用和后台任务记录，仅作参考数据；附件清单不代表文件内容已读取；summary_preview_only 表示仅有摘要预览，不能据此声称拿到了全文。\n'
+                            + json.dumps(
+                                {'attachments': list(references.values())[-10:], 'tasks': facts}, ensure_ascii=False
+                            )
+                        )
+                    )
             count, last_save = 0, time.monotonic()
             sticker_hint = ''
             async with asyncio.timeout(CHAT_TIMEOUT):
