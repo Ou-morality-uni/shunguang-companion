@@ -1,9 +1,10 @@
-# Shunguang Companion v0.5.6
+# Shunguang Companion v0.6.0
 
-[v0.5.6 release notes (Chinese)](versions/0.5.6/README.md) · [TTS setup (Chinese)](docs/tts.md)
+[v0.6.0 release notes (Chinese)](versions/0.6.0/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice preparation for 0.6.1 (Chinese)](versions/0.6.1/LibreOffice-install.md)
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.6.0](versions/0.6.0/README.md): Integrate chat file workspaces, automatic cross-chat memory, weather reminders, online voice input, per-chat model choices, and global animated backgrounds.
 - [v0.5.6](versions/0.5.6/README.md): Refresh the warm red-and-gold interface with flowing light, collapsible navigation, compact status and voice controls, and resizable file previews.
 - [v0.5.5](versions/0.5.5/README.md): Add chat attachments and background file tasks, resumable long-document reading with workload consent, saved Markdown summaries, and stage-based work speech.
 - [v0.5.4](versions/0.5.4/README.md): Add document uploads and reading, multi-file summaries, vision capability and fallback consent, varied work cues, and code-block speech filtering.
@@ -38,6 +39,18 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -C
 ```
 
 [INSTALL_LIST.md](INSTALL_LIST.md) describes the downloads. Each run also produces **`data/install-list.md`** with Python package actions, installed npm packages, model sources/hashes, and local storage paths. Package managers may use their caches. Failed runs return a nonzero exit code and record the failed stage; a receipt alone does not prove success.
+
+## LibreOffice: optional manual installation
+
+**The current code version is 0.6.0. Office authoring/editing, page-layout previews, Office-to-PDF export, and Excel recalculation remain part of the in-development 0.6.1 release.** A dependency release does not mean these application features have shipped. Chat, extracted document content, and Markdown summaries in 0.6.0 do not require LibreOffice.
+
+See the [LibreOffice installation guide (Chinese)](versions/0.6.1/LibreOffice-install.md):
+
+1. Download the Windows x64 main installer from the [official website](https://www.libreoffice.org/download/download-libreoffice/). After the maintainer publishes it, the [project Releases page](https://github.com/Ou-morality-uni/shunguang-companion/releases) may also offer `LibreOffice-26.8.1-Windows-x64-installer-bundle.zip` and its `.zip.sha256`. GitHub's automatically generated **Source code (zip)** is not the installer.
+2. Verify the bundle SHA-256, extract it, and run the MSI. Keep downloads in `tools/installers/` and use Custom installation to choose `tools/LibreOffice/` under the project root, supplying its full absolute path. Reuse an existing installation where available.
+3. For this custom location, add the full `tools/LibreOffice/program` directory to your user PATH and restart the backend. In an application version that includes Office dependency detection, click the recheck button. The standard system installation location is also supported.
+
+Neither `Install.bat` nor `Start_up.bat` installs LibreOffice. The bundle is an installer with documentation, not a portable distribution. LibreOffice keeps its own licenses; this project's noncommercial code license does not replace them.
 
 ## BGE-M3 download and location
 
@@ -82,12 +95,19 @@ Each user has their own `data/` directory for encrypted keys, settings, chat his
 
 Development progress documents, delivery checklists, acceptance reports, private logs, and original development Git history are excluded. Installation does not enter API keys, purchase services, train voices, or upload reference audio.
 
+## Using 0.6.0
+
+- **Models**: save working API connections in settings, then select a provider, model, and supported reasoning level in the composer. Each conversation remembers its selection; new conversations use the default.
+- **Files**: upload or drop files into chat and send your request. Tasks run in the background; open their shortcut to view progress, sources, and complete Markdown results in right-side tabs. New results are saved under `data/outputs/任务-<task ID>/`. Convert legacy `.doc/.xls/.ppt` files to `.docx/.xlsx/.pptx` first. Office document editing and PDF export are not included in 0.6.0.
+- **Voice input**: configure a supported HTTPS audio-transcription endpoint, model, and credentials under Audio & Playback → Voice Input. Click to start and again to stop; review the resulting draft before sending. Transcription and TTS have separate configuration, and text/image support does not imply audio support. Your browser requests microphone permission.
+- **Profile and care**: set your preferred form of address, home city, and age in Memory Space. A city is sufficient for weather reminders; a street address is unnecessary. Automatic memory and cross-chat processing can be disabled in memory settings. Weather reminders stop when the page closes.
+
 ## Audio, tools, memory, and reminders
 
 - **Audio**: supports Xiaomi MiMo and Alibaba Cloud Bailian. MiMo references an existing recording on the server computer. Bailian creates and saves multiple cloud voices from transient uploads, with list, select, copy, and delete controls. Qwen-Audio 3.1/3.0 streaming and the separate legacy Qwen-TTS protocol are supported; voices cannot be mixed across models. Includes sentence playback, stop, replay, and mute. See [TTS setup (Chinese)](docs/tts.md).
 - **Tools**: Open-Meteo provides weather. Search defaults to public, key-free endpoints; Tavily is optional. Public services may rate-limit or require verification. The UI displays actual results, failures, and sources.
-- **Memory**: explicit user statements can be saved automatically and real excerpts recalled across chats. Manual summarization remains optional, with edit, forget, and disable controls. User facts, chat history, and game lore remain separate; personal-memory questions skip lore retrieval.
-- **Reminders**: configure intervals, quiet hours, pause, and tests. These are time-based reminders, not posture detection. Background tabs may be delayed; reminders cannot reliably run after closing the page.
+- **Memory**: explicit profile facts and preferences can be saved automatically; background conversation summaries support relevant cross-chat recall with real sources. The manual summarization entry has been removed. Edit, forget, and disable controls remain. Background processing may make additional model calls and does not guarantee recall of every detail. User facts, chat history, and game lore remain separate.
+- **Reminders**: configure intervals, quiet hours, pause, and tests, with varied phrases and weather based on your home city. Weather failures fall back to ordinary reminders. These are time-based reminders, not posture detection. Background tabs may be delayed; closing the page pauses reminders without replaying an offline backlog.
 
 Model and voice providers require your own usable API credentials and may charge according to their terms. Windows uses DPAPI. A system-keyring backend is included for other platforms, but macOS/Linux still require real-device validation.
 

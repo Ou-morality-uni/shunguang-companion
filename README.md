@@ -1,9 +1,10 @@
-# 瞬光伴行 v0.5.6
+# 瞬光伴行 v0.6.0
 
-[v0.5.6 更新说明](versions/0.5.6/README.md) · [语音配置与选型](docs/tts.md)
+[v0.6.0 更新说明](versions/0.6.0/README.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南（0.6.1 准备）](versions/0.6.1/LibreOffice-install.md)
 
 [English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.6.0](versions/0.6.0/README.md)：整合聊天文件工作区、自动跨会话记忆、天气关怀、在线语音输入、会话模型选择与全局动态光效。
 - [v0.5.6](versions/0.5.6/README.md)：更新暖霞红金布局与动态光效，支持导航折叠、紧凑状态与语音控制、可调宽及放大的独立文件预览。
 - [v0.5.5](versions/0.5.5/README.md)：打通聊天附件与后台文件任务，支持长资料分批阅读、超限确认续接、总结自动另存和关键节点工作语音。
 - [v0.5.4](versions/0.5.4/README.md)：新增六类资料阅读与上传、多文件总结、视觉能力及替代识别授权、自然工作语音和代码块朗读过滤。
@@ -38,6 +39,18 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -C
 ```
 
 安装项目清单见 [INSTALL_LIST.md](INSTALL_LIST.md)。每次运行还会生成 **`data/install-list.md`**，列出本次处理的 Python包、实际安装的 npm包、模型文件、来源和数据库位置，区分已有依赖与本次安装；包管理器可能使用缓存。失败会返回非零退出码并保留阶段记录，不能把失败清单当作安装成功。
+
+## LibreOffice：按需手动安装
+
+**当前代码版本为 0.6.0；Office 创作编辑、页面排版预览、Office 转 PDF 和 Excel 重算仍属于开发中的 0.6.1。** 发布 LibreOffice 依赖包不代表这些应用功能已经交付。使用 0.6.0 的聊天、资料文字阅读和 Markdown 总结，无需为此安装 LibreOffice。
+
+准备使用后续办公能力时，请阅读 [LibreOffice 下载与安装指南](versions/0.6.1/LibreOffice-install.md)：
+
+1. 从 [LibreOffice 官网](https://www.libreoffice.org/download/download-libreoffice/) 下载 Windows x64 主程序；也可查看 [本项目 Releases](https://github.com/Ou-morality-uni/shunguang-companion/releases)，在维护者发布附件后下载 `LibreOffice-26.8.1-Windows-x64-installer-bundle.zip` 和同名 `.zip.sha256`。自动生成的 **Source code (zip)** 不是 LibreOffice 安装包。
+2. ZIP 下载后先核对同页 SHA-256，再解压并运行其中的 MSI。推荐将下载包放在项目 `tools/installers/`，在自定义安装中把程序安装到项目 `tools/LibreOffice/`；安装向导需要填写完整路径。已有安装可直接沿用。
+3. 自定义目录安装后，按指南将完整的 `tools/LibreOffice/program` 目录加入用户 PATH，重启小光后端；安装了支持 Office 检测的应用版本后，再点击“重新检测”。系统默认安装目录也受支持。
+
+`Install.bat` 和 `Start_up.bat` **不会自动下载或安装 LibreOffice**。这个 ZIP 是主程序安装包与说明，不是免安装便携版；只把它解压到项目内不能启用引擎。LibreOffice 保留其原有许可，不适用本项目原创代码的非商业限制。
 
 ## BGE-M3 的下载和位置
 
@@ -82,12 +95,19 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -M
 
 工程进度、交付清单、验收报告、私人日志和原开发Git历史不在公开仓库；README与安装清单是面向使用者的操作文档。安装不会替你填写API、购买服务、训练声音或上传参考音频。
 
+## 开始使用 0.6.0
+
+- **模型选择**：在设置中保存可用的 API 连接后，可从输入区按服务切换模型及支持的思考强度；每个聊天独立记住选择，新聊天使用默认配置。
+- **文件任务**：在聊天中拖入或上传文件，再发送自然语言要求。任务在后台执行，聊天显示短摘要；点击资料或成果入口打开右侧多标签工作区，查看进度、来源及完整 Markdown，支持主动朗读和下载。新成果保存在 `data/outputs/任务-<任务ID>/`。旧 `.doc/.xls/.ppt` 请先另存为 `.docx/.xlsx/.pptx`；0.6.0 不提供 Office 成品编辑或 PDF 导出。
+- **语音输入**：在“声音与播放 → 语音输入”配置实际支持音频转写的 HTTPS 接口、模型和密钥。点击开始录音，再点击结束；文字先进入草稿，检查后自行发送。它与 TTS 朗读分别配置，文字模型或看图模型不一定支持转写。浏览器会请求麦克风权限。
+- **个人资料与关怀**：在记忆空间填写称呼、常住城市和年龄；默认称呼为“小师妹”。城市供天气关怀使用，不需要填写详细住址。自动记忆与跨聊天整理可在长期记忆设置关闭；网页关闭后不继续天气提醒。
+
 ## 声音、工具与提醒
 
 - **声音与播放**：仅保留小米 MiMo 与阿里云百炼。小米引用服务电脑的 MP3 路径；百炼可在页面临时提交录音、创建并保存多个云端音色，刷新、选择、复制和删除。支持 Qwen-Audio 3.1/3.0 流式合成；旧 Qwen-TTS 单独兼容，音色不能跨模型混用。支持分句朗读、停止、重播及静音。详细配置见 [TTS 接入与选型](docs/tts.md)。
 - **工具服务**：天气使用Open-Meteo；网页搜索默认使用无需Key的公开入口，Tavily是可选配置。公开服务可能限流或要求验证；界面显示调用结果、失败和真实来源。
-- **长期记忆**：根据明确自述自动保存用户事实，新聊天可按需召回其他会话的真实片段；手动总结作为补充。支持编辑、忘记与自动记忆开关；聊天历史、用户事实与游戏知识分开管理。个人记忆问题不会再无条件检索游戏世界观。
-- **关怀提醒**：配置间隔、安静时段、暂停和测试。按时间触发，不检测坐姿；浏览器后台可能延迟，关闭页面后不能可靠提醒。
+- **长期记忆**：根据明确自述自动保存用户资料与偏好，后台整理会话摘要，相关话题按需召回旧聊天并展示真实来源；已移除手动总结入口。支持编辑、忘记与自动记忆开关。后台整理可能额外调用所选模型，不保证记住所有历史细节；聊天历史、用户事实与游戏知识分开管理。
+- **关怀提醒**：配置间隔、安静时段、暂停和测试，使用多组话术并结合常住城市天气；天气不可用时退回普通提醒。按时间触发，不检测坐姿；浏览器后台可能延迟，关闭页面后暂停，不补发离线积压。
 
 模型与声音服务需要使用者自己的可用API，可能按服务规则计费。Windows 使用 DPAPI；其他系统已增加系统密钥环后端，macOS/Linux 仍需实机验收。
 
@@ -140,6 +160,6 @@ Required Notice: 瞬光伴行 — https://github.com/Ou-morality-uni/shunguang-c
 
 ## 开发与长期维护
 
-模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](versions/0.5.5/README.md)。
+模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](versions/0.6.0/README.md)。
 
 开发环境安装 `backend/requirements-dev.txt` 后，可用 `python scripts/dev.py verify` 统一运行检查；接口变化后用 `python scripts/dev.py contracts` 更新契约。生产安装继续使用运行时锁文件。数据库升级会先自动备份旧库；升级后不要用旧程序直接打开新库。
