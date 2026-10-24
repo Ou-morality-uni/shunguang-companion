@@ -99,7 +99,8 @@ def test_file_task_keeps_its_conversation_model_when_queued_and_global_defaults_
         return '资料整理完成。'
 
     monkeypatch.setattr(document_models, 'invoke', invoke)
-    (source / 'source.txt').write_text('task material\n' * 2000, encoding='utf-8')
+    # Exercise multiple model calls without forty unrelated disk-reading batches.
+    (source / 'source.txt').write_text('task material ' * 4000, encoding='utf-8')
     task = submit(setup, 'source.txt')
     try:
         assert started.wait(5)
@@ -120,7 +121,8 @@ def test_file_task_keeps_its_conversation_model_when_queued_and_global_defaults_
         release.set()
     result = wait(work, task)
     assert result['status'] == 'complete', result['error']
-    assert seen and all(item == ('https://selected.example/v1', 'selected-model') for item in seen)
+    assert len(seen) >= 2
+    assert all(item == ('https://selected.example/v1', 'selected-model') for item in seen)
 
 
 def test_summary_has_a_short_chat_abstract_and_saves_the_complete_markdown(setup, monkeypatch):

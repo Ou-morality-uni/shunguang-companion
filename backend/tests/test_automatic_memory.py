@@ -88,9 +88,12 @@ def test_background_summary_extracts_stable_facts_without_holding_up_chat_and_ke
             assert 'event: done' in response.text
             assert not release.is_set(), 'chat must finish before background extraction'
             release.set()
-            for _ in range(100):
+            deadline = time.monotonic() + 5
+            while time.monotonic() < deadline:
                 memories = client.get('/api/memories').json()
-                if any(item['value'] == '羽毛球' for item in memories):
+                status = client.get('/api/memories/status').json()
+                # Facts and conversation summaries are published in separate transactions.
+                if any(item['value'] == '羽毛球' for item in memories) and status['summaries'] >= 1:
                     break
                 time.sleep(0.01)
             assert any(item['value'] == '羽毛球' for item in memories)
