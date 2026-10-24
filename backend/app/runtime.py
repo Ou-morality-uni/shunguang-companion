@@ -14,6 +14,8 @@ stops: dict[str, asyncio.Event] = {}
 finished: dict[str, asyncio.Future[bool]] = {}
 mutation_lock = asyncio.Lock()
 work: FileWork | None = None
+weather_care = None
+memory_jobs = None
 
 
 def require_conversation(conversation_id):

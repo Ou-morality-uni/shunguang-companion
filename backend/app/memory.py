@@ -16,7 +16,10 @@ KEYS = {
     '称呼': '名字',
     '喜好': '偏好',
 }
-EXCLUDED = re.compile(r'假设|假如|如果|例如|比如|扮演|台词|角色设定|叶瞬光|api.?key|密钥|sk-|tvly-|[“”"「」]', re.I)
+SENSITIVE = re.compile(r'api.?key|密钥|密码|password|sk-|tvly-', re.I)
+EXCLUDED = re.compile(
+    r'假设|假如|如果|例如|比如|扮演|台词|角色设定|叶瞬光|api.?key|密钥|密码|password|sk-|tvly-|[“”"「」]', re.I
+)
 
 
 def recall_facts(facts, query, budget=6000):
@@ -24,7 +27,7 @@ def recall_facts(facts, query, budget=6000):
     for fact in facts:
         unique.setdefault(canonical_key(fact['key'], fact['value']), fact)
     facts = list(unique.values())
-    stable = {'家乡', '籍贯', '居住地', '名字', '称呼'}
+    stable = {'家乡', '籍贯', '居住地', '名字', '称呼', '对用户的称呼', '年龄'}
     scored = sorted(
         enumerate(facts),
         key=lambda item: (
@@ -59,6 +62,15 @@ def canonical_key(key, value):
     return key
 
 
+def temporary_residence(text):
+    return bool(
+        re.search(
+            r'临时|暂住|暂时|出差|旅游|旅行|酒店|旅馆|民宿|玩[几两一二三四五六七八九十\d]+天|住[几两一二三四五六七八九十\d]+天|就回|过[几两\d]+天',
+            text,
+        )
+    )
+
+
 def direct_facts(text):
     if EXCLUDED.search(text) or '?' in text or '？' in text:
         return []
@@ -68,6 +80,11 @@ def direct_facts(text):
         ('家乡', r'我来自([\u4e00-\u9fff]{2,16}?)(?:[，。！!\s]|$)'),
         ('居住地', r'我(?:现在|目前)?(?:住在|居住在|搬到)([\u4e00-\u9fff]{2,16}?)(?:了|[，。！!\s]|$)'),
         ('名字', r'我(?:叫|的名字是)([^，。！!\s]{1,20})'),
+        (
+            '对用户的称呼',
+            r'(?:^|[，。！!\n])(?:小光[，、 ]*)?(?:你)?(?:以后|今后)?(?:可以)?叫我([^，。！!\s]{1,20}?)(?:吧|[，。！!\s]|$)',
+        ),
+        ('年龄', r'我(?:今年)?(\d{1,3})岁'),
         ('偏好', r'我(不喜欢[^，。！!\n]{1,40})'),
         ('偏好', r'我(?:最)?喜欢([^，。！!\n]{1,40})'),
     ]
@@ -75,6 +92,10 @@ def direct_facts(text):
         match = re.search(pattern, text)
         if match:
             value = match[1].strip()
+            if key == '年龄' and not 1 <= int(value) <= 120:
+                continue
+            if key == '居住地' and temporary_residence(text):
+                continue
             if key == '家乡' and any(word in value for word in ('一个', '今天', '你的', '学生', '工程师', '普通')):
                 continue
             if key in ('家乡', '居住地') and any(place in value for place in ('六分街', '新艾利都', '云岿山', '空洞')):
@@ -158,7 +179,7 @@ def execute(name, args, store, message, settings, history):
     return {'ok': False, 'message': '此记忆能力未启用。'}
 
 
-async def update_from_message(store, model, message, settings, history):
+async def update_from_message(store, model, message, settings, history, allow_model=True):
     import asyncio
 
     text = message['content']
@@ -182,6 +203,8 @@ async def update_from_message(store, model, message, settings, history):
         return {'status': 'not_saved'}
     facts = direct_facts(text)
     explicit = bool(re.search(r'记住|记下来|记下|更正|改正', text))
+    if not facts and explicit and not allow_model:
+        return {'status': 'queued', 'explicit_request': True}
     if not facts and explicit and hasattr(model, 'ainvoke'):
         try:
             facts = await asyncio.wait_for(summarize(model, [message]), timeout=8)
@@ -216,6 +239,10 @@ async def summarize(model, history):
     if raw.startswith('```'):
         raw = re.sub(r'^```(?:json)?\s*|\s*```$', '', raw)
     data = json.loads(raw)
+    return parse_candidates(data, source)
+
+
+def parse_candidates(data, source):
     mapping = {item['id']: item['text'] for item in source}
     candidates, seen = [], set()
     for item in data.get('candidates', [])[:20]:

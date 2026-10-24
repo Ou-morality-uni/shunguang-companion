@@ -144,7 +144,7 @@ def events(after: int | None = Query(default=None, ge=0), work=Depends(service))
 
 @router.get('/output')
 def output(work=Depends(service)):
-    workspace = work.store.output_workspace()
+    workspace = invoke(work.default_output_workspace)
     return {
         'workspace': {key: workspace[key] for key in ('id', 'path', 'enabled', 'created_at')} if workspace else None
     }

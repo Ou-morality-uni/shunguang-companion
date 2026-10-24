@@ -1,3 +1,4 @@
+import { GlideSelect } from './components/ui/glide-select';
 import { useEffect, useRef, useState } from 'react';
 import { FolderOpen, Plus, RefreshCw, RotateCcw, Square, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -195,16 +196,16 @@ export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void })
         >
           <label className="field">
             工作文件夹
-            <select value={chosen} onChange={(event) => setChosen(event.target.value)} required>
-              <option value="">请选择已授权文件夹</option>
-              {workspaces
+            <GlideSelect
+              label="工作文件夹"
+              placeholder="请选择已授权文件夹"
+              value={chosen}
+              onValueChange={setChosen}
+              required
+              options={workspaces
                 .filter((item) => item.enabled)
-                .map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.path}
-                  </option>
-                ))}
-            </select>
+                .map((item) => ({ value: item.id, label: item.path }))}
+            />
           </label>
           <label className="field">
             任务名称
@@ -219,10 +220,11 @@ export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void })
             <div className="work-step" key={index}>
               <label className="field">
                 操作 {index + 1}
-                <select
+                <GlideSelect
+                  label={`操作 ${index + 1}`}
                   value={step.action}
-                  onChange={(event) => {
-                    const action = event.target.value as Step['action'];
+                  onValueChange={(value) => {
+                    const action = value as Step['action'];
                     update(index, {
                       action,
                       path: action === 'list' ? '.' : '',
@@ -230,15 +232,10 @@ export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void })
                       ...(action === 'move' ? { destination: '' } : {}),
                     });
                   }}
-                >
-                  {Object.entries(actions)
+                  options={Object.entries(actions)
                     .filter(([value]) => !['upload', 'summarize'].includes(value))
-                    .map(([value, label]) => (
-                      <option key={value} value={value}>
-                        {label}
-                      </option>
-                    ))}
-                </select>
+                    .map(([value, label]) => ({ value, label }))}
+                />
               </label>
               <label className="field">
                 相对路径 {index + 1}
@@ -254,16 +251,16 @@ export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void })
                 <>
                   <label className="field">
                     阅读方式 {index + 1}
-                    <select
+                    <GlideSelect
+                      label={`阅读方式 ${index + 1}`}
                       value={step.scope ?? 'range'}
-                      onChange={(event) =>
-                        update(index, { ...step, scope: event.target.value as Step['scope'] })
-                      }
-                    >
-                      <option value="range">仅读指定范围</option>
-                      <option value="full">整份分批阅读</option>
-                      <option value="focused">按关键词定位相关范围</option>
-                    </select>
+                      onValueChange={(value) => update(index, { ...step, scope: value as Step['scope'] })}
+                      options={[
+                        { value: 'range', label: '仅读指定范围' },
+                        { value: 'full', label: '整份分批阅读' },
+                        { value: 'focused', label: '按关键词定位相关范围' },
+                      ]}
+                    />
                   </label>
                   {step.scope === 'focused' && (
                     <label className="field">

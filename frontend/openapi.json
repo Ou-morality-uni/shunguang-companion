@@ -79,6 +79,16 @@
               }
             ],
             "title": "Conversation Id"
+          },
+          "model_choice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -180,6 +190,37 @@
         "title": "CloudVoiceOut",
         "type": "object"
       },
+      "ConnectionOptions": {
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelItem"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "configured",
+          "models"
+        ],
+        "title": "ConnectionOptions",
+        "type": "object"
+      },
       "ConversationOut": {
         "properties": {
           "created_at": {
@@ -232,6 +273,18 @@
       "FeaturePatch": {
         "additionalProperties": false,
         "properties": {
+          "asr": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asr"
+          },
           "memory": {
             "anyOf": [
               {
@@ -612,6 +665,59 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "HistorySourceOut": {
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "episode_summary": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Episode Summary"
+          },
+          "message_id": {
+            "title": "Message Id",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "user",
+              "assistant"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          },
+          "time": {
+            "title": "Time",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "message_id",
+          "conversation_id",
+          "title",
+          "role",
+          "time",
+          "text"
+        ],
+        "title": "HistorySourceOut",
+        "type": "object"
+      },
       "LocalReferenceRequest": {
         "additionalProperties": false,
         "properties": {
@@ -721,6 +827,39 @@
         "title": "MemoryOut",
         "type": "object"
       },
+      "MemoryStatusOut": {
+        "properties": {
+          "failed": {
+            "title": "Failed",
+            "type": "integer"
+          },
+          "paused": {
+            "title": "Paused",
+            "type": "integer"
+          },
+          "queued": {
+            "title": "Queued",
+            "type": "integer"
+          },
+          "running": {
+            "title": "Running",
+            "type": "integer"
+          },
+          "summaries": {
+            "title": "Summaries",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "queued",
+          "running",
+          "failed",
+          "paused",
+          "summaries"
+        ],
+        "title": "MemoryStatusOut",
+        "type": "object"
+      },
       "MemorySummaryRequest": {
         "properties": {
           "conversation_id": {
@@ -762,6 +901,13 @@
           "created_at": {
             "title": "Created At",
             "type": "string"
+          },
+          "history_sources": {
+            "items": {
+              "$ref": "#/components/schemas/HistorySourceOut"
+            },
+            "title": "History Sources",
+            "type": "array"
           },
           "id": {
             "title": "Id",
@@ -830,6 +976,116 @@
           "created_at"
         ],
         "title": "MessageOut",
+        "type": "object"
+      },
+      "ModelChoice": {
+        "additionalProperties": false,
+        "properties": {
+          "effort": {
+            "default": "default",
+            "enum": [
+              "default",
+              "off",
+              "on",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "title": "Effort",
+            "type": "string"
+          },
+          "model": {
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "profile_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile_id",
+          "model"
+        ],
+        "title": "ModelChoice",
+        "type": "object"
+      },
+      "ModelChoiceOut": {
+        "additionalProperties": false,
+        "properties": {
+          "configured": {
+            "title": "Configured",
+            "type": "boolean"
+          },
+          "effort": {
+            "default": "default",
+            "enum": [
+              "default",
+              "off",
+              "on",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "title": "Effort",
+            "type": "string"
+          },
+          "efforts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Efforts",
+            "type": "array"
+          },
+          "model": {
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Model",
+            "type": "string"
+          },
+          "profile_id": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Profile Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "profile_id",
+          "model",
+          "configured",
+          "efforts"
+        ],
+        "title": "ModelChoiceOut",
+        "type": "object"
+      },
+      "ModelItem": {
+        "properties": {
+          "efforts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Efforts",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "efforts"
+        ],
+        "title": "ModelItem",
         "type": "object"
       },
       "PreviewRequest": {
@@ -945,6 +1201,18 @@
             "title": "Configured",
             "type": "boolean"
           },
+          "effort": {
+            "default": "default",
+            "title": "Effort",
+            "type": "string"
+          },
+          "efforts": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Efforts",
+            "type": "array"
+          },
           "has_api_key": {
             "title": "Has Api Key",
             "type": "boolean"
@@ -1026,6 +1294,21 @@
             "default": false,
             "title": "Clear Api Key",
             "type": "boolean"
+          },
+          "effort": {
+            "default": "default",
+            "enum": [
+              "default",
+              "off",
+              "on",
+              "low",
+              "medium",
+              "high",
+              "xhigh",
+              "max"
+            ],
+            "title": "Effort",
+            "type": "string"
           },
           "max_tokens": {
             "default": 1800,
@@ -1381,6 +1664,52 @@
         "title": "ToolRequest",
         "type": "object"
       },
+      "TranscriptionOut": {
+        "properties": {
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text"
+        ],
+        "title": "TranscriptionOut",
+        "type": "object"
+      },
+      "UserProfile": {
+        "additionalProperties": false,
+        "properties": {
+          "age": {
+            "anyOf": [
+              {
+                "maximum": 120.0,
+                "minimum": 1.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age"
+          },
+          "city": {
+            "default": "",
+            "maxLength": 80,
+            "title": "City",
+            "type": "string"
+          },
+          "nickname": {
+            "default": "小师妹",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Nickname",
+            "type": "string"
+          }
+        },
+        "title": "UserProfile",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1638,10 +1967,28 @@
   },
   "info": {
     "title": "瞬光伴行 API",
-    "version": "0.5.5"
+    "version": "0.6.0"
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/asr/transcribe": {
+      "post": {
+        "operationId": "transcribe_recording_api_asr_transcribe_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscriptionOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Transcribe Recording"
+      }
+    },
     "/api/auth/login": {
       "post": {
         "operationId": "auth_login_api_auth_login_post",
@@ -1933,6 +2280,92 @@
         "summary": "Get Messages"
       }
     },
+    "/api/conversations/{conversation_id}/model": {
+      "get": {
+        "operationId": "conversation_model_api_conversations__conversation_id__model_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelChoiceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Conversation Model"
+      },
+      "patch": {
+        "operationId": "update_conversation_model_api_conversations__conversation_id__model_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ModelChoice"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelChoiceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Conversation Model"
+      }
+    },
     "/api/features": {
       "get": {
         "operationId": "features_get_api_features_get",
@@ -2057,6 +2490,63 @@
         "summary": "Confirm Memory"
       }
     },
+    "/api/memories/history/{message_id}": {
+      "get": {
+        "operationId": "history_source_api_memories_history__message_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "message_id",
+            "required": true,
+            "schema": {
+              "title": "Message Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HistorySourceOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "History Source"
+      }
+    },
+    "/api/memories/status": {
+      "get": {
+        "operationId": "memory_status_api_memories_status_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemoryStatusOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Memory Status"
+      }
+    },
     "/api/memories/summarize": {
       "post": {
         "operationId": "summarize_memory_api_memories_summarize_post",
@@ -2173,6 +2663,147 @@
           }
         },
         "summary": "Edit Memory"
+      }
+    },
+    "/api/model-default": {
+      "get": {
+        "operationId": "chat_model_default_api_model_default_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/components/schemas/ModelChoiceOut"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ],
+                  "title": "Response Chat Model Default Api Model Default Get"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Chat Model Default"
+      }
+    },
+    "/api/model-options": {
+      "get": {
+        "operationId": "chat_model_options_api_model_options_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ConnectionOptions"
+                  },
+                  "title": "Response Chat Model Options Api Model Options Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Chat Model Options"
+      }
+    },
+    "/api/model-options/{profile_id}/refresh": {
+      "post": {
+        "operationId": "refresh_chat_models_api_model_options__profile_id__refresh_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "profile_id",
+            "required": true,
+            "schema": {
+              "title": "Profile Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ConnectionOptions"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Refresh Chat Models"
+      }
+    },
+    "/api/profile": {
+      "get": {
+        "operationId": "profile_api_profile_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Profile"
+      },
+      "patch": {
+        "operationId": "update_profile_api_profile_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UserProfile"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserProfile"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Profile"
       }
     },
     "/api/providers/activate": {
@@ -2366,6 +2997,18 @@
     "/api/reminders/poll": {
       "get": {
         "operationId": "reminders_poll_api_reminders_poll_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "refresh_weather",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh Weather",
+              "type": "boolean"
+            }
+          }
+        ],
         "responses": {
           "200": {
             "content": {
@@ -2374,6 +3017,16 @@
               }
             },
             "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
           }
         },
         "summary": "Reminders Poll"

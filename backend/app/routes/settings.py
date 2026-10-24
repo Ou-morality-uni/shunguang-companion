@@ -18,11 +18,49 @@ from ..config import (
 from ..constants import VERSION
 from ..llm import EmptyResponseError, build_model, extract_text, friendly_error
 from ..logging_setup import report_error
+from ..model_choices import (
+    ConnectionOptions,
+    ModelChoiceOut,
+    default_choice,
+    effort_options,
+    model_options,
+    remember_models,
+)
 from ..providers import PRESETS, discover
 from ..runtime import require_config
 from ..schemas import SettingsOut
 
 router = APIRouter()
+
+
+@router.get('/api/model-default', response_model=ModelChoiceOut | None)
+def chat_model_default():
+    value = load_config()
+    if not value.llm_model:
+        return None
+    return {**default_choice(value), 'configured': public_config(value)['configured'], 'efforts': effort_options(value)}
+
+
+@router.get('/api/model-options', response_model=list[ConnectionOptions])
+def chat_model_options():
+    return model_options()
+
+
+@router.post('/api/model-options/{profile_id}/refresh', response_model=ConnectionOptions)
+async def refresh_chat_models(profile_id: str):
+    item = next((entry for entry in saved_profiles() if entry['id'] == profile_id), None)
+    if item is None:
+        raise HTTPException(404, '保存的连接不存在。')
+    value = profile_config(item)
+    if not public_config(value)['configured']:
+        raise HTTPException(503, '请先配置该连接。')
+    try:
+        result = await discover(value)
+        await asyncio.to_thread(remember_models, profile_id, result['models'])
+        return next(entry for entry in model_options() if entry.id == profile_id)
+    except Exception as error:
+        report_error('model_discovery', error)
+        raise HTTPException(502, '模型发现失败，仍保留已保存的模型，请检查连接或稍后重试。')
 
 
 class SettingsUpdate(BaseModel):
@@ -36,6 +74,7 @@ class SettingsUpdate(BaseModel):
     provider: str = Field(default='custom', max_length=40)
     protocol: Literal['openai', 'anthropic'] = 'openai'
     vision: Literal['unknown', 'supported', 'unsupported'] | None = None
+    effort: Literal['default', 'off', 'on', 'low', 'medium', 'high', 'xhigh', 'max'] = 'default'
 
 
 class DiscoveryRequest(BaseModel):
@@ -92,6 +131,7 @@ def update_settings(payload: SettingsUpdate):
                     'llm_temperature': payload.temperature,
                     'llm_timeout': payload.timeout,
                     'llm_max_tokens': payload.max_tokens,
+                    'llm_effort': payload.effort,
                     'llm_api_key': SecretStr(secret),
                     'llm_provider': payload.provider,
                     'llm_protocol': payload.protocol,
@@ -107,6 +147,8 @@ def update_settings(payload: SettingsUpdate):
             )
         except ValidationError:
             raise HTTPException(422, 'API 地址格式不正确，请输入 HTTP(S) 地址。')
+        if config.llm_effort not in effort_options(config):
+            raise HTTPException(422, '该模型尚未声明此思考选项。')
         try:
             save_config(config)
         except (OSError, RuntimeError):

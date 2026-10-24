@@ -1,5 +1,41 @@
 import { ExternalLink, Wrench } from 'lucide-react';
-import { safeSourceUrl, type Source, type ToolEvent } from './api';
+import { safeSourceUrl, type Source, type ToolEvent, type HistorySource } from './api';
+import { useResourcePreview } from './PreviewContext';
+
+export function HistorySources({ sources = [] }: { sources?: HistorySource[] }) {
+  const open = useResourcePreview();
+  return sources.length ? (
+    <details className="sources history-sources">
+      <summary>回忆来源 · {sources.length} 条</summary>
+      <div className="source-list">
+        {sources.map((source) => (
+          <article key={source.message_id} className="source-card">
+            <strong>{source.title}</strong>
+            <small>
+              {source.role === 'user' ? '你当时说' : '当时的回复'} ·{' '}
+              {new Date(source.time).toLocaleString('zh-CN')}
+            </small>
+            <p>{source.text}</p>
+            <button
+              type="button"
+              className="text-link"
+              disabled={!open}
+              aria-label={`查看旧对话来源：${source.title}`}
+              onClick={(event) =>
+                open?.(
+                  { kind: 'history', id: source.message_id, title: `旧对话 · ${source.title}` },
+                  event.currentTarget,
+                )
+              }
+            >
+              查看来源原文
+            </button>
+          </article>
+        ))}
+      </div>
+    </details>
+  ) : null;
+}
 const verificationLabels: Record<string, string> = {
   official_verified: '官方资料已核实',
   official_account_text_crosschecked: '官方账号资料已交叉核对',

@@ -2,6 +2,7 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, expect, it, vi } from 'vitest';
 import { request, type FileTask } from './api';
 import { ArtifactCard, AttachmentCard, ChatFileTasks, DocumentMarkdown, OutputFolder } from './FileTasks';
+import { PreviewWorkspace } from './PreviewWorkspace';
 
 vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
@@ -11,6 +12,7 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
   vi.unstubAllGlobals();
+  sessionStorage.clear();
 });
 
 const task: FileTask = {
@@ -28,31 +30,33 @@ const task: FileTask = {
   context: { pause: { reason: '已读范围保留，等待继续。' } },
 };
 
-it('requires an explicit folder grant and remembers the selected output location', async () => {
-  vi.mocked(request).mockImplementation((path, options) =>
-    Promise.resolve({
-      workspace: options?.method === 'POST' ? { id: 'out', enabled: true, path: 'D:\\成果' } : null,
-    }),
-  );
+it('shows the automatic project output folder without requiring a custom path', async () => {
+  vi.mocked(request).mockResolvedValue({
+    workspace: { id: 'out', enabled: true, path: 'C:/project/data/outputs' },
+  });
   render(<OutputFolder />);
   await waitFor(() => expect(request).toHaveBeenCalledOnce());
   expect(request).not.toHaveBeenCalledWith('/work/output', expect.objectContaining({ method: 'POST' }));
-  fireEvent.change(screen.getByLabelText('成果文件夹路径（本机已有文件夹）'), {
-    target: { value: 'D:\\成果' },
-  });
-  fireEvent.click(screen.getByRole('button', { name: '授权并设为成果目录' }));
-  await screen.findByText('当前成果目录：D:\\成果');
-  expect(request).toHaveBeenCalledWith('/work/output', {
-    method: 'POST',
-    body: JSON.stringify({ path: 'D:\\成果' }),
-  });
+  await screen.findByText('当前成果目录：C:/project/data/outputs');
+  expect(screen.queryByLabelText('成果文件夹路径（本机已有文件夹）')).toBeNull();
+  expect(screen.queryByText('更换成果文件夹')).toBeNull();
 });
 
 it('shows the conversation task and only resumes a workload pause after an explicit click', async () => {
   vi.mocked(request).mockImplementation((path) =>
-    Promise.resolve(path.startsWith('/work/tasks?') ? [task] : { workspace: null }),
+    Promise.resolve(
+      path.startsWith('/work/tasks?') ? [task] : path === '/work/tasks/t1' ? task : { workspace: null },
+    ),
   );
-  render(<ChatFileTasks conversationId="c1" onSettings={vi.fn()} onWork={vi.fn()} />);
+  render(
+    <PreviewWorkspace>
+      <ChatFileTasks conversationId="c1" onSettings={vi.fn()} onWork={vi.fn()} />
+    </PreviewWorkspace>,
+  );
+  const open = await screen.findByRole('button', { name: '查看任务：阅读资料' });
+  expect(screen.queryByRole('region', { name: '文件预览' })).toBeNull();
+  expect(screen.queryByRole('group', { name: '任务继续确认' })).toBeNull();
+  fireEvent.click(open);
   await screen.findByRole('group', { name: '任务继续确认' });
   expect(request).not.toHaveBeenCalledWith('/work/tasks/t1/continue', expect.anything());
   fireEvent.click(screen.getByRole('button', { name: '继续下一轮处理' }));

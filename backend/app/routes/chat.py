@@ -5,14 +5,16 @@ import time
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from fastapi.responses import StreamingResponse
-from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
+from langchain_core.messages import HumanMessage, ToolMessage
 from pydantic import BaseModel, Field, field_validator
 
 from .. import runtime, stickers
+from ..config import profile_id
 from ..constants import CHAT_TIMEOUT, HISTORY_WINDOW, MAX_MESSAGE_LENGTH, MAX_TOOL_CALLS, MAX_TOOL_ROUNDS
 from ..filework import local_request
 from ..llm import EmptyResponseError, build_messages, build_model, extract_text, friendly_error
 from ..logging_setup import report_error
+from ..model_choices import ModelChoice, ModelChoiceOut, choice_config, default_choice, public_choice
 from ..runtime import require_config, require_conversation
 from ..schemas import ConversationOut, MessageOut
 from ..tool_registry import ToolRegistry
@@ -43,6 +45,7 @@ class ChatRequest(BaseModel):
     conversation_id: str | None = None
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
     attachments: list[str] = Field(default_factory=list, max_length=10)
+    model_choice: ModelChoice | None = None
 
     @field_validator('content')
     @classmethod
@@ -70,6 +73,22 @@ def get_messages(
 ):
     require_conversation(conversation_id)
     return runtime.store.messages(conversation_id, limit, before)
+
+
+@router.get('/api/conversations/{conversation_id}/model', response_model=ModelChoiceOut)
+def conversation_model(conversation_id: str):
+    require_conversation(conversation_id)
+    choice = runtime.store.conversation_model(conversation_id) or default_choice()
+    return public_choice(choice)
+
+
+@router.patch('/api/conversations/{conversation_id}/model', response_model=ModelChoiceOut)
+async def update_conversation_model(conversation_id: str, payload: ModelChoice):
+    async with runtime.mutation_lock:
+        require_conversation(conversation_id)
+        result = public_choice(payload.model_dump())
+        runtime.store.set_conversation_model(conversation_id, payload.model_dump())
+        return result
 
 
 def event(name: str, data: dict) -> str:
@@ -154,18 +173,39 @@ async def chat(payload: ChatRequest, request: Request = None):
 
         for attachment_id in dict.fromkeys(payload.attachments):
             attachments.append(await asyncio.to_thread(invoke, attachment, runtime.work, attachment_id))
-    config = await asyncio.to_thread(require_config)
-    model = await asyncio.to_thread(build_model, config)
     # Reserve before yielding to I/O. Deletion shares the gate; never discard a live lock.
     async with runtime.mutation_lock:
         if payload.conversation_id:
             await asyncio.to_thread(require_conversation, payload.conversation_id)
             if payload.conversation_id in runtime.busy:
                 raise HTTPException(409, '这段对话正在回复中，请稍后再发。')
+        selected = (
+            payload.model_choice.model_dump()
+            if payload.model_choice
+            else (
+                await asyncio.to_thread(runtime.store.conversation_model, payload.conversation_id)
+                if payload.conversation_id
+                else None
+            )
+        )
+        config = (
+            await asyncio.to_thread(choice_config, selected) if selected else await asyncio.to_thread(require_config)
+        )
+        if selected is None:
+            selected = {
+                'profile_id': profile_id(config.llm_base_url, config.llm_protocol),
+                'model': config.llm_model,
+                'effort': config.llm_effort,
+            }
+        model = await asyncio.to_thread(build_model, config)
         user_message = await asyncio.to_thread(
-            runtime.store.begin_turn, payload.conversation_id, payload.content, {'attachments': attachments}
+            runtime.store.begin_turn,
+            payload.conversation_id,
+            payload.content,
+            {'attachments': attachments, 'model_choice': selected},
         )
         conversation_id = user_message['conversation_id']
+        await asyncio.to_thread(runtime.store.set_conversation_model, conversation_id, selected)
         runtime.busy.add(conversation_id)
         stop = runtime.stops[conversation_id] = asyncio.Event()
         finished = runtime.finished[conversation_id] = asyncio.get_running_loop().create_future()
@@ -179,7 +219,7 @@ async def chat(payload: ChatRequest, request: Request = None):
     async def stream():
         text = ''
         persisted = False
-        metadata = {'sources': [], 'context_sources': [], 'tools': []}
+        metadata = {'sources': [], 'context_sources': [], 'tools': [], 'model_choice': selected}
         assistant = None
         try:
             assistant = await io(runtime.store.add_message, conversation_id, 'assistant', '', 'streaming')
@@ -202,18 +242,26 @@ async def chat(payload: ChatRequest, request: Request = None):
             metadata['retrieval'] = {'domain': decision['domain'], 'candidate_count': 0, 'context_count': 0}
             try:
                 memory_result = await interruptible(
-                    memory.update_from_message(runtime.store, model, user_message, features.memory, stored_history),
+                    memory.update_from_message(
+                        runtime.store, model, user_message, features.memory, stored_history, allow_model=False
+                    ),
                     stop,
                 )
             except StopRequested:
                 raise
             except Exception:
                 memory_result = {'status': 'failed'}
+            if runtime.memory_jobs:
+                try:
+                    await io(runtime.memory_jobs.enqueue, conversation_id, selected)
+                except Exception as error:
+                    report_error('memory_queue', error)
             recalled = (
-                await io(runtime.store.recall_history, payload.content, conversation_id)
-                if features.memory.recall_history and decision['domain'] in ('memory', 'memory_knowledge')
+                await io(runtime.store.recall_history, payload.content, conversation_id, 6, True)
+                if features.memory.recall_history
                 else []
             )
+            metadata['history_sources'] = recalled
             try:
                 if decision['search'] and (await interruptible(asyncio.to_thread(rag.status), stop)).get('ready'):
                     permit = bool(re.search(r'(允许|接受|可以)剧透', payload.content)) and not bool(
@@ -317,7 +365,13 @@ async def chat(payload: ChatRequest, request: Request = None):
                     if not calls:
                         sticker_hint = decoration.hint
                         break
-                    history.append(AIMessage(content=round_text, tool_calls=calls))
+                    history.append(
+                        accumulated.model_copy(
+                            update={
+                                'content': round_text if isinstance(accumulated.content, str) else accumulated.content
+                            }
+                        )
+                    )
                     allowed_names = {t.get('name', t.get('function', {}).get('name')) for t in schemas}
                     for call in calls:
                         if stop.is_set():
@@ -349,6 +403,11 @@ async def chat(payload: ChatRequest, request: Request = None):
                             else 'error',
                             'result': result,
                         }
+                        if name == 'recall_conversations' and result.get('ok'):
+                            combined = metadata['history_sources'] + result.get('episodes', [])
+                            metadata['history_sources'] = list(
+                                {item['message_id']: item for item in combined}.values()
+                            )[:12]
                         metadata['tools'].append(state)
                         yield event('tool', state)
                         history.append(ToolMessage(content=tool_content(result), tool_call_id=call['id']))
@@ -356,7 +415,6 @@ async def chat(payload: ChatRequest, request: Request = None):
                 raise EmptyResponseError()
             metadata['sources'] = retrieval_router.cited_sources(text, metadata['context_sources'])
             metadata['sticker'] = stickers.choose(sticker_catalog, sticker_hint, stored_history, assistant['id'])
-            await io(runtime.store.update_summary, conversation_id)
             result = await io(runtime.store.update_message, assistant['id'], text, 'complete', metadata)
             persisted = True
             yield event('done', result)

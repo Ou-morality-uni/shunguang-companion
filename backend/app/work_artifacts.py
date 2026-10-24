@@ -34,9 +34,7 @@ def attachment_bytes(work, task_id):
 
 
 def output_root(work):
-    workspace = work.store.output_workspace()
-    if not workspace or not workspace['enabled']:
-        raise WorkError('请先选择并授权一个已有的成果文件夹。', 422)
+    workspace = work.default_output_workspace()
     return workspace, work.root(workspace['id'])
 
 
@@ -47,9 +45,11 @@ def save_summary(work, task):
         return True
     try:
         workspace, root = output_root(work)
-    except WorkError:
+    except (WorkError, OSError):
         task['status'] = 'waiting_output'
-        task['context']['pause'] = {'reason': '总结已完成，请选择成果文件夹后保存；继续时不会重新调用总结模型。'}
+        task['context']['pause'] = {
+            'reason': '总结已完成，但项目成果目录暂不可写；请检查目录权限后重试保存，无需重新总结。'
+        }
         return False
     coverage = []
     for step in task['steps']:

@@ -230,6 +230,21 @@ class Store:
             row = db.execute('SELECT * FROM conversations WHERE id=?', (conversation_id,)).fetchone()
             return dict(row) if row else None
 
+    def conversation_model(self, conversation_id):
+        with self.connect() as db:
+            row = db.execute(
+                'SELECT profile_id,model,effort FROM conversation_models WHERE conversation_id=?', (conversation_id,)
+            ).fetchone()
+            return dict(row) if row else None
+
+    def set_conversation_model(self, conversation_id, choice):
+        with self.connect() as db:
+            db.execute(
+                """INSERT INTO conversation_models VALUES(?,?,?,?)
+                ON CONFLICT(conversation_id) DO UPDATE SET profile_id=excluded.profile_id,model=excluded.model,effort=excluded.effort""",
+                (conversation_id, choice['profile_id'], choice['model'], choice['effort']),
+            )
+
     def messages(self, conversation_id: str, limit: int | None = None, before: int | None = None):
         with self.connect() as db:
             query = 'SELECT * FROM messages WHERE conversation_id=?'
@@ -251,6 +266,13 @@ class Store:
                         'tools': metadata.get('tools', []),
                         'sticker': metadata.get('sticker'),
                         'attachments': metadata.get('attachments', []),
+                        'history_sources': [
+                            {**source, 'text': source['text'][:1800]}
+                            for item in metadata.get('history_sources', [])
+                            if isinstance(item, dict)
+                            for source in [self._history_source(db, item.get('message_id', ''))]
+                            if source
+                        ],
                     }
                 )
             return records
@@ -292,6 +314,56 @@ class Store:
     def list_memories(self):
         with self.connect() as db:
             return [dict(row) for row in db.execute('SELECT * FROM memories ORDER BY updated_at DESC')]
+
+    def user_profile(self):
+        from .memory import canonical_key
+
+        facts = {}
+        for item in self.list_memories():
+            facts.setdefault(canonical_key(item['key'], item['value']), item['value'])
+        age = facts.get('年龄', '')
+        return {
+            'nickname': facts.get('对用户的称呼', '小师妹'),
+            'city': facts.get('居住地', ''),
+            'age': int(age) if age.isdecimal() and 1 <= int(age) <= 120 else None,
+        }
+
+    def update_user_profile(self, patch):
+        from .memory import canonical_key
+
+        fields = {'nickname': '对用户的称呼', 'city': '居住地', 'age': '年龄'}
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            for field, value in patch.items():
+                key = fields[field]
+                text = '' if value is None else str(value)
+                old = [
+                    dict(row)
+                    for row in db.execute('SELECT * FROM memories')
+                    if canonical_key(row['key'], row['value']) == key
+                ]
+                for item in old:
+                    if item['value'] != text:
+                        self._block(db, item['key'], item['value'], item['source_message_id'])
+                    db.execute('DELETE FROM memories WHERE id=?', (item['id'],))
+                if text:
+                    record = {
+                        'id': old[0]['id'] if old else str(uuid4()),
+                        'key': key,
+                        'value': text,
+                        'source_message_id': None,
+                        'created_at': old[0]['created_at'] if old else now(),
+                        'updated_at': now(),
+                    }
+                    db.execute(
+                        'INSERT INTO memories VALUES(:id,:key,:value,:source_message_id,:created_at,:updated_at)',
+                        record,
+                    )
+                    db.execute(
+                        'INSERT INTO memory_events VALUES(?,?,?,?,?,?,?)',
+                        (str(uuid4()), key, text, None, '用户在个人资料中填写', 'manual', now()),
+                    )
+        return self.user_profile()
 
     def add_candidates(self, conversation_id, items):
         records = []
@@ -403,8 +475,28 @@ class Store:
                 (source['conversation_id'], source['seq'], following or boundary + 1),
             ).fetchall()
             db.executemany('INSERT OR IGNORE INTO forgotten_messages VALUES(?)', [(row['id'],) for row in ids])
+        affected = list(
+            db.execute(
+                """SELECT e.conversation_id,MIN(e.start_seq) AS start_seq FROM conversation_episodes e
+            WHERE EXISTS(SELECT 1 FROM json_each(e.source_ids) ids JOIN messages m ON m.id=ids.value
+                WHERE m.id IN (SELECT message_id FROM forgotten_messages)
+                OR (m.seq<=? AND instr(m.content,?)>0)) GROUP BY e.conversation_id""",
+                (boundary, value),
+            )
+        )
+        for episode in affected:
+            db.execute(
+                'DELETE FROM conversation_episodes WHERE conversation_id=? AND start_seq>=?',
+                (episode['conversation_id'], episode['start_seq']),
+            )
+            db.execute(
+                "UPDATE memory_jobs SET through_seq=MIN(through_seq,?),status=CASE WHEN status='running' THEN status ELSE 'queued' END WHERE conversation_id=?",
+                (episode['start_seq'] - 1, episode['conversation_id']),
+            )
 
     def save_fact(self, key, value, evidence, source_message_id):
+        from .memory import SENSITIVE, canonical_key, temporary_residence
+
         with self.connect() as db:
             db.execute('BEGIN IMMEDIATE')
             source = db.execute(
@@ -412,17 +504,41 @@ class Store:
             ).fetchone()
             if (
                 not source
+                or SENSITIVE.search(source['content'])
                 or evidence not in source['content']
                 or value not in evidence
                 or db.execute('SELECT 1 FROM forgotten_messages WHERE message_id=?', (source_message_id,)).fetchone()
             ):
                 raise ValueError('没有可核对的用户原话')
+            if canonical_key(key, value) == '居住地' and temporary_residence(source['content']):
+                raise ValueError('临时出行不能覆盖常住地')
+            context = db.execute(
+                "SELECT content FROM messages WHERE conversation_id=? AND role='user' AND seq<=? ORDER BY seq DESC LIMIT 6",
+                (source['conversation_id'], source['seq']),
+            )
+            if any(re.search(r'我们.*扮演|我扮演|我的角色|设定我是', item['content']) for item in context):
+                raise ValueError('角色扮演不能作为现实用户事实')
+            if (
+                key == '年龄'
+                and (not value.isascii() or not value.isdigit() or not 1 <= int(value) <= 120)
+                or key == '对用户的称呼'
+                and (not value.strip() or len(value) > 40)
+                or key == '居住地'
+                and len(value) > 80
+                or any(ord(char) < 32 for char in value)
+            ):
+                raise ValueError('用户资料格式不正确')
             if db.execute(
-                'SELECT 1 FROM memory_blocks WHERE key=? AND value=? AND through_seq>=?', (key, value, source['seq'])
+                'SELECT 1 FROM memory_blocks WHERE value=? AND through_seq>=?', (value, source['seq'])
             ).fetchone():
                 raise ValueError('此来源已被用户要求忘记')
             old = db.execute('SELECT * FROM memories WHERE key=?', (key,)).fetchone()
             if old and old['value'] != value:
+                previous = db.execute('SELECT seq FROM messages WHERE id=?', (old['source_message_id'],)).fetchone()
+                if (previous and previous['seq'] >= source['seq']) or (
+                    not previous and old['updated_at'] > source['created_at']
+                ):
+                    raise ValueError('不能用较旧的消息覆盖更新的用户资料')
                 self._block(db, old['key'], old['value'], old['source_message_id'])
             record = {
                 'id': old['id'] if old else str(uuid4()),
@@ -442,7 +558,9 @@ class Store:
             )
             return record
 
-    def recall_history(self, query, current_conversation_id, limit=6):
+    def recall_history(self, query, current_conversation_id, limit=6, automatic=False):
+        from .memory import SENSITIVE
+
         terms = re.findall(r'[a-zA-Z0-9]{2,}|[\u4e00-\u9fff]{2,}', query)
         terms = {
             part
@@ -451,6 +569,26 @@ class Store:
         }
         generic = {'记得', '上次', '聊天', '什么', '我们', '那个', '之前', '昨天', '你还', '知道'}
         terms -= generic
+        if automatic:
+            terms -= {
+                '帮我',
+                '一下',
+                '你好',
+                '谢谢',
+                '可以',
+                '今天',
+                '继续',
+                '接着',
+                '请问',
+                '看看',
+                '现在',
+                '这个',
+                '一下',
+                '早上',
+                '晚上',
+            }
+            if not terms and not re.search(r'上个聊天|另一个聊天|上次聊|昨天聊', query):
+                return []
         with self.connect() as db:
             blocks = list(db.execute('SELECT * FROM memory_blocks'))
             sql = "SELECT m.*,c.title FROM messages m JOIN conversations c ON c.id=m.conversation_id WHERE m.conversation_id<>? AND m.status='complete' AND m.id NOT IN (SELECT message_id FROM forgotten_messages)"
@@ -461,14 +599,35 @@ class Store:
                 parameters.extend(bounded_terms)
             sql += ' ORDER BY m.seq DESC LIMIT 200'
             rows = list(db.execute(sql, parameters))
+            if terms:
+                bounded = sorted(terms, key=lambda term: (-len(term), term))[:20]
+                episode_sql = (
+                    """SELECT m.*,c.title,e.summary AS episode_summary FROM conversation_episodes e
+                    JOIN json_each(e.source_ids) ids JOIN messages m ON m.id=ids.value JOIN conversations c ON c.id=m.conversation_id
+                    WHERE e.conversation_id<>? AND m.status='complete'
+                    AND NOT EXISTS(SELECT 1 FROM json_each(e.source_ids) source LEFT JOIN messages original ON original.id=source.value
+                        WHERE original.id IS NULL OR original.id IN (SELECT message_id FROM forgotten_messages)
+                        OR EXISTS(SELECT 1 FROM memory_blocks b WHERE original.seq<=b.through_seq AND instr(original.content,b.value)>0))
+                    AND ("""
+                    + ' OR '.join('instr(lower(e.summary),lower(?))>0' for _ in bounded)
+                    + ') ORDER BY e.end_seq DESC LIMIT 200'
+                )
+                rows += list(db.execute(episode_sql, [current_conversation_id, *bounded]))
         ranked = []
         for row in rows:
+            if SENSITIVE.search(row['content']):
+                continue
             if any(row['seq'] <= b['through_seq'] and b['value'] in row['content'] for b in blocks):
                 continue
             score = sum(term.casefold() in row['content'].casefold() for term in terms)
+            if 'episode_summary' in row.keys():
+                score += sum(term.casefold() in row['episode_summary'].casefold() for term in terms)
             if score or not terms or re.search(r'上个聊天|另一个聊天|上次聊|昨天聊', query):
                 ranked.append((score, row['seq'], row))
         ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
+        unique = {}
+        for score, seq, row in ranked:
+            unique.setdefault(row['id'], (score, seq, row))
         return [
             {
                 'message_id': row['id'],
@@ -477,9 +636,44 @@ class Store:
                 'role': row['role'],
                 'time': row['created_at'],
                 'text': row['content'][:1800],
+                **({'episode_summary': row['episode_summary']} if 'episode_summary' in row.keys() else {}),
             }
-            for _, _, row in ranked[:limit]
+            for _, _, row in list(unique.values())[:limit]
         ]
+
+    @staticmethod
+    def _history_source(db, message_id):
+        from .memory import SENSITIVE
+
+        row = db.execute(
+            """SELECT m.*,c.title FROM messages m JOIN conversations c ON c.id=m.conversation_id
+            WHERE m.id=? AND m.status='complete' AND m.id NOT IN (SELECT message_id FROM forgotten_messages)
+            AND NOT EXISTS(SELECT 1 FROM memory_blocks b WHERE m.seq<=b.through_seq AND instr(m.content,b.value)>0)""",
+            (message_id,),
+        ).fetchone()
+        if not row or SENSITIVE.search(row['content']):
+            return None
+        episode = db.execute(
+            """SELECT e.summary FROM conversation_episodes e JOIN json_each(e.source_ids) ids
+            WHERE ids.value=? AND NOT EXISTS(SELECT 1 FROM json_each(e.source_ids) source LEFT JOIN messages m ON m.id=source.value
+                WHERE m.id IS NULL OR m.id IN (SELECT message_id FROM forgotten_messages)
+                OR EXISTS(SELECT 1 FROM memory_blocks b WHERE m.seq<=b.through_seq AND instr(m.content,b.value)>0))
+            ORDER BY e.end_seq DESC LIMIT 1""",
+            (message_id,),
+        ).fetchone()
+        return {
+            'message_id': row['id'],
+            'conversation_id': row['conversation_id'],
+            'title': row['title'],
+            'role': row['role'],
+            'time': row['created_at'],
+            'text': row['content'],
+            **({'episode_summary': episode['summary']} if episode else {}),
+        }
+
+    def history_source(self, message_id):
+        with self.connect() as db:
+            return self._history_source(db, message_id)
 
     def update_summary(self, conversation_id):
         with self.connect() as db:
@@ -498,3 +692,127 @@ class Store:
                 'INSERT INTO conversation_summaries VALUES(?,?,?,?) ON CONFLICT(conversation_id) DO UPDATE SET summary=excluded.summary,source_ids=excluded.source_ids,updated_at=excluded.updated_at',
                 (conversation_id, summary, json.dumps([r['id'] for r in rows]), now()),
             )
+
+    def queue_memory(self, conversation_id, choice=None):
+        from .model_choices import default_choice
+
+        explicit_choice = choice is not None
+        choice = choice or self.conversation_model(conversation_id) or default_choice()
+        with self.connect() as db:
+            target = db.execute(
+                "SELECT MAX(seq) FROM messages WHERE conversation_id=? AND role='user' AND status='complete'",
+                (conversation_id,),
+            ).fetchone()[0]
+            if target is None:
+                return
+            if not explicit_choice:
+                previous = db.execute(
+                    'SELECT model_choice FROM memory_jobs WHERE conversation_id=?', (conversation_id,)
+                ).fetchone()
+                if previous:
+                    choice = json.loads(previous['model_choice'])
+            db.execute(
+                """INSERT INTO memory_jobs(conversation_id,requested_seq,model_choice) VALUES(?,?,?)
+                ON CONFLICT(conversation_id) DO UPDATE SET requested_seq=MAX(requested_seq,excluded.requested_seq),
+                model_choice=excluded.model_choice, error='',
+                status=CASE WHEN status='running' THEN status WHEN through_seq<excluded.requested_seq THEN 'queued' ELSE status END""",
+                (conversation_id, target, json.dumps(choice)),
+            )
+
+    def queue_memory_backfill(self, recover=False):
+        if recover:
+            with self.connect() as db:
+                db.execute("UPDATE memory_jobs SET status='queued' WHERE status='running'")
+        for conversation in self.list_conversations():
+            self.queue_memory(conversation['id'])
+
+    def next_memory_batch(self):
+        from .memory import SENSITIVE, forget_request
+
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            job = db.execute(
+                "SELECT * FROM memory_jobs WHERE status='queued' AND requested_seq>through_seq ORDER BY requested_seq LIMIT 1"
+            ).fetchone()
+            if not job:
+                return None
+            rows = list(
+                db.execute(
+                    """SELECT m.* FROM messages m WHERE conversation_id=? AND role='user' AND status='complete'
+                AND seq>? AND seq<=? AND id NOT IN (SELECT message_id FROM forgotten_messages)
+                AND NOT EXISTS (SELECT 1 FROM memory_blocks b WHERE m.seq<=b.through_seq AND instr(m.content,b.value)>0)
+                ORDER BY seq LIMIT 12""",
+                    (job['conversation_id'], job['through_seq'], job['requested_seq']),
+                )
+            )
+            messages, size, through = [], 0, job['through_seq']
+            for row in rows:
+                if messages and size + len(row['content']) > 24000:
+                    break
+                through = row['seq']
+                if SENSITIVE.search(row['content']) or forget_request(row['content']):
+                    continue
+                messages.append(dict(row))
+                size += len(row['content'])
+            if not messages:
+                through = through if rows else job['requested_seq']
+                db.execute(
+                    "UPDATE memory_jobs SET through_seq=?,status=CASE WHEN requested_seq>? THEN 'queued' ELSE 'idle' END WHERE conversation_id=?",
+                    (through, through, job['conversation_id']),
+                )
+            else:
+                db.execute("UPDATE memory_jobs SET status='running' WHERE conversation_id=?", (job['conversation_id'],))
+            return {**dict(job), 'messages': messages, 'end_seq': through, 'choice': json.loads(job['model_choice'])}
+
+    def finish_memory_batch(self, job, summary):
+        messages = job['messages']
+        with self.connect() as db:
+            db.execute('BEGIN IMMEDIATE')
+            if not db.execute(
+                'SELECT 1 FROM memory_jobs WHERE conversation_id=?', (job['conversation_id'],)
+            ).fetchone():
+                return
+            for message in messages:
+                valid = db.execute(
+                    """SELECT 1 FROM messages m WHERE id=? AND content=? AND status='complete'
+                    AND NOT EXISTS(SELECT 1 FROM forgotten_messages WHERE message_id=m.id)
+                    AND NOT EXISTS(SELECT 1 FROM memory_blocks b WHERE m.seq<=b.through_seq AND instr(m.content,b.value)>0)""",
+                    (message['id'], message['content']),
+                ).fetchone()
+                if not valid:
+                    db.execute(
+                        "UPDATE memory_jobs SET status='queued' WHERE conversation_id=?", (job['conversation_id'],)
+                    )
+                    return
+            db.execute(
+                'INSERT OR REPLACE INTO conversation_episodes VALUES(?,?,?,?,?,?)',
+                (
+                    job['conversation_id'],
+                    messages[0]['seq'],
+                    messages[-1]['seq'],
+                    summary,
+                    json.dumps([item['id'] for item in messages]),
+                    now(),
+                ),
+            )
+            db.execute(
+                "UPDATE memory_jobs SET through_seq=?,status=CASE WHEN requested_seq>? THEN 'queued' ELSE 'idle' END,error='' WHERE conversation_id=?",
+                (job['end_seq'], job['end_seq'], job['conversation_id']),
+            )
+
+    def memory_job_state(self, conversation_id, status, error=''):
+        with self.connect() as db:
+            db.execute(
+                'UPDATE memory_jobs SET status=?,error=? WHERE conversation_id=?', (status, error, conversation_id)
+            )
+
+    def memory_status(self):
+        with self.connect() as db:
+            counts = {
+                row['status']: row['n']
+                for row in db.execute('SELECT status,COUNT(*) n FROM memory_jobs GROUP BY status')
+            }
+            return {
+                **{key: counts.get(key, 0) for key in ('queued', 'running', 'failed', 'paused')},
+                'summaries': db.execute('SELECT COUNT(*) FROM conversation_episodes').fetchone()[0],
+            }

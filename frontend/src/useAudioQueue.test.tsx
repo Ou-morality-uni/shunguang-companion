@@ -79,6 +79,42 @@ function pendingRequests() {
   return pending;
 }
 
+it('suppresses automatic and manual speech while the microphone is acquiring or recording', async () => {
+  const pending = pendingRequests();
+  const { result } = renderHook(() => useAudioQueue(settings));
+  act(() => result.current.setInputActive(true));
+  act(() => {
+    result.current.enqueue('暂时不应播放');
+    result.current.beginReply();
+    result.current.appendReply('不要读进录音。');
+    result.current.finishReply('不要读进录音。');
+    result.current.enqueueWork({
+      task_id: 'one',
+      kind: 'complete',
+      text: '任务完成。',
+      created_at: new Date().toISOString(),
+    });
+  });
+  expect(pending).toHaveLength(0);
+  act(() => result.current.setInputActive(false));
+  act(() => result.current.enqueue('现在可以播放。'));
+  await waitFor(() => expect(pending).toHaveLength(1));
+  act(() => result.current.stop());
+});
+
+it('queues a complete long artifact in bounded clips and excludes code before splitting', async () => {
+  const pending = pendingRequests();
+  const { result } = renderHook(() => useAudioQueue({ ...settings, auto_play: false }));
+  act(() => result.current.enqueueDocument('文'.repeat(6100) + '\n```\nSECRET_CODE\n```', '完整成果'));
+  await waitFor(() => expect(pending.length).toBeGreaterThan(0));
+  expect(result.current.error).toBe('');
+  expect(result.current.queued).toBe(2);
+  expect(
+    pending.every((item) => Array.from(item.text).length <= 3000 && !item.text.includes('SECRET_CODE')),
+  ).toBe(true);
+  act(() => result.current.stop());
+});
+
 it('filters manual and whole reply speech while retaining displayed text unchanged', async () => {
   const pending = pendingRequests();
   const { result } = renderHook(() => useAudioQueue(settings));

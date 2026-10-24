@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { request, streamChat, type Conversation, type Message, type Source, type ToolEvent } from './api';
+import {
+  request,
+  streamChat,
+  type Conversation,
+  type Message,
+  type ModelChoice,
+  type Source,
+  type ToolEvent,
+} from './api';
 
 /** Server owns durable turns; this hook owns selection and transient stream display. */
 export function useConversation(
@@ -88,7 +96,7 @@ export function useConversation(
     }
   }
 
-  async function send(text: string, attachments: string[] = []) {
+  async function send(text: string, attachments: string[] = [], modelChoice?: ModelChoice) {
     text = text.trim();
     if (!text || busyRef.current || historyLoading) return false;
     busyRef.current = true;
@@ -151,6 +159,7 @@ export function useConversation(
           }
         },
         attachments,
+        modelChoice,
       );
     } catch (failure) {
       if ((failure as Error).name !== 'AbortError') setError((failure as Error).message);

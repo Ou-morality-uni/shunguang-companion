@@ -8,6 +8,75 @@ from backend.app import anthropic_adapter, providers
 from backend.app.config import ModelConfig
 
 
+def test_claude_effort_and_signed_thinking_survive_a_tool_roundtrip(monkeypatch):
+    seen = []
+
+    def handler(request):
+        body = json.loads(request.content)
+        seen.append(body)
+        assert body['output_config'] == {'effort': 'low'}
+        assert body['thinking'] == {'type': 'adaptive'}
+        assert 'temperature' not in body
+        if len(seen) == 1:
+            events = [
+                {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'thinking', 'thinking': ''}},
+                {
+                    'type': 'content_block_delta',
+                    'index': 0,
+                    'delta': {'type': 'thinking_delta', 'thinking': 'hidden summary'},
+                },
+                {
+                    'type': 'content_block_delta',
+                    'index': 0,
+                    'delta': {'type': 'signature_delta', 'signature': 'signed-continuation'},
+                },
+                {'type': 'content_block_stop', 'index': 0},
+                {
+                    'type': 'content_block_start',
+                    'index': 1,
+                    'content_block': {'type': 'tool_use', 'id': 'call-one', 'name': 'check', 'input': {'value': 1}},
+                },
+            ]
+        else:
+            assert body['messages'][-2]['content'][0] == {
+                'type': 'thinking',
+                'thinking': 'hidden summary',
+                'signature': 'signed-continuation',
+            }
+            events = [
+                {'type': 'content_block_start', 'index': 0, 'content_block': {'type': 'text', 'text': '核对完成。'}}
+            ]
+        return httpx.Response(
+            200, text='\n\n'.join('data: ' + json.dumps(event) for event in [*events, {'type': 'message_stop'}])
+        )
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        anthropic_adapter.httpx,
+        'AsyncClient',
+        lambda **kwargs: original(transport=httpx.MockTransport(handler), **kwargs),
+    )
+    model = anthropic_adapter.AnthropicModel(
+        ModelConfig(
+            llm_protocol='anthropic',
+            llm_base_url='https://api.anthropic.com',
+            llm_model='claude-sonnet-4-6',
+            llm_api_key='test-only',
+            llm_effort='low',
+        )
+    )
+
+    async def run():
+        first = await model.ainvoke('核对一下')
+        assert first.content == ''
+        result = await model.ainvoke(
+            [HumanMessage(content='核对一下'), first, ToolMessage(content='1', tool_call_id='call-one')]
+        )
+        assert result.content == '核对完成。'
+
+    asyncio.run(run())
+
+
 def test_anthropic_tool_messages_are_native():
     system, turns = anthropic_adapter.serialize(
         [

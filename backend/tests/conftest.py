@@ -31,3 +31,13 @@ def platform_credentials(monkeypatch):
             return secrets.get((service, account))
 
     monkeypatch.setattr(credentials.KeyringBackend, 'vault', lambda _: TestVault())
+
+
+@pytest.fixture(autouse=True)
+def offline_background_memory(monkeypatch):
+    from backend.app import memory_jobs
+
+    def offline_model(value):
+        raise RuntimeError('Unrelated offline tests do not call background model services')
+
+    monkeypatch.setattr(memory_jobs, 'build_memory_model', offline_model)

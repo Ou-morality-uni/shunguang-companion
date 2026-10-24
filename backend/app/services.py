@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisco
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, ValidationError
 
-from . import access, feature_config, reminders, tools, voice
+from . import access, feature_config, reminders, runtime, tools, voice
 from .schemas import CloudVoiceCreatedOut, CloudVoiceListOut
 
 router = APIRouter()
@@ -21,6 +21,18 @@ class FeaturePatch(BaseModel):
     tts: dict | None = None
     reminders: dict | None = None
     memory: dict | None = None
+    asr: dict | None = None
+
+
+class TranscriptionOut(BaseModel):
+    text: str
+
+
+@router.post('/api/asr/transcribe', response_model=TranscriptionOut)
+async def transcribe_recording(request: Request):
+    from .asr import transcribe
+
+    return {'text': await transcribe(request)}
 
 
 @router.get('/api/features')
@@ -37,6 +49,8 @@ def features_patch(payload: FeaturePatch):
         result = feature_config.update(payload.model_dump(exclude_none=True))
         if payload.reminders is not None:
             reminders.reset()
+        if payload.memory is not None and runtime.memory_jobs:
+            runtime.memory_jobs.backfill()
         return feature_config.public(result)
     except (ValidationError, ValueError, TypeError):
         raise HTTPException(422, '服务设置格式不正确，请检查字段、时间、地址及范围。')
@@ -375,9 +389,9 @@ async def reference_upload(payload: ReferenceUpload):
 
 
 @router.get('/api/reminders/poll')
-def reminders_poll():
+def reminders_poll(refresh_weather: bool = False):
     try:
-        return reminders.poll()
+        return reminders.poll(weather_care=runtime.weather_care, refresh_weather=refresh_weather)
     except (ValueError, OSError, RuntimeError):
         raise HTTPException(503, '提醒状态无法读取或保存，请检查数据目录。')
 
@@ -385,7 +399,7 @@ def reminders_poll():
 @router.post('/api/reminders/test')
 def reminders_test():
     try:
-        return reminders.poll(immediate=True)
+        return reminders.poll(immediate=True, weather_care=runtime.weather_care)
     except (ValueError, OSError, RuntimeError):
         raise HTTPException(503, '提醒状态无法读取或保存，请检查数据目录。')
 

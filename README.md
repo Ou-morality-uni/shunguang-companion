@@ -1,9 +1,10 @@
-# 瞬光伴行 v0.5.5
+# 瞬光伴行 v0.5.6
 
-[v0.5.5 更新说明](versions/0.5.5/README.md) · [语音配置与选型](docs/tts.md)
+[v0.5.6 更新说明](versions/0.5.6/README.md) · [语音配置与选型](docs/tts.md)
 
 [English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.5.6](versions/0.5.6/README.md)：更新暖霞红金布局与动态光效，支持导航折叠、紧凑状态与语音控制、可调宽及放大的独立文件预览。
 - [v0.5.5](versions/0.5.5/README.md)：打通聊天附件与后台文件任务，支持长资料分批阅读、超限确认续接、总结自动另存和关键节点工作语音。
 - [v0.5.4](versions/0.5.4/README.md)：新增六类资料阅读与上传、多文件总结、视觉能力及替代识别授权、自然工作语音和代码块朗读过滤。
 - [v0.5.3](versions/0.5.3/README.md)：新增本机工作台、文件夹授权、文件任务与删除确认，支持操作记录、取消、备份和冲突保护恢复。

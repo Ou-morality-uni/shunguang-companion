@@ -54,6 +54,9 @@ it('grants the entered folder and submits a bounded relative-path task', async (
   fireEvent.change(screen.getByLabelText('本机文件夹完整路径'), { target: { value: 'D:\\work' } });
   fireEvent.click(screen.getByRole('button', { name: '授权此文件夹' }));
   await screen.findByText('工作文件夹已授权。');
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: '提交任务' }).hasAttribute('disabled')).toBe(false),
+  );
   fireEvent.click(screen.getByRole('button', { name: '提交任务' }));
   await waitFor(() =>
     expect(request).toHaveBeenCalledWith('/work/tasks', {

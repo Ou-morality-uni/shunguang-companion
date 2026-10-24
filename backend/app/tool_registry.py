@@ -68,7 +68,9 @@ class ToolRegistry:
                 async def files(name, args):
                     try:
                         payload = FileTaskRequest.model_validate(args)
-                        task = await asyncio.to_thread(work.submit, payload, 'chat', message.get('conversation_id'))
+                        task = await asyncio.to_thread(
+                            work.submit, payload, 'chat', message.get('conversation_id'), message.get('model_choice')
+                        )
                         return {
                             'ok': True,
                             'background': True,

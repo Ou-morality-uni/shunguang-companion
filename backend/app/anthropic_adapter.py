@@ -10,6 +10,7 @@ import httpx
 from langchain_core.messages import AIMessage, AIMessageChunk, HumanMessage, SystemMessage, ToolMessage
 from langchain_core.utils.function_calling import convert_to_openai_tool
 
+from .model_choices import claude_adaptive
 from .providers import ProviderError, endpoint, headers
 from .transport import ssl_context
 
@@ -32,6 +33,12 @@ def serialize(messages):
                 if isinstance(message.content, str) and message.content
                 else []
             )
+            thinking_blocks = message.additional_kwargs.get('thinking_blocks', [])
+            blocks = [
+                block
+                for block in thinking_blocks
+                if isinstance(block, dict) and block.get('type') in ('thinking', 'redacted_thinking')
+            ] + blocks
             blocks.extend(
                 {'type': 'tool_use', 'id': call['id'], 'name': call['name'], 'input': call['args']}
                 for call in message.tool_calls
@@ -92,6 +99,11 @@ class AnthropicModel:
         }
         if urlparse(self.config.llm_base_url).hostname == 'api.deepseek.com':
             result['thinking'] = {'type': 'disabled'}
+        if claude_adaptive(self.config):
+            result.pop('temperature')
+            if self.config.llm_effort != 'default':
+                result['thinking'] = {'type': 'adaptive'}
+                result['output_config'] = {'effort': self.config.llm_effort}
         if self.tools:
             converted = [convert_to_openai_tool(tool)['function'] for tool in self.tools]
             result['tools'] = [
@@ -106,7 +118,11 @@ class AnthropicModel:
             accumulated = chunk if accumulated is None else accumulated + chunk
         if accumulated is None:
             raise ProviderError()
-        return AIMessage(content=accumulated.content, tool_calls=accumulated.tool_calls)
+        return AIMessage(
+            content=accumulated.content,
+            tool_calls=accumulated.tool_calls,
+            additional_kwargs=accumulated.additional_kwargs,
+        )
 
     async def astream(self, messages):
         async with httpx.AsyncClient(
@@ -121,6 +137,7 @@ class AnthropicModel:
                 if response.status_code != 200:
                     raise ProviderError(response.status_code)
                 stopped, size = False, 0
+                thinking_blocks = {}
                 async for line in response.aiter_lines():
                     size += len(line)
                     if size > 2_000_000:
@@ -135,6 +152,8 @@ class AnthropicModel:
                         stopped = True
                     if kind == 'content_block_start':
                         block = data.get('content_block', {})
+                        if block.get('type') in ('thinking', 'redacted_thinking'):
+                            thinking_blocks[data['index']] = dict(block)
                         if block.get('type') == 'tool_use':
                             initial = block.get('input', {})
                             yield AIMessageChunk(
@@ -152,6 +171,12 @@ class AnthropicModel:
                             yield AIMessageChunk(content=block['text'])
                     if kind == 'content_block_delta':
                         delta = data.get('delta', {})
+                        if data.get('index') in thinking_blocks:
+                            block = thinking_blocks[data['index']]
+                            if delta.get('type') == 'thinking_delta':
+                                block['thinking'] = block.get('thinking', '') + delta.get('thinking', '')
+                            elif delta.get('type') == 'signature_delta':
+                                block['signature'] = block.get('signature', '') + delta.get('signature', '')
                         if delta.get('type') == 'text_delta':
                             yield AIMessageChunk(content=delta.get('text', ''))
                         elif delta.get('type') == 'input_json_delta':
@@ -166,5 +191,9 @@ class AnthropicModel:
                                     }
                                 ],
                             )
+                    if kind == 'content_block_stop' and data.get('index') in thinking_blocks:
+                        yield AIMessageChunk(
+                            content='', additional_kwargs={'thinking_blocks': [thinking_blocks.pop(data['index'])]}
+                        )
                 if not stopped:
                     raise ProviderError()

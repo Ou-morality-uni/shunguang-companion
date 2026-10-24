@@ -1,6 +1,6 @@
 """Ordered, transactional upgrades from the pre-versioned database (version 0)."""
 
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 8
 
 
 def migrate(db):
@@ -78,6 +78,26 @@ def migrate(db):
         db.execute('CREATE INDEX file_tasks_conversation ON file_tasks(conversation_id,created_at)')
         db.execute('CREATE TABLE work_settings (key TEXT PRIMARY KEY,value TEXT NOT NULL)')
         db.execute('PRAGMA user_version=6')
+    if version < 7:
+        db.execute("""CREATE TABLE conversation_models (
+            conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+            profile_id TEXT NOT NULL, model TEXT NOT NULL, effort TEXT NOT NULL
+        )""")
+        db.execute('PRAGMA user_version=7')
+    if version < 8:
+        db.execute("""CREATE TABLE memory_jobs (
+            conversation_id TEXT PRIMARY KEY REFERENCES conversations(id) ON DELETE CASCADE,
+            through_seq INTEGER NOT NULL DEFAULT 0, requested_seq INTEGER NOT NULL,
+            status TEXT NOT NULL DEFAULT 'queued', model_choice TEXT NOT NULL DEFAULT '{}',
+            error TEXT NOT NULL DEFAULT ''
+        )""")
+        db.execute("""CREATE TABLE conversation_episodes (
+            conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+            start_seq INTEGER NOT NULL, end_seq INTEGER NOT NULL, summary TEXT NOT NULL,
+            source_ids TEXT NOT NULL, updated_at TEXT NOT NULL,
+            PRIMARY KEY(conversation_id,start_seq,end_seq)
+        )""")
+        db.execute('PRAGMA user_version=8')
 
 
 LEGACY_SCHEMA = """

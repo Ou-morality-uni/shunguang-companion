@@ -13,9 +13,11 @@ from .config import ROOT
 from .constants import MAX_MESSAGE_LENGTH, VERSION
 from .filework import FileWork
 from .logging_setup import report_error, setup_logging
+from .memory_jobs import MemoryJobs
 from .routes import chat, knowledge, memories, settings, work
 from .schemas import CapabilitiesOut
 from .services import router as services_router
+from .weather_care import WeatherCare
 
 
 @asynccontextmanager
@@ -24,9 +26,15 @@ async def lifespan(app):
     runtime.mutation_lock = asyncio.Lock()
     await asyncio.to_thread(runtime.store.initialize)
     runtime.work = await asyncio.to_thread(FileWork, runtime.store)
+    runtime.weather_care = WeatherCare(runtime.store)
+    runtime.memory_jobs = MemoryJobs(runtime.store)
     try:
         yield
     finally:
+        await asyncio.to_thread(runtime.memory_jobs.close)
+        runtime.memory_jobs = None
+        await asyncio.to_thread(runtime.weather_care.close)
+        runtime.weather_care = None
         await asyncio.to_thread(runtime.work.close)
         runtime.work = None
 

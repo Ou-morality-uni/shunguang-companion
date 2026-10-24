@@ -2,6 +2,7 @@
 
 import json
 import os
+import secrets
 import time
 import uuid
 from datetime import datetime, timezone
@@ -14,6 +15,16 @@ from .feature_config import load
 LOCK = RLock()
 MAX_POLL_GAP = 90
 REMINDER_TEXT = '陪你待了一会儿，先让眼睛歇一歇吧。喝口水，起身活动一下，再回来慢慢聊。'
+REMINDER_PHRASES = (
+    REMINDER_TEXT,
+    '手边的事先放一放呀，看看远处，让眼睛也透口气。我在这里等你。',
+    '坐了这么久，起来伸个懒腰吧。事情可以慢慢做，咱们也要照顾好自己。',
+    '杯子还在手边吗？喝两口水再继续吧，我陪你把剩下的慢慢理清。',
+    '专心的时候容易忘了歇一歇。松松肩膀，活动一下手腕，好不好？',
+    '这一小段先告个段落吧，起身走两步，回来再接着聊。',
+    '别总盯着屏幕啦，眨眨眼，看看窗外。留一点精神，后面的路还长着呢。',
+    '忙归忙，也给自己留口喘气的工夫呀。休息一会儿，我替你守着这些思路。',
+)
 
 
 def read_state():
@@ -53,9 +64,28 @@ def timestamp(value):
     return datetime.fromtimestamp(value, timezone.utc).isoformat()
 
 
-def poll(*, immediate=False):
+def weather_message(value):
+    current = value['current']
+    city = value.get('location', {}).get('city') or value['profile_city']
+    condition = value.get('condition', '天气状况待核对')
+    temperature = float(current['temperature_2m'])
+    if float(current.get('precipitation') or 0) > 0 or any(word in condition for word in ('雨', '雪', '雷')):
+        advice = '出门记得带好雨具，路上慢一点呀。'
+    elif temperature >= 30:
+        advice = '外面有些热，出门记得遮阳，也别忘了补水。'
+    elif temperature <= 10:
+        advice = '外面偏凉，出门记得添件衣服，别让自己冻着。'
+    elif float(current.get('wind_speed_10m') or 0) >= 30:
+        advice = '外面风有些大，出门留意一下，咱们稳稳当当地走。'
+    else:
+        advice = '忙完也给自己留点休息的工夫，喝口水，再慢慢来。'
+    return f'{city}这次查到的是{condition}，气温约{temperature:g}℃。{advice}'
+
+
+def poll(*, immediate=False, weather_care=None, refresh_weather=False):
     with LOCK:
-        settings = load().reminders
+        features = load()
+        settings = features.reminders
         now = time.time()
         state = read_state()
         interval = settings.interval_minutes * 60
@@ -69,15 +99,35 @@ def poll(*, immediate=False):
             and datetime.fromisoformat(settings.paused_until.replace('Z', '+00:00')).timestamp() > now
         )
         in_quiet = quiet(settings, now)
+        weather = None
+        if (
+            weather_care
+            and features.tools.weather_enabled
+            and (immediate or (settings.enabled and not paused and not in_quiet))
+        ):
+            weather = weather_care.snapshot(features.tools.timeout, force=refresh_weather or reconnected)
         event = None
         if immediate or (settings.enabled and not paused and not in_quiet and not reconnected and now >= due):
+            recent = state.get('recent_phrases', [])
+            text = secrets.choice([item for item in REMINDER_PHRASES if item not in recent] or REMINDER_PHRASES)
+            state['recent_phrases'] = (recent + [text])[-4:]
             event = {
                 'id': uuid.uuid4().hex,
-                'text': REMINDER_TEXT,
+                'text': text,
                 'voice': settings.voice,
                 'created_at': timestamp(now),
                 'test': immediate,
             }
+            if weather:
+                signature = weather['profile_city'] + '|' + weather['current']['time']
+                if signature != state.get('last_weather'):
+                    event['text'] = weather_message(weather)
+                    event['weather'] = {
+                        'city': weather['profile_city'],
+                        'observed_at': weather['current']['time'],
+                        'sources': weather.get('sources', []),
+                    }
+                    state['last_weather'] = signature
             # Consume durably before returning. A dropped response is not replayed.
             state['last_event_id'] = event['id']
             state['last_delivery'] = now
@@ -93,5 +143,6 @@ def poll(*, immediate=False):
             'quiet': in_quiet,
             'enabled': settings.enabled,
             'reconnected': reconnected,
+            'weather_notice': weather_care.notice if weather_care else '',
             'notice': '休息提醒按时间间隔触发，不检测姿态。页面前台轮询时可靠；后台受浏览器节流限制。关闭页面不提醒，恢复连接后不补发历史提醒。立即测试会忽略开关和安静时段。',
         }

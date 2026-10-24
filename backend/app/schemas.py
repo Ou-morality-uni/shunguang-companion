@@ -48,6 +48,16 @@ class StickerOut(BaseModel):
     scene: str
 
 
+class HistorySourceOut(BaseModel):
+    message_id: str
+    conversation_id: str
+    title: str
+    role: Literal['user', 'assistant']
+    time: str
+    text: str
+    episode_summary: str | None = None
+
+
 class MessageOut(BaseModel):
     id: str
     conversation_id: str
@@ -61,6 +71,7 @@ class MessageOut(BaseModel):
     tools: list[ToolEventOut] = Field(default_factory=list)
     sticker: StickerOut | None = None
     attachments: list[dict[str, Any]] = Field(default_factory=list)
+    history_sources: list[HistorySourceOut] = Field(default_factory=list)
 
 
 class SettingsOut(BaseModel):
@@ -74,6 +85,8 @@ class SettingsOut(BaseModel):
     provider: str
     protocol: Literal['openai', 'anthropic']
     vision: Literal['unknown', 'supported', 'unsupported'] = 'unknown'
+    effort: str = 'default'
+    efforts: list[str] = Field(default_factory=lambda: ['default'])
 
 
 class CapabilitiesOut(BaseModel):

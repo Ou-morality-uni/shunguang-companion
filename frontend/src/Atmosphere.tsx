@@ -1,13 +1,47 @@
-import { FluidBackground } from './FluidBackground';
+import InteractiveBackground from './InteractiveBackground';
 
-export function Atmosphere({ enabled }: { enabled: boolean }) {
+export const backgroundStyles = [
+  { id: 'dark-veil', name: 'Dark Veil · 柔光纱幕', description: '柔软光纱随鼠标弯曲，温柔相伴。' },
+  {
+    id: 'gradient-blinds',
+    name: 'Gradient Blinds · 渐变光幕',
+    description: '鼠标聚光掠过渐变纹理，互动更鲜明。',
+  },
+  { id: 'aurora', name: 'Aurora · 暖霞极光', description: '顶部霞光缓缓流动，轻轻追随鼠标。' },
+] as const;
+export type BackgroundStyle = (typeof backgroundStyles)[number]['id'];
+
+export function Atmosphere({ enabled, style }: { enabled: boolean; style: BackgroundStyle }) {
   return (
     <div className="atmosphere" aria-hidden="true">
       <div className="ambient-glow glow-rose" />
       <div className="ambient-glow glow-gold" />
       <div className="ambient-glow glow-crimson" />
-      <div className="ambient-grid" />
-      <FluidBackground enabled={enabled} />
+      <svg className="dawn-ribbons" viewBox="0 0 1600 900" preserveAspectRatio="none">
+        <defs>
+          <linearGradient id="dawn-light" x1="0" y1="0" x2="1" y2="0">
+            <stop stopColor="#6b263e" stopOpacity="0" />
+            <stop offset=".3" stopColor="#c65a70" stopOpacity=".6" />
+            <stop offset=".65" stopColor="#edc08c" stopOpacity=".9" />
+            <stop offset="1" stopColor="#b3445e" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <g className="dawn-stream dawn-stream-top" fill="none" stroke="url(#dawn-light)">
+          <path d="M-150 145 C190 -95 440 225 780 90 S1280 45 1750 175" strokeWidth="2" />
+          <path d="M-150 160 C200 -70 430 245 790 112 S1290 58 1750 190" strokeWidth="14" opacity=".13" />
+          <path d="M-150 185 C210 -30 460 262 800 135 S1300 80 1750 220" strokeWidth="1" opacity=".65" />
+          <path d="M-150 200 C220 -10 470 280 810 158 S1320 98 1750 245" strokeWidth="28" opacity=".05" />
+        </g>
+        <g className="dawn-stream dawn-stream-bottom" fill="none" stroke="url(#dawn-light)">
+          <path d="M-120 770 C290 1010 480 680 900 815 S1370 830 1740 705" strokeWidth="1.5" opacity=".55" />
+          <path d="M-120 792 C290 1032 500 704 910 838 S1390 850 1740 730" strokeWidth="18" opacity=".08" />
+        </g>
+      </svg>
+      {enabled && (
+        <div className="interactive-background" data-background={style}>
+          <InteractiveBackground key={style} style={style} />
+        </div>
+      )}
     </div>
   );
 }

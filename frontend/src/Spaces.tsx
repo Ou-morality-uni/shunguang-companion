@@ -9,7 +9,6 @@ import {
   Play,
   Search,
   ShieldCheck,
-  Sparkles,
   Square,
   Trash2,
   Volume2,
@@ -19,7 +18,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   request,
-  type Candidate,
   type Conversation,
   type Features,
   type Memory,
@@ -28,6 +26,7 @@ import {
   type Source,
 } from './api';
 import { Sources } from './Evidence';
+import { UserProfileForm } from './UserProfileForm';
 import { useCompanionAudio } from './useAudioQueue';
 
 export type Page = 'chat' | 'memory' | 'world' | 'reminders' | 'work';
@@ -151,64 +150,50 @@ type MemoryProps = {
   onChanged?: () => void;
   compact?: boolean;
 };
-export function MemorySpace({ conversations, active, onChanged, compact = false }: MemoryProps) {
+export function MemorySpace({ onChanged, compact = false }: MemoryProps) {
   const [memories, setMemories] = useState<Memory[]>([]),
-    [chosen, setChosen] = useState(active || ''),
-    [candidates, setCandidates] = useState<Candidate[]>([]),
-    [selected, setSelected] = useState<Set<string>>(new Set()),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState(''),
     [editing, setEditing] = useState<string | null>(null),
     [editValue, setEditValue] = useState(''),
-    [deleting, setDeleting] = useState<string | null>(null);
+    [deleting, setDeleting] = useState<string | null>(null),
+    [progress, setProgress] = useState<{
+      queued: number;
+      running: number;
+      failed: number;
+      paused: number;
+      summaries: number;
+    } | null>(null);
   async function load() {
     setMemories(await request<Memory[]>('/memories'));
   }
   useEffect(() => {
-    load().catch((e) => setNotice((e as Error).message));
+    let disposed = false;
+    const refresh = async () => {
+      if (document.hidden || disposed) return;
+      try {
+        const [items, status] = await Promise.all([
+          request<Memory[]>('/memories'),
+          request<NonNullable<typeof progress>>('/memories/status'),
+        ]);
+        if (!disposed) {
+          setMemories(items);
+          setProgress(status);
+        }
+      } catch (e) {
+        if (!disposed) setNotice((e as Error).message);
+      }
+    };
+    void refresh();
+    const timer = window.setInterval(() => void refresh(), 5000);
+    const visible = () => void refresh();
+    document.addEventListener('visibilitychange', visible);
+    return () => {
+      disposed = true;
+      window.clearInterval(timer);
+      document.removeEventListener('visibilitychange', visible);
+    };
   }, []);
-  useEffect(() => {
-    if (active) setChosen(active);
-  }, [active]);
-  async function summarize() {
-    setBusy(true);
-    setNotice('');
-    setCandidates([]);
-    try {
-      const result = await request<{ candidates: Candidate[] }>('/memories/summarize', {
-        method: 'POST',
-        body: JSON.stringify({ conversation_id: chosen }),
-      });
-      setCandidates(result.candidates);
-      setSelected(new Set(result.candidates.map((item) => item.id)));
-      if (!result.candidates.length) setNotice('这段对话没有可确认的用户事实。');
-    } catch (e) {
-      setNotice((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
-  async function confirm() {
-    setBusy(true);
-    try {
-      await request('/memories/confirm', {
-        method: 'POST',
-        body: JSON.stringify({
-          candidates: candidates
-            .filter((item) => selected.has(item.id))
-            .map(({ id, key, value }) => ({ id, key, value })),
-        }),
-      });
-      setCandidates([]);
-      await load();
-      onChanged?.();
-      setNotice('已保存确认的事实，后续会话可以使用。');
-    } catch (e) {
-      setNotice((e as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
   async function update(item: Memory) {
     setBusy(true);
     try {
@@ -244,7 +229,7 @@ export function MemorySpace({ conversations, active, onChanged, compact = false 
           <PageHeading
             eyebrow="LITTLE THINGS ABOUT YOU"
             title="关于你的，慢慢记住。"
-            description="明确自述可自动记住，跨聊天按需回忆。这里可查看、更正和删除，手动总结作为补充。"
+            description="明确自述可自动记住，跨聊天按需回忆。这里可填写个人资料，查看、更正和删除记忆。"
           />
           <div className="summary-stats">
             <div>
@@ -258,78 +243,35 @@ export function MemorySpace({ conversations, active, onChanged, compact = false 
           </div>
         </>
       )}
-      <div className="memory-summary glass">
-        <label className="field">
-          选择要总结的对话
-          <select value={chosen} onChange={(e) => setChosen(e.target.value)}>
-            <option value="">请选择对话</option>
-            {conversations.map((item) => (
-              <option key={item.id} value={item.id}>
-                {item.title}
-              </option>
-            ))}
-          </select>
-        </label>
-        <Button disabled={!chosen || busy} onClick={() => void summarize()}>
-          {busy ? <LoaderCircle className="spin" size={15} /> : <Sparkles size={15} />}手动总结这段对话
-        </Button>
-        <p className="space-note">提炼只读取用户消息；预览后确认保存，可取消或修改候选事实。</p>
-      </div>
+      <UserProfileForm
+        revision={memories.map((item) => `${item.id}:${item.value}`).join('|')}
+        onSaved={async () => {
+          await load();
+          onChanged?.();
+        }}
+      />
+      {progress && typeof progress.summaries === 'number' && (
+        <div className="privacy-strip" role="status">
+          <BookOpen size={19} />
+          <div>
+            <strong>
+              {progress.running || progress.queued
+                ? `正在后台整理 · ${progress.running} 个进行中，${progress.queued} 个排队`
+                : progress.paused
+                  ? '自动整理已暂停'
+                  : '跨聊天记忆已就绪'}
+            </strong>
+            <p>
+              已整理 {progress.summaries} 段对话摘要
+              {progress.failed ? ` · ${progress.failed} 项暂未完成，下次聊天或重启时重试` : ''}
+              。相关内容会按需回忆，并提供原话来源。
+            </p>
+          </div>
+        </div>
+      )}
       {notice && (
         <div className="settings-notice" role="status">
           {notice}
-        </div>
-      )}
-      {candidates.length > 0 && (
-        <div className="candidate-list">
-          <h3>确认候选事实</h3>
-          {candidates.map((item) => (
-            <article className="memory-item" key={item.id}>
-              <label className="candidate-check">
-                <input
-                  type="checkbox"
-                  checked={selected.has(item.id)}
-                  onChange={(e) =>
-                    setSelected((previous) => {
-                      const next = new Set(previous);
-                      if (e.target.checked) next.add(item.id);
-                      else next.delete(item.id);
-                      return next;
-                    })
-                  }
-                />
-                {item.key}
-              </label>
-              <Input
-                aria-label={`候选事实 ${item.key}`}
-                value={item.value}
-                onChange={(e) =>
-                  setCandidates((items) =>
-                    items.map((value) =>
-                      value.id === item.id ? { ...value, value: e.target.value } : value,
-                    ),
-                  )
-                }
-              />
-              {item.evidence && <blockquote>用户原话：{item.evidence}</blockquote>}
-              {item.existing_value && (
-                <p className="conflict-note">
-                  已有事实：{item.existing_value}
-                  <br />
-                  确认后将更新这项事实。
-                </p>
-              )}
-            </article>
-          ))}
-          <div className="inline-actions">
-            <Button disabled={busy || !selected.size} onClick={() => void confirm()}>
-              <Check size={15} />
-              确认保存 {selected.size} 条
-            </Button>
-            <Button variant="outline" disabled={busy} onClick={() => setCandidates([])}>
-              取消候选
-            </Button>
-          </div>
         </div>
       )}
       <div className="memory-list">
@@ -337,7 +279,7 @@ export function MemorySpace({ conversations, active, onChanged, compact = false 
           <div className="empty-space glass">
             <BookOpen size={30} />
             <h2>故事，还在第一章</h2>
-            <p>还没有长期记忆。聊天中可以告诉她你的家乡、称呼或偏好，也可在此手动整理。</p>
+            <p>还没有长期记忆。聊天中可以告诉她你的家乡、称呼或偏好，也可填写上方个人资料。</p>
           </div>
         ) : (
           memories.map((item) => (

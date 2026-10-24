@@ -153,6 +153,7 @@ class FileWork:
         self.pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix='file-work')
         self.jobs = {}
         self.closed = False
+        self.output_root = config.DATA_DIR.absolute() / 'outputs'
         self.upload_root = (store.path.parent / 'attachments').resolve()
         self.cues = WorkCues(store)
         store.interrupt_file_tasks()
@@ -168,9 +169,28 @@ class FileWork:
     def protected(self, path):
         if path == self.upload_root or self.upload_root in path.parents:
             return
+        if path == self.output_root or self.output_root in path.parents:
+            return
         protected = [config.DATA_DIR.resolve(), config.ROOT / '.git', config.ROOT / '.codex']
         if any(path == item or item in path.parents for item in protected):
             raise WorkError('应用数据、凭据和内部管理目录不属于工作文件范围。', 403)
+
+    def default_output_workspace(self):
+        with self.gate:
+            for parent in self.output_root.parents:
+                no_link(parent)
+            self.output_root.mkdir(exist_ok=True)
+            no_link(self.output_root)
+            existing = next(
+                (item for item in self.store.list_workspaces() if Path(item['path']) == self.output_root), None
+            )
+            if existing:
+                self.root(existing['id'])
+                workspace = existing
+            else:
+                workspace = self.grant(str(self.output_root))
+            self.store.set_output_workspace(workspace['id'])
+            return workspace
 
     def grant(self, raw_path):
         path = Path(raw_path.strip())
@@ -276,7 +296,7 @@ class FileWork:
             raise WorkError('任务不存在。', 404)
         return record
 
-    def submit(self, payload, origin='workbench', conversation_id=None):
+    def submit(self, payload, origin='workbench', conversation_id=None, model_choice=None):
         with self.gate:
             self.jobs = {key: job for key, job in self.jobs.items() if not job[0].done()}
             if self.closed or len(self.jobs) >= 8:
@@ -333,6 +353,17 @@ class FileWork:
             task = self.store.create_file_task(
                 payload.workspace_id, payload.title, steps, status, origin, conversation_id
             )
+            if payload.instruction or any(step.action == 'read_document' for step in payload.steps):
+                from .model_choices import default_choice
+
+                choice = (
+                    model_choice
+                    or (self.store.conversation_model(conversation_id) if conversation_id else None)
+                    or default_choice()
+                )
+                if choice.get('model'):
+                    task['context']['model_choice'] = dict(choice)
+                    self.store.save_file_task(task)
             if status == 'queued':
                 self.schedule(task['id'])
             return public_task(task)

@@ -1,15 +1,40 @@
 import asyncio
 
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from .. import runtime
 from ..llm import build_model, friendly_error
 from ..memory import summarize
 from ..runtime import require_config, require_conversation
-from ..schemas import MemoryOut
+from ..schemas import HistorySourceOut, MemoryOut
 
 router = APIRouter()
+
+
+class UserProfile(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    nickname: str = Field(default='小师妹', min_length=1, max_length=40)
+    city: str = Field(default='', max_length=80)
+    age: int | None = Field(default=None, ge=1, le=120, strict=True)
+
+    @field_validator('nickname', 'city')
+    @classmethod
+    def clean(cls, value, info):
+        value = value.strip()
+        if any(ord(char) < 32 for char in value) or (info.field_name == 'nickname' and not value):
+            raise ValueError('资料内容不正确')
+        return value
+
+
+@router.get('/api/profile', response_model=UserProfile)
+def profile():
+    return runtime.store.user_profile()
+
+
+@router.patch('/api/profile', response_model=UserProfile)
+def update_profile(payload: UserProfile):
+    return runtime.store.update_user_profile(payload.model_dump(exclude_unset=True))
 
 
 class MemorySummaryRequest(BaseModel):
@@ -33,6 +58,27 @@ class MemoryEditRequest(BaseModel):
 @router.get('/api/memories', response_model=list[MemoryOut])
 def memories():
     return runtime.store.list_memories()
+
+
+class MemoryStatusOut(BaseModel):
+    queued: int
+    running: int
+    failed: int
+    paused: int
+    summaries: int
+
+
+@router.get('/api/memories/status', response_model=MemoryStatusOut)
+def memory_status():
+    return runtime.store.memory_status()
+
+
+@router.get('/api/memories/history/{message_id}', response_model=HistorySourceOut)
+def history_source(message_id: str):
+    result = runtime.store.history_source(message_id)
+    if result is None:
+        raise HTTPException(404, '来源对话已删除、遗忘或不再可用。')
+    return result
 
 
 @router.post('/api/memories/summarize')

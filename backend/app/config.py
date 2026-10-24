@@ -26,6 +26,7 @@ class ModelConfig(BaseModel):
     llm_max_tokens: int = Field(default=1800, ge=128, le=8192)
     llm_protocol: Literal['openai', 'anthropic'] = 'openai'
     llm_vision: Literal['unknown', 'supported', 'unsupported'] = 'unknown'
+    llm_effort: Literal['default', 'off', 'on', 'low', 'medium', 'high', 'xhigh', 'max'] = 'default'
 
     @field_validator('llm_base_url')
     @classmethod
@@ -118,6 +119,8 @@ def find_saved_config(base_url, protocol):
 
 
 def public_config(config: ModelConfig) -> dict:
+    from .model_choices import effort_options
+
     return {
         'base_url': config.llm_base_url,
         'model': config.llm_model,
@@ -129,4 +132,6 @@ def public_config(config: ModelConfig) -> dict:
         'provider': config.llm_provider,
         'protocol': config.llm_protocol,
         'vision': config.llm_vision,
+        'effort': config.llm_effort,
+        'efforts': effort_options(config),
     }

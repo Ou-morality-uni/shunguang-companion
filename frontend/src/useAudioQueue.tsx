@@ -45,10 +45,12 @@ export type AudioController = {
   analyser: AnalyserNode | null;
   firstAudioMs: number | null;
   enqueue: (text: string, label?: string) => void;
+  enqueueDocument: (text: string, label?: string) => void;
   beginReply: () => void;
   appendReply: (text: string) => void;
   finishReply: (text: string) => void;
   stop: () => void;
+  setInputActive: (active: boolean) => void;
   replay: () => void;
   toggleMute: () => void;
   enqueueWork: (event: { task_id: string; kind: string; text: string; created_at: string }) => void;
@@ -59,6 +61,7 @@ export const useCompanionAudio = () => useContext(AudioContextValue)!;
 
 /** Only session-local URLs are cached; no text or private media enters browser storage. */
 export function useAudioQueue(settings?: Features['tts']): AudioController {
+  const inputActive = useRef(false);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const signature = JSON.stringify(
@@ -366,6 +369,7 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     }
   }
   function ready() {
+    if (inputActive.current) return false;
     const valid =
       settings?.enabled &&
       settings.has_api_key &&
@@ -414,6 +418,20 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
       group(),
       itemLabel,
     );
+  }
+  function enqueueDocument(text: string, itemLabel = '完整成果') {
+    const characters = Array.from(spokenText(text).trim());
+    if (!characters.length || !ready()) return;
+    if (characters.length > 40000) {
+      setError('成果超过单次完整朗读的 40000 字符上限，请选择需要的部分播放。');
+      return;
+    }
+    const chunks: string[] = [];
+    for (let offset = 0; offset < characters.length; offset += 2500)
+      chunks.push(characters.slice(offset, offset + 2500).join(''));
+    stop();
+    void prepareGraph().catch(() => {});
+    addChunks(chunks, group(), itemLabel);
   }
   function beginReply() {
     stop();
@@ -708,10 +726,15 @@ export function useAudioQueue(settings?: Features['tts']): AudioController {
     analyser,
     firstAudioMs,
     enqueue,
+    enqueueDocument,
     beginReply,
     appendReply,
     finishReply,
     stop,
+    setInputActive: (active: boolean) => {
+      inputActive.current = active;
+      if (active) stop();
+    },
     replay,
     toggleMute,
     enqueueWork,

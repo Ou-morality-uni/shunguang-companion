@@ -6,7 +6,7 @@ import type { AudioController } from './useAudioQueue';
 
 vi.mock('./api', () => ({ request: vi.fn() }));
 
-it('reads the background task summary after its real completion, independently of the chat acknowledgement', async () => {
+it('only announces a short completion cue and never automatically fetches or reads the full summary', async () => {
   vi.useFakeTimers();
   const enqueueWork = vi.fn();
   const audio = { enqueueWork } as unknown as AudioController;
@@ -34,12 +34,12 @@ it('reads the background task summary after its real completion, independently o
             },
     ),
   );
-  renderHook(() => useWorkEvents(true, audio, false));
+  renderHook(() => useWorkEvents(true, audio));
   await act(async () => {});
   await act(async () => vi.advanceTimersByTimeAsync(1000));
-  expect(enqueueWork).toHaveBeenCalledTimes(2);
+  expect(enqueueWork).toHaveBeenCalledTimes(1);
   expect(enqueueWork.mock.calls[0][0].kind).toBe('complete');
-  expect(enqueueWork.mock.calls[1][0].kind).toBe('summary');
+  expect(request).not.toHaveBeenCalledWith('/work/tasks/t1', expect.anything());
 });
 afterEach(() => {
   cleanup();
@@ -47,7 +47,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('keeps a completed background summary pending while a chat reply is active', async () => {
+it('never starts reading a full summary after subsequent polling', async () => {
   vi.useFakeTimers();
   const enqueueWork = vi.fn(),
     audio = { enqueueWork } as unknown as AudioController;
@@ -71,17 +71,15 @@ it('keeps a completed background summary pending while a chat reply is active', 
           : { cursor: 1, events: [event] },
     ),
   );
-  const { rerender } = renderHook(({ busy }) => useWorkEvents(true, audio, busy), {
-    initialProps: { busy: true },
-  });
+  const { rerender } = renderHook(() => useWorkEvents(true, audio));
   await act(async () => {});
   await act(async () => vi.advanceTimersByTimeAsync(1000));
   expect(enqueueWork).toHaveBeenCalledTimes(1);
   expect(enqueueWork.mock.calls[0][0].kind).toBe('complete');
-  rerender({ busy: false });
+  rerender();
   await act(async () => vi.advanceTimersByTimeAsync(1000));
-  expect(enqueueWork).toHaveBeenCalledTimes(2);
-  expect(enqueueWork.mock.calls[1][0]).toMatchObject({ kind: 'summary', text: '后台整理结果。' });
+  expect(enqueueWork).toHaveBeenCalledTimes(1);
+  expect(request).not.toHaveBeenCalledWith('/work/tasks/t1', expect.anything());
 });
 
 it('starts at the cursor, drops obsolete progress and deduplicates repeated events', async () => {

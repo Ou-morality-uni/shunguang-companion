@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import { MessageSquare, Trash2 } from 'lucide-react';
 import type { Conversation } from './api';
 import { Button } from './components/ui/button';
@@ -17,6 +18,8 @@ export function ConversationHistory({
   onDelete: (id: string) => Promise<void>;
 }) {
   const [confirm, setConfirm] = useState<string | null>(null);
+  const highlightId = useId(),
+    reduced = useReducedMotion();
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   async function remove(id: string) {
@@ -51,6 +54,14 @@ export function ConversationHistory({
               className={`history-item ${item.id === active ? 'active' : ''}`}
               onClick={() => onSelect(item.id)}
             >
+              {item.id === active && (
+                <motion.span
+                  aria-hidden="true"
+                  className="selection-glide"
+                  layoutId={highlightId}
+                  transition={{ duration: reduced ? 0 : 0.22 }}
+                />
+              )}
               <MessageSquare size={14} />
               <span>{item.title}</span>
             </button>

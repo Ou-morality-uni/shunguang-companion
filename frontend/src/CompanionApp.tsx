@@ -1,18 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import {
-  ArrowUpRight,
   AudioLines,
   Bell,
   ChevronRight,
   CircleHelp,
   Compass,
-  Cpu,
   Flower2,
   FolderOpen,
   Heart,
   LoaderCircle,
   Menu,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Square,
+  Volume2,
+  VolumeX,
+  Sparkles,
   MessageSquare,
   Plus,
   Settings2,
@@ -22,15 +26,23 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { request, type Features, type Memory, type ModelSettings, type ReminderEvent } from './api';
-import { Atmosphere } from './Atmosphere';
+import {
+  request,
+  safeSourceUrl,
+  type Features,
+  type Memory,
+  type ModelSettings,
+  type ModelChoice,
+  type ReminderEvent,
+} from './api';
+import { Atmosphere, backgroundStyles, type BackgroundStyle } from './Atmosphere';
 import { ChatThread } from './ChatThread';
-import { MemorySpace, WorldArchive, ReminderSpace, VoiceConsole, type Page, type Panel } from './Spaces';
+import { MemorySpace, WorldArchive, ReminderSpace, type Page, type Panel } from './Spaces';
 import { CompanionSettings } from './CompanionSettings';
 import { AudioContextValue, useAudioQueue } from './useAudioQueue';
 import { useConversation } from './useConversation';
 import { ConversationHistory } from './ConversationHistory';
-import { ResourceImage } from './ResourceImage';
+import { PreviewWorkspace } from './PreviewWorkspace';
 import { WorkSpace } from './WorkSpace';
 import { useWorkEvents } from './useWorkEvents';
 
@@ -56,6 +68,25 @@ export default function App() {
     [page, setPage] = useState<Page>('chat'),
     [loading, setLoading] = useState(true),
     [mobileNav, setMobileNav] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => preference('shunguang-sidebar-collapsed', false));
+  const [fileStatus, setFileStatus] = useState<string | null>(null);
+  useEffect(() => {
+    try {
+      localStorage.setItem('shunguang-sidebar-collapsed', collapsed ? 'on' : 'off');
+    } catch {
+      /* Private mode remains usable. */
+    }
+  }, [collapsed]);
+  const [backgroundStyle, setBackgroundStyle] = useState<BackgroundStyle>(() => {
+    try {
+      return (
+        backgroundStyles.find((item) => item.id === localStorage.getItem('shunguang-ui-background'))?.id ??
+        'dark-veil'
+      );
+    } catch {
+      return 'dark-veil';
+    }
+  });
   const [effects, setEffects] = useState(() => preference('shunguang-ui-effects', true)),
     [reduceMotion, setReduceMotion] = useState(() => preference('shunguang-ui-reduce-motion', false)),
     [background, setBackground] = useState(document.hidden),
@@ -64,7 +95,8 @@ export default function App() {
     [password, setPassword] = useState(''),
     [authBusy, setAuthBusy] = useState(false),
     [authError, setAuthError] = useState(''),
-    [reminder, setReminder] = useState<ReminderEvent | null>(null);
+    [reminder, setReminder] = useState<ReminderEvent | null>(null),
+    [weatherNotice, setWeatherNotice] = useState('');
   const [smallScreen, setSmallScreen] = useState(matchMedia('(max-width:700px)').matches);
   useEffect(() => {
     const media = matchMedia('(max-width:700px)');
@@ -103,7 +135,8 @@ export default function App() {
     abortRef,
     stopReply,
   } = chat;
-  useWorkEvents(!loading && !authRequired, audio, busy);
+  useEffect(() => setFileStatus(null), [page, chat.active]);
+  useWorkEvents(!loading && !authRequired, audio);
   async function refreshMemory() {
     try {
       const data = await request<Memory[]>('/memories');
@@ -152,10 +185,11 @@ export default function App() {
     try {
       localStorage.setItem('shunguang-ui-effects', effects ? 'on' : 'off');
       localStorage.setItem('shunguang-ui-reduce-motion', reduceMotion ? 'on' : 'off');
+      localStorage.setItem('shunguang-ui-background', backgroundStyle);
     } catch {
       /* Private mode remains usable. */
     }
-  }, [effects, reduceMotion]);
+  }, [effects, reduceMotion, backgroundStyle]);
   useEffect(() => {
     const media = matchMedia('(prefers-reduced-motion: reduce)');
     const change = () => setSystemReduce(media.matches),
@@ -195,22 +229,27 @@ export default function App() {
     if (loading || authRequired) return;
     let live = true,
       running = false;
-    const poll = async () => {
-      if (running) return;
+    const poll = async (refreshWeather = false) => {
+      if (running || document.hidden) return;
       running = true;
       try {
-        const data = await request<{ event: ReminderEvent | null }>('/reminders/poll');
-        if (live) acceptReminder(data.event);
+        const data = await request<{ event: ReminderEvent | null; weather_notice?: string }>(
+          '/reminders/poll' + (refreshWeather ? '?refresh_weather=true' : ''),
+        );
+        if (live) {
+          acceptReminder(data.event);
+          setWeatherNotice(data.weather_notice || '');
+        }
       } catch {
         /* Poll failure does not interrupt chat. */
       } finally {
         running = false;
       }
     };
-    void poll();
-    const timer = window.setInterval(poll, 10000);
+    void poll(true);
+    const timer = window.setInterval(() => void poll(), 10000);
     const visible = () => {
-      if (!document.hidden) void poll();
+      if (!document.hidden) void poll(true);
     };
     document.addEventListener('visibilitychange', visible);
     return () => {
@@ -275,13 +314,13 @@ export default function App() {
     chat.selectConversation(null);
     navigate('chat');
   }
-  async function send(text: string, attachments: string[] = []): Promise<boolean> {
+  async function send(text: string, attachments: string[] = [], modelChoice?: ModelChoice): Promise<boolean> {
     if (loading) return false;
-    if (!settings?.configured) {
+    if (!settings?.configured && !modelChoice) {
       openPanel('model');
       return false;
     }
-    return chat.send(text, attachments);
+    return chat.send(text, attachments, modelChoice);
   }
   const title =
     page === 'chat'
@@ -295,15 +334,38 @@ export default function App() {
         : '正在思考'
     : error
       ? '需要关注'
-      : settings?.configured
-        ? '等待你的消息'
-        : '等待模型连接';
+      : fileStatus
+        ? fileStatus
+        : settings?.configured
+          ? '等待你的消息'
+          : '等待模型连接';
   const animate = effects && !reduceMotion && !systemReduce && !background;
   return (
     <AudioContextValue.Provider value={audio}>
       <MotionConfig reducedMotion={animate ? 'user' : 'always'}>
-        <div className={`app-shell ${animate ? '' : 'effects-off'}`}>
-          <Atmosphere enabled={animate} />
+        <div
+          className={`app-shell ${animate ? '' : 'effects-off'}`}
+          onPointerMove={(event) => {
+            if (!animate || event.pointerType === 'touch') return;
+            const card = (event.target as Element).closest<HTMLElement>(
+              '.file-card, .chat-task-card, .starter-cards button, .nav-item, [data-slot="button"]',
+            );
+            if (card) {
+              const bounds = card.getBoundingClientRect();
+              card.style.setProperty('--glow-x', `${event.clientX - bounds.left}px`);
+              card.style.setProperty('--glow-y', `${event.clientY - bounds.top}px`);
+            }
+            event.currentTarget.style.setProperty(
+              '--dawn-x',
+              `${(event.clientX / window.innerWidth - 0.5) * 10}px`,
+            );
+            event.currentTarget.style.setProperty(
+              '--dawn-y',
+              `${(event.clientY / window.innerHeight - 0.5) * 6}px`,
+            );
+          }}
+        >
+          <Atmosphere enabled={animate && !matchMedia('(pointer: coarse)').matches} style={backgroundStyle} />
           {mobileNav && (
             <button className="nav-overlay" aria-label="关闭导航" onClick={() => setMobileNav(false)} />
           )}
@@ -311,8 +373,18 @@ export default function App() {
             id="primary-navigation"
             aria-hidden={smallScreen && !mobileNav ? true : undefined}
             inert={smallScreen && !mobileNav ? true : undefined}
-            className={`sidebar ${mobileNav ? 'is-open' : ''}`}
+            className={`sidebar ${mobileNav ? 'is-open' : ''} ${collapsed ? 'is-collapsed' : ''}`}
+            aria-label="主导航"
           >
+            <button
+              className="sidebar-toggle icon-button"
+              aria-label={collapsed ? '展开侧栏' : '收起侧栏'}
+              aria-expanded={!collapsed}
+              aria-controls="primary-navigation"
+              onClick={() => setCollapsed(!collapsed)}
+            >
+              {collapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
             <a className="brand" href="/" aria-label="瞬光伴行首页">
               <span className="brand-mark">
                 <Flower2 strokeWidth={1.1} />
@@ -325,9 +397,15 @@ export default function App() {
               <span className="subtle-dot" />
               暖霞拾光<span>THE WARM DAWN</span>
             </div>
-            <Button className="new-chat" onClick={newConversation} disabled={busy || loading}>
+            <Button
+              className="new-chat"
+              aria-label="开启新的对话"
+              title="开启新的对话"
+              onClick={newConversation}
+              disabled={busy || loading}
+            >
               <Plus size={17} />
-              开启新的对话
+              <span>开启新的对话</span>
             </Button>
             <div className="nav-section-label">
               相伴的日常<span>01 — 05</span>
@@ -337,12 +415,24 @@ export default function App() {
                 <button
                   key={key}
                   className={`nav-item ${page === key ? 'selected' : ''}`}
+                  aria-label={label}
+                  title={label}
                   onClick={() => navigate(key)}
                   aria-current={page === key ? 'page' : undefined}
                 >
+                  {page === key && (
+                    <motion.span
+                      aria-hidden="true"
+                      className="selection-glide"
+                      layoutId="primary-navigation-highlight"
+                      transition={{ duration: animate ? 0.22 : 0 }}
+                    />
+                  )}
                   <Icon size={18} strokeWidth={1.6} />
                   <span>{label}</span>
-                  {key === 'chat' ? (
+                  {key === 'memory' ? (
+                    <span className="nav-count">{memoryCount}</span>
+                  ) : key === 'chat' ? (
                     <span className="nav-count">{conversations.length}</span>
                   ) : (
                     <ChevronRight className="nav-arrow" size={13} />
@@ -364,9 +454,14 @@ export default function App() {
               onDelete={chat.deleteConversation}
             />
             <div className="sidebar-bottom">
-              <button className="nav-item" onClick={() => openPanel('model')}>
+              <button
+                className="nav-item"
+                aria-label="陪伴设置"
+                title="陪伴设置"
+                onClick={() => openPanel('model')}
+              >
                 <Settings2 size={18} />
-                陪伴设置
+                <span>陪伴设置</span>
                 <ChevronRight className="nav-arrow" size={14} />
               </button>
               <div className="local-note">
@@ -375,7 +470,7 @@ export default function App() {
               </div>
               <div className="version">
                 <span className="version-dot" />
-                瞬光伴行 WEB<span>v0.5.5</span>
+                瞬光伴行 WEB<span>v0.6.0</span>
               </div>
             </div>
           </aside>
@@ -396,7 +491,14 @@ export default function App() {
                 <strong>{title}</strong>
               </div>
               <div className="topbar-right">
-                <span className="quiet-caption">一隅暖霞 · 一路相伴</span>
+                <button
+                  className="icon-button"
+                  aria-label="沉浸光效设置"
+                  title="沉浸光效"
+                  onClick={() => openPanel('effects')}
+                >
+                  <Sparkles size={18} />
+                </button>
                 <button
                   className={`connection ${settings?.configured ? 'configured' : ''}`}
                   onClick={() => openPanel('model')}
@@ -407,180 +509,139 @@ export default function App() {
                 </button>
               </div>
             </header>
-            <div className="content-columns">
-              <section className="chat-column" aria-label="主内容区域">
-                {error && (
-                  <div role="alert" className="error-banner">
-                    <CircleHelp size={17} />
-                    <span>{error}</span>
-                    <button className="icon-button" aria-label="关闭提示" onClick={() => setError('')}>
-                      <X size={15} />
-                    </button>
-                  </div>
-                )}
-                {reminder && (
-                  <div className="reminder-banner" role="status">
-                    <Bell size={17} />
-                    <span>{reminder.text}</span>
-                    <button
-                      className="icon-button"
-                      onClick={() => audio.enqueue(reminder.text, '关怀提醒')}
-                      aria-label="播放提醒"
-                    >
-                      <AudioLines size={16} />
-                    </button>
-                    <button className="icon-button" onClick={() => setReminder(null)} aria-label="关闭提醒">
-                      <X size={16} />
-                    </button>
-                  </div>
-                )}
-                <div className={`page-container ${page === 'chat' ? 'chat-page' : ''}`}>
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={page}
-                      className="page-transition"
-                      initial={{ opacity: 0, y: 8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -6 }}
-                      transition={{ duration: 0.2 }}
-                    >
-                      {page === 'chat' ? (
-                        <ChatThread
-                          key={active ?? 'new'}
-                          messages={messages}
-                          partial={partial}
-                          tools={currentTools}
-                          sources={currentSources}
-                          busy={busy}
-                          loading={loading || historyLoading}
-                          configured={!!settings?.configured}
-                          onSend={send}
-                          onStop={() => void stopReply()}
-                          onSettings={() => openPanel('model')}
-                          onVoice={() => openPanel('voice')}
-                          onTools={() => openPanel('tools')}
-                          onWork={() => navigate('work')}
-                          conversationId={active}
-                        />
-                      ) : page === 'memory' ? (
-                        <MemorySpace
-                          conversations={conversations}
-                          active={active}
-                          onChanged={() => void refreshMemory()}
-                        />
-                      ) : page === 'world' ? (
-                        <WorldArchive />
-                      ) : page === 'work' ? (
-                        <WorkSpace onModelSettings={() => openPanel('model')} />
-                      ) : (
-                        <ReminderSpace
-                          features={features}
-                          event={reminder}
-                          onSettings={() => openPanel('reminders')}
-                          onTest={() => void testReminder()}
-                          onPause={() => void pauseReminder()}
-                        />
-                      )}
-                    </motion.div>
-                  </AnimatePresence>
-                </div>
-              </section>
-              <aside className="companion-column" aria-label="陪伴信息">
-                <div className="profile-card glass">
-                  <div className="profile-art">
-                    <ResourceImage
-                      className="character-portrait"
-                      src="/api/resources/assets/ye-shunguang/warm-dawn-full-body.webp"
-                      alt="叶瞬光暖霞立绘"
-                      label
-                    />
-                    <span className="art-seal">
-                      暖<br />霞
-                    </span>
-                  </div>
-                  <div className="profile-info">
-                    <div className="profile-eyebrow">YOUR EVERYDAY COMPANION</div>
-                    <h2>
-                      叶瞬光<span>暖霞拾光</span>
-                    </h2>
-                    <p>把故事里的相遇，延续到日常。</p>
-                    <div className="profile-status">
-                      <span className="subtle-dot" />
-                      你的日常陪伴
-                    </div>
-                  </div>
-                </div>
-                <div className="agent-card glass">
-                  <div className="detail-heading">
-                    <Cpu size={15} />
-                    <h3>Agent 状态</h3>
-                    <span className={`agent-dot ${busy ? 'active' : ''}`} />
-                  </div>
-                  <div className="agent-state" role="status">
-                    {busy ? <LoaderCircle className="spin" size={15} /> : <span className="subtle-dot" />}
-                    {agentState}
-                  </div>
-                  <div className="agent-steps">
-                    <span className={busy ? 'step-active' : ''}>接收</span>
-                    <i />
-                    <span className={busy && !partial ? 'step-active' : ''}>思考</span>
-                    <i />
-                    <span className={busy && partial ? 'step-active' : ''}>回应</span>
-                  </div>
-                  <button className="text-link" onClick={() => openPanel('tools')}>
-                    <Wrench size={12} />
-                    工具设置
-                    <ArrowUpRight size={12} />
-                  </button>
-                </div>
-                <div className="detail-card voice-card glass">
-                  <div className="detail-heading">
-                    <AudioLines size={15} />
-                    <h3>声音的温度</h3>
-                    <span>{features?.tts.enabled ? '已开启' : '未开启'}</span>
-                  </div>
-                  <VoiceConsole compact />
-                  <button className="text-link" onClick={() => openPanel('voice')}>
-                    声音与播放设置
-                    <ArrowUpRight size={12} />
-                  </button>
-                </div>
-                <div className="detail-card memory-card glass">
-                  <div className="detail-heading">
-                    <Heart size={15} />
-                    <h3>记忆拾光</h3>
-                    <span>{memoryCount} 条</span>
-                  </div>
-                  <div className="memory-card-content">
-                    <p>{memoryCount ? '把你说过的小事，放在心上。' : '从空白开始，慢慢认识你。'}</p>
-                    <ResourceImage
-                      src="/api/resources/character/stickers/10-red-pat.png"
-                      alt="叶瞬光摸头表情"
-                    />
-                  </div>
-                  <button className="text-link" onClick={() => navigate('memory')}>
-                    走进记忆空间
-                    <ArrowUpRight size={12} />
-                  </button>
-                </div>
-                <button className="reminder-mini" onClick={() => navigate('reminders')}>
-                  <span className="reminder-mini-icon">
-                    <Bell size={17} />
-                  </span>
-                  <span>
-                    也记得，照顾好自己
-                    <small>
-                      {features?.reminders.enabled
-                        ? `每 ${features.reminders.interval_minutes} 分钟 · ${features.reminders.paused_until ? '已暂停' : '已开启'}`
-                        : '温柔提醒 · 未开启'}
-                    </small>
-                  </span>
-                  <ChevronRight size={14} />
+            <div className="session-bar" role="region" aria-label="当前状态">
+              <div className={`session-state ${busy ? 'is-active' : ''}`} role="status">
+                {busy ? <LoaderCircle className="spin" size={15} /> : <span className="subtle-dot" />}
+                <span>{agentState}</span>
+              </div>
+              <div className="session-controls">
+                <button className="text-link" aria-label="工具设置" onClick={() => openPanel('tools')}>
+                  <Wrench size={14} />
+                  <span>工具</span>
                 </button>
-                <div className="margin-note">
-                  ✦ <span>有时聊聊，就很好。</span>
-                </div>
-              </aside>
+                <button className="text-link" aria-label="声音与播放设置" onClick={() => openPanel('voice')}>
+                  <AudioLines size={15} />
+                  <span>{audio.busy ? (audio.playing ? '正在播放' : '正在合成') : '声音与播放'}</span>
+                </button>
+                {audio.busy && (
+                  <button className="icon-button" aria-label="停止顶部语音" onClick={audio.stop}>
+                    <Square size={14} />
+                  </button>
+                )}
+                <button
+                  className="icon-button"
+                  aria-label={audio.muted ? '取消静音' : '静音'}
+                  onClick={audio.toggleMute}
+                >
+                  {audio.muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
+                </button>
+              </div>
+            </div>
+            <div className="content-columns">
+              <PreviewWorkspace resetKey={`${page}:${active ?? ''}`} onSettings={() => openPanel('model')}>
+                <section className="chat-column" aria-label="主内容区域">
+                  {error && (
+                    <div role="alert" className="error-banner">
+                      <CircleHelp size={17} />
+                      <span>{error}</span>
+                      <button className="icon-button" aria-label="关闭提示" onClick={() => setError('')}>
+                        <X size={15} />
+                      </button>
+                    </div>
+                  )}
+                  {reminder && (
+                    <div className="reminder-banner" role="status">
+                      <Bell size={17} />
+                      <div className="reminder-copy">
+                        <span>{reminder.text}</span>
+                        {reminder.weather && (
+                          <small>
+                            天气数据：{reminder.weather.observed_at}{' '}
+                            <a
+                              href={safeSourceUrl(reminder.weather.sources[0]?.url)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                            >
+                              天气来源
+                            </a>
+                          </small>
+                        )}
+                      </div>
+                      <button
+                        className="icon-button"
+                        onClick={() => audio.enqueue(reminder.text, '关怀提醒')}
+                        aria-label="播放提醒"
+                      >
+                        <AudioLines size={16} />
+                      </button>
+                      <button className="icon-button" onClick={() => setReminder(null)} aria-label="关闭提醒">
+                        <X size={16} />
+                      </button>
+                    </div>
+                  )}
+                  <div className={`page-container ${page === 'chat' ? 'chat-page' : ''}`}>
+                    {weatherNotice && (
+                      <div className="settings-notice" role="status">
+                        {weatherNotice}{' '}
+                        <button type="button" className="text-link" onClick={() => navigate('memory')}>
+                          完善城市资料
+                        </button>
+                      </div>
+                    )}
+                    <AnimatePresence mode="wait">
+                      <motion.div
+                        key={page}
+                        className="page-transition"
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -6 }}
+                        transition={{ duration: 0.2 }}
+                      >
+                        {page === 'chat' ? (
+                          <ChatThread
+                            key={active ?? 'new'}
+                            messages={messages}
+                            partial={partial}
+                            tools={currentTools}
+                            sources={currentSources}
+                            busy={busy}
+                            loading={loading || historyLoading}
+                            configured={!!settings?.configured}
+                            modelSettings={settings}
+                            asrSettings={features?.asr}
+                            onSend={send}
+                            onStop={() => void stopReply()}
+                            onSettings={() => openPanel('model')}
+                            onVoice={() => openPanel('voice')}
+                            onTools={() => openPanel('tools')}
+                            onWork={() => navigate('work')}
+                            conversationId={active}
+                            onTaskStatus={setFileStatus}
+                          />
+                        ) : page === 'memory' ? (
+                          <MemorySpace
+                            conversations={conversations}
+                            active={active}
+                            onChanged={() => void refreshMemory()}
+                          />
+                        ) : page === 'world' ? (
+                          <WorldArchive />
+                        ) : page === 'work' ? (
+                          <WorkSpace onModelSettings={() => openPanel('model')} />
+                        ) : (
+                          <ReminderSpace
+                            features={features}
+                            event={reminder}
+                            onSettings={() => openPanel('reminders')}
+                            onTest={() => void testReminder()}
+                            onPause={() => void pauseReminder()}
+                          />
+                        )}
+                      </motion.div>
+                    </AnimatePresence>
+                  </div>
+                </section>
+              </PreviewWorkspace>
             </div>
           </main>
           <CompanionSettings
@@ -592,6 +653,8 @@ export default function App() {
             setEffects={setEffects}
             reduceMotion={reduceMotion}
             setReduceMotion={setReduceMotion}
+            backgroundStyle={backgroundStyle}
+            setBackgroundStyle={setBackgroundStyle}
             onModelSaved={setSettings}
             onFeaturesSaved={setFeatures}
             conversations={conversations}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 import {
   ArrowUpRight,
   AudioLines,
@@ -29,6 +30,10 @@ import { useCompanionAudio } from './useAudioQueue';
 import { ToolFeedback } from './Evidence';
 import { CloudVoiceManager } from './CloudVoiceManager';
 import { supportsLiveSpeech } from './speechStream';
+import { backgroundStyles, type BackgroundStyle } from './Atmosphere';
+import { GlideSelect } from './components/ui/glide-select';
+import { effortLabels } from './ModelPicker';
+import { ASRSettings } from './ASRSettings';
 
 const categories = [
   { id: 'model', label: '模型连接', icon: Cpu },
@@ -85,6 +90,8 @@ type Props = {
   setEffects: (value: boolean) => void;
   reduceMotion: boolean;
   setReduceMotion: (value: boolean) => void;
+  backgroundStyle: BackgroundStyle;
+  setBackgroundStyle: (value: BackgroundStyle) => void;
   onModelSaved: (value: ModelSettings) => void;
   onFeaturesSaved: (value: Features) => void;
   conversations: Conversation[];
@@ -123,6 +130,8 @@ export function CompanionSettings({
   setEffects,
   reduceMotion,
   setReduceMotion,
+  backgroundStyle,
+  setBackgroundStyle,
   onModelSaved,
   onFeaturesSaved,
   conversations,
@@ -146,20 +155,20 @@ export function CompanionSettings({
     [clearToolKey, setClearToolKey] = useState(false),
     [busy, setBusy] = useState(false),
     [notice, setNotice] = useState('');
+  const reduced = useReducedMotion();
   const opened = useRef(false),
     audio = useCompanionAudio(),
     navRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const returningFocus = useRef<HTMLElement | null>(null),
-    mobileCategory = useRef<HTMLSelectElement | null>(null),
+    mobileCategory = useRef<HTMLButtonElement | null>(null),
     requestLock = useRef(false);
   const referenceLock = useRef(false);
   const panelRef = useRef(panel);
   panelRef.current = panel;
   const [profiles, setProfiles] = useState<Array<ModelSettings & { id: string }>>([]);
-  const [toolTestQuery, setToolTestQuery] = useState('Python programming language'),
-    [toolTestResult, setToolTestResult] = useState<Record<string, unknown> | null>(null);
+  const [toolTestResult, setToolTestResult] = useState<Record<string, unknown> | null>(null);
   async function testSearch() {
-    if (requestLock.current || !toolTestQuery.trim()) return;
+    if (requestLock.current) return;
     requestLock.current = true;
     setBusy(true);
     setToolTestResult(null);
@@ -167,7 +176,10 @@ export function CompanionSettings({
     try {
       const result = await request<Record<string, unknown>>('/tools/run', {
         method: 'POST',
-        body: JSON.stringify({ name: 'web_search', args: { query: toolTestQuery.trim(), limit: 3 } }),
+        body: JSON.stringify({
+          name: 'web_search',
+          args: { query: 'Python programming language', limit: 3 },
+        }),
       });
       setToolTestResult(result);
       setNotice(
@@ -334,6 +346,7 @@ export function CompanionSettings({
           temperature: draft.temperature,
           timeout: draft.timeout,
           max_tokens: draft.max_tokens,
+          effort: draft.effort ?? 'default',
           api_key: modelKey.trim() || undefined,
           clear_api_key: clearModelKey,
           vision: draft.vision ?? 'unknown',
@@ -488,6 +501,8 @@ export function CompanionSettings({
       protocol: item.protocol || 'openai',
       model: stored?.model || item.model || '',
       vision: stored?.vision ?? 'unknown',
+      effort: stored?.effort ?? 'default',
+      efforts: stored?.efforts ?? ['default'],
       has_api_key: !!stored?.has_api_key,
     });
     setModels([]);
@@ -563,6 +578,14 @@ export function CompanionSettings({
                   }
                 }}
               >
+                {panel === id && (
+                  <motion.span
+                    aria-hidden="true"
+                    className="selection-glide"
+                    layoutId="settings-navigation-highlight"
+                    transition={{ duration: reduced || !effects || reduceMotion ? 0 : 0.22 }}
+                  />
+                )}
                 <Icon size={18} />
                 {label}
               </button>
@@ -570,21 +593,17 @@ export function CompanionSettings({
           </nav>
           <label className="mobile-settings-select">
             设置分类
-            <select
+            <GlideSelect
               ref={mobileCategory}
+              label="设置分类"
               value={panel || 'model'}
               disabled={busy}
-              onChange={(e) => {
-                setPanel(e.target.value as Panel);
+              onValueChange={(value) => {
+                setPanel(value as Panel);
                 setNotice('');
               }}
-            >
-              {categories.map((item) => (
-                <option key={item.id} value={item.id}>
-                  {item.label}
-                </option>
-              ))}
-            </select>
+              options={categories.map((item) => ({ value: item.id, label: item.label }))}
+            />
           </label>
           <section
             className="settings-body"
@@ -596,19 +615,17 @@ export function CompanionSettings({
             {panel === 'model' && profiles.length > 0 && (
               <label className="field">
                 已保存的连接
-                <select
-                  aria-label="已保存的连接"
+                <GlideSelect
+                  label="已保存的连接"
+                  placeholder="选择并激活保存的连接"
                   value=""
                   disabled={busy}
-                  onChange={(e) => void activateProfile(e.target.value)}
-                >
-                  <option value="">选择并激活保存的连接</option>
-                  {profiles.map((item) => (
-                    <option key={item.id} value={item.id}>
-                      {item.provider || item.base_url} · {item.protocol || 'openai'} · {item.model}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(value) => void activateProfile(value)}
+                  options={profiles.map((item) => ({
+                    value: item.id,
+                    label: `${item.provider || item.base_url} · ${item.protocol || 'openai'} · ${item.model}`,
+                  }))}
+                />
               </label>
             )}
             {panel === 'model' &&
@@ -622,37 +639,37 @@ export function CompanionSettings({
                   <h2>模型连接</h2>
                   <label className="field">
                     提供商
-                    <select
-                      aria-label="提供商"
+                    <GlideSelect
+                      label="提供商"
                       value={draft.provider || 'custom'}
-                      onChange={(e) => selectProvider(e.target.value)}
-                    >
-                      {providers.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                      {!providers.some((item) => item.id === (draft.provider || 'custom')) && (
-                        <option value={draft.provider || 'custom'}>当前自定义配置</option>
-                      )}
-                    </select>
+                      onValueChange={selectProvider}
+                      options={[
+                        ...providers.map((item) => ({ value: item.id, label: item.name })),
+                        ...(!providers.some((item) => item.id === (draft.provider || 'custom'))
+                          ? [{ value: draft.provider || 'custom', label: '当前自定义配置' }]
+                          : []),
+                      ]}
+                    />
                   </label>
                   <label className="field">
                     接口协议
-                    <select
-                      aria-label="接口协议"
+                    <GlideSelect
+                      label="接口协议"
                       value={draft.protocol || 'openai'}
-                      onChange={(e) =>
+                      onValueChange={(value) =>
                         setDraft({
                           ...draft,
-                          protocol: e.target.value as 'openai' | 'anthropic',
+                          protocol: value as 'openai' | 'anthropic',
                           vision: 'unknown',
+                          effort: 'default',
+                          efforts: ['default'],
                         })
                       }
-                    >
-                      <option value="openai">OpenAI 兼容</option>
-                      <option value="anthropic">Anthropic 兼容</option>
-                    </select>
+                      options={[
+                        { value: 'openai', label: 'OpenAI 兼容' },
+                        { value: 'anthropic', label: 'Anthropic 兼容' },
+                      ]}
+                    />
                     <span className="field-hint">协议决定请求和流式解析方式，请匹配提供商的实际接口。</span>
                   </label>
                   <label className="field">
@@ -667,6 +684,8 @@ export function CompanionSettings({
                           ...draft,
                           base_url: e.target.value,
                           vision: 'unknown',
+                          effort: 'default',
+                          efforts: ['default'],
                           has_api_key: e.target.value === settings?.base_url && !!settings.has_api_key,
                         })
                       }
@@ -724,17 +743,21 @@ export function CompanionSettings({
                   {models.length > 0 && (
                     <label className="field">
                       可用模型
-                      <select
+                      <GlideSelect
+                        label="可用模型"
+                        placeholder="选择实际模型"
                         value={models.some((item) => item.id === draft.model) ? draft.model : ''}
-                        onChange={(e) => setDraft({ ...draft, model: e.target.value, vision: 'unknown' })}
-                      >
-                        <option value="">选择实际模型</option>
-                        {models.map((item) => (
-                          <option key={item.id} value={item.id}>
-                            {item.id}
-                          </option>
-                        ))}
-                      </select>
+                        onValueChange={(value) =>
+                          setDraft({
+                            ...draft,
+                            model: value,
+                            vision: 'unknown',
+                            effort: 'default',
+                            efforts: ['default'],
+                          })
+                        }
+                        options={models.map((item) => ({ value: item.id, label: item.id }))}
+                      />
                     </label>
                   )}
                   <label className="field">
@@ -743,9 +766,31 @@ export function CompanionSettings({
                       aria-label="模型 ID"
                       required
                       value={draft.model}
-                      onChange={(e) => setDraft({ ...draft, model: e.target.value, vision: 'unknown' })}
+                      onChange={(e) =>
+                        setDraft({
+                          ...draft,
+                          model: e.target.value,
+                          vision: 'unknown',
+                          effort: 'default',
+                          efforts: ['default'],
+                        })
+                      }
                       maxLength={150}
                     />
+                  </label>
+                  <label className="field">
+                    新聊天的默认思考强度
+                    <GlideSelect
+                      label="新聊天的默认思考强度"
+                      value={draft.effort || 'default'}
+                      options={(draft.efforts || ['default']).map((value) => ({
+                        value,
+                        label: effortLabels[value] || value,
+                      }))}
+                      disabled={busy || (draft.efforts || ['default']).length === 1}
+                      onValueChange={(effort) => setDraft({ ...draft, effort })}
+                    />
+                    <span className="field-hint">保存连接后显示已核实的支持项；不改变已有聊天的选择。</span>
                   </label>
                   <div className="field-row">
                     <label className="field">
@@ -783,16 +828,18 @@ export function CompanionSettings({
                   </label>
                   <label className="field">
                     当前模型的图像理解能力
-                    <select
+                    <GlideSelect
+                      label="当前模型的图像理解能力"
                       value={draft.vision ?? 'unknown'}
-                      onChange={(event) =>
-                        setDraft({ ...draft, vision: event.target.value as ModelSettings['vision'] })
+                      onValueChange={(value) =>
+                        setDraft({ ...draft, vision: value as ModelSettings['vision'] })
                       }
-                    >
-                      <option value="unknown">尚未确认（需要替代识别时询问）</option>
-                      <option value="supported">已确认支持（必要图像直接交给当前模型）</option>
-                      <option value="unsupported">不支持图像输入</option>
-                    </select>
+                      options={[
+                        { value: 'unknown', label: '尚未确认（需要替代识别时询问）' },
+                        { value: 'supported', label: '已确认支持（必要图像直接交给当前模型）' },
+                        { value: 'unsupported', label: '不支持图像输入' },
+                      ]}
+                    />
                     <span className="field-hint">
                       仅看图能力，不代表支持生图或改图。切换模型、协议或地址后需要重新确认。
                     </span>
@@ -845,7 +892,7 @@ export function CompanionSettings({
                       <ArrowUpRight size={15} />
                       保存并测试连接
                     </Button>
-                    <Button type="submit" disabled={busy}>
+                    <Button type="submit" disabled={busy} aria-busy={busy}>
                       <Check size={15} />
                       保存配置
                     </Button>
@@ -854,6 +901,9 @@ export function CompanionSettings({
               ) : (
                 <p>模型设置需要后端服务在线。</p>
               ))}
+            {panel === 'voice' && (
+              <ASRSettings value={features?.asr} connections={profiles} onSaved={onFeaturesSaved} />
+            )}
             {panel === 'voice' && tts && (
               <form
                 onSubmit={(e) => {
@@ -892,12 +942,11 @@ export function CompanionSettings({
                   />
                   <label className="field">
                     语音提供商
-                    <select
-                      aria-label="语音提供商"
+                    <GlideSelect
+                      label="语音提供商"
                       value={tts.provider}
                       disabled={busy || referenceBusy}
-                      onChange={(e) => {
-                        const id = e.target.value;
+                      onValueChange={(id) => {
                         const item = cloneProviders.find((value) => value.id === id);
                         if (!item) return;
                         setBusy(true);
@@ -928,20 +977,17 @@ export function CompanionSettings({
                           .catch((error: Error) => setNotice(error.message))
                           .finally(() => setBusy(false));
                       }}
-                    >
-                      {cloneProviders.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.name}
-                        </option>
-                      ))}
-                      {!cloneProviders.some((item) => item.id === 'mimo') && (
-                        <option value="mimo">小米 MiMo · 参考声音克隆</option>
-                      )}
-                      {tts.provider !== 'mimo' &&
-                        !cloneProviders.some((item) => item.id === tts.provider) && (
-                          <option value={tts.provider}>{tts.provider}（不支持本项目的参考克隆）</option>
-                        )}
-                    </select>
+                      options={[
+                        ...cloneProviders.map((item) => ({ value: item.id, label: item.name })),
+                        ...(!cloneProviders.some((item) => item.id === 'mimo')
+                          ? [{ value: 'mimo', label: '小米 MiMo · 参考音频克隆' }]
+                          : []),
+                        ...(tts.provider !== 'mimo' &&
+                        !cloneProviders.some((item) => item.id === tts.provider)
+                          ? [{ value: tts.provider, label: `${tts.provider}（须支持本项目的参考克隆）` }]
+                          : []),
+                      ]}
+                    />
                     <span className="field-hint">
                       百炼使用云端音色实时合成；小米引用原 MP3
                       并合并短句合成。切换厂商后请使用对应密钥和音色。
@@ -1016,22 +1062,23 @@ export function CompanionSettings({
                   <label className="field">
                     TTS 克隆模型 ID
                     {tts.provider === 'aliyun' ? (
-                      <select
-                        aria-label="TTS 克隆模型 ID"
+                      <GlideSelect
+                        label="TTS 克隆模型 ID"
                         value={tts.model}
-                        onChange={(event) => setTts({ model: event.target.value, voice: '' })}
-                      >
-                        {![
-                          'qwen-audio-3.1-tts-flash',
-                          'qwen-audio-3.0-tts-flash',
-                          'qwen-audio-3.0-tts-plus',
-                        ].includes(tts.model) && (
-                          <option value={tts.model}>{tts.model}（旧配置，请核对）</option>
-                        )}
-                        <option value="qwen-audio-3.1-tts-flash">Qwen-Audio 3.1 Flash</option>
-                        <option value="qwen-audio-3.0-tts-flash">Qwen-Audio 3.0 Flash</option>
-                        <option value="qwen-audio-3.0-tts-plus">Qwen-Audio 3.0 Plus</option>
-                      </select>
+                        onValueChange={(value) => setTts({ model: value, voice: '' })}
+                        options={[
+                          ...(![
+                            'qwen-audio-3.1-tts-flash',
+                            'qwen-audio-3.0-tts-flash',
+                            'qwen-audio-3.0-tts-plus',
+                          ].includes(tts.model) && tts.model
+                            ? [{ value: tts.model, label: `${tts.model}（旧配置，请核对）` }]
+                            : []),
+                          { value: 'qwen-audio-3.1-tts-flash', label: 'Qwen-Audio 3.1 Flash' },
+                          { value: 'qwen-audio-3.0-tts-flash', label: 'Qwen-Audio 3.0 Flash' },
+                          { value: 'qwen-audio-3.0-tts-plus', label: 'Qwen-Audio 3.0 Plus' },
+                        ]}
+                      />
                     ) : (
                       <Input
                         aria-label="TTS 克隆模型 ID"
@@ -1209,9 +1256,35 @@ export function CompanionSettings({
             {panel === 'effects' && (
               <>
                 <h2>沉浸光效</h2>
+                <fieldset className="background-choices">
+                  <legend>背景光效</legend>
+                  {backgroundStyles.map((item) => (
+                    <label key={item.id} className="background-choice">
+                      {backgroundStyle === item.id && (
+                        <motion.span
+                          aria-hidden="true"
+                          className="selection-glide"
+                          layoutId="background-style-highlight"
+                          transition={{ duration: reduced || !effects || reduceMotion ? 0 : 0.22 }}
+                        />
+                      )}
+                      <input
+                        type="radio"
+                        name="background-style"
+                        value={item.id}
+                        checked={backgroundStyle === item.id}
+                        onChange={() => setBackgroundStyle(item.id)}
+                      />
+                      <span>
+                        <strong>{item.name}</strong>
+                        <small>{item.description}</small>
+                      </span>
+                    </label>
+                  ))}
+                </fieldset>
                 <Toggle
                   label="沉浸光效"
-                  description="柔光、玻璃与鼠标染色效果；触屏自动使用静态背景，页面后台停止绘制。"
+                  description="所选背景在全区域响应鼠标，卡片带局部柔光；正文遮罩保持清晰，触屏保留静态霞光。"
                   checked={effects}
                   onChange={setEffects}
                 />
@@ -1222,7 +1295,7 @@ export function CompanionSettings({
                   onChange={setReduceMotion}
                 />
                 <p className="space-note">
-                  此设备的显示偏好自动保存。鼠标效果限制绘制尺寸与帧率，停止移动后休眠。
+                  此设备的显示偏好自动保存。页面进入后台时暂停动效，也尊重系统的减少动态效果设置。
                 </p>
                 <div className="about-app">
                   <h3>关于瞬光伴行</h3>
@@ -1257,16 +1330,17 @@ export function CompanionSettings({
                 />
                 <label className="field">
                   搜索服务
-                  <select
-                    aria-label="搜索服务"
+                  <GlideSelect
+                    label="搜索服务"
                     value={tools.search_provider}
-                    onChange={(e) => setTools({ search_provider: e.target.value })}
-                  >
-                    <option value="public">公开搜索（无需 Key）</option>
-                    <option value="bing">Bing RSS（公开网页检索，尽力服务）</option>
-                    <option value="wikipedia">Wikipedia（公开百科检索）</option>
-                    <option value="tavily">Tavily（网页搜索，需要密钥）</option>
-                  </select>
+                    onValueChange={(value) => setTools({ search_provider: value })}
+                    options={[
+                      { value: 'public', label: '公开搜索（无需 Key）' },
+                      { value: 'bing', label: 'Bing RSS（公开网页检索，尽力服务）' },
+                      { value: 'wikipedia', label: 'Wikipedia（公开百科检索）' },
+                      { value: 'tavily', label: 'Tavily（网页搜索，需要密钥）' },
+                    ]}
+                  />
                   <span className="field-hint">
                     公开搜索无需 Key，以 DuckDuckGo 为主，Bing RSS 最多一次回退，仍为尽力服务。Wikipedia
                     只提供百科内容；Tavily 需密钥。
@@ -1318,33 +1392,21 @@ export function CompanionSettings({
                 <p className="space-note">
                   开启工具后，模型可在有限调用次数内选择并执行。失败原因会显示，未返回结果时不会冒充调用成功。
                 </p>
-                <Button type="submit" disabled={busy}>
+                <Button type="submit" disabled={busy} aria-busy={busy}>
                   <Check size={15} />
                   保存工具配置
                 </Button>
-                <div className="reference-panel">
-                  <h3>测试已保存的搜索服务</h3>
-                  <label className="field">
-                    测试关键词
-                    <Input
-                      aria-label="搜索测试关键词"
-                      value={toolTestQuery}
-                      onChange={(e) => setToolTestQuery(e.target.value)}
-                      maxLength={200}
-                    />
-                  </label>
+                <div className="search-connection-test">
                   <Button
                     type="button"
                     variant="outline"
-                    disabled={busy || !toolTestQuery.trim()}
+                    disabled={busy}
+                    aria-busy={busy}
                     onClick={() => void testSearch()}
                   >
-                    用已保存配置测试搜索
+                    {busy && <LoaderCircle size={15} className="spin" />}测试搜索连接
                   </Button>
-                  <p className="space-note">
-                    一次查询最多返回 3 条来源，使用已保存的配置。Tavily 密钥通常以 tvly-
-                    开头，请勿填写模型服务的密钥。认证失败需检查 Tavily 控制台的密钥有效性与账户权限。
-                  </p>
+                  <span className="field-hint">使用已保存的配置测试一次搜索。</span>
                   {toolTestResult && (
                     <ToolFeedback
                       tools={[
@@ -1486,7 +1548,7 @@ export function CompanionSettings({
                 <p className="space-note">
                   按时间间隔触发，不检测坐姿。页面需打开并连接服务；后台可能延迟，浏览器关闭后不能保证提醒。重连不补发积压提醒。
                 </p>
-                <Button type="submit" disabled={busy}>
+                <Button type="submit" disabled={busy} aria-busy={busy}>
                   <Check size={15} />
                   保存提醒配置
                 </Button>

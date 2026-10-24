@@ -58,6 +58,90 @@ def submit(setup, filename, scope='full', **kwargs):
     )
 
 
+def test_new_summary_uses_project_outputs_without_changing_existing_files(setup):
+    work, _, source, old_output, _, _ = setup
+    (old_output / 'existing.md').write_text('keep this result', encoding='utf-8')
+    (source / 'source.txt').write_text('source for automatic output', encoding='utf-8')
+    task = wait(work, submit(setup, 'source.txt'))
+    assert task['status'] == 'complete', task['error']
+    artifact, data = artifact_bytes(work, task['id'])
+    expected = config.DATA_DIR / 'outputs' / artifact['path']
+    assert expected.is_file()
+    assert expected.read_bytes() == data
+    assert (old_output / 'existing.md').read_text(encoding='utf-8') == 'keep this result'
+
+
+def test_file_task_keeps_its_conversation_model_when_queued_and_global_defaults_change(setup, monkeypatch):
+    work, _, source, _, cid, _ = setup
+    config.save_config(
+        config.ModelConfig(
+            llm_base_url='https://selected.example/v1', llm_model='selected-model', llm_api_key='dummy-one'
+        )
+    )
+    choice = {
+        'profile_id': config.profile_id('https://selected.example/v1', 'openai'),
+        'model': 'selected-model',
+        'effort': 'default',
+    }
+    work.store.set_conversation_model(cid, choice)
+    config.save_config(
+        config.ModelConfig(
+            llm_base_url='https://default.example/v1', llm_model='default-model', llm_api_key='dummy-default'
+        )
+    )
+    started, release = Event(), Event()
+    seen = []
+
+    async def invoke(value, *args, **kwargs):
+        seen.append((value.llm_base_url, value.llm_model))
+        started.set()
+        assert await asyncio.to_thread(release.wait, 5)
+        return '资料整理完成。'
+
+    monkeypatch.setattr(document_models, 'invoke', invoke)
+    (source / 'source.txt').write_text('task material\n' * 2000, encoding='utf-8')
+    task = submit(setup, 'source.txt')
+    try:
+        assert started.wait(5)
+        config.save_config(
+            config.ModelConfig(
+                llm_base_url='https://other.example/v1', llm_model='other-model', llm_api_key='dummy-two'
+            )
+        )
+        work.store.set_conversation_model(
+            cid,
+            {
+                'profile_id': config.profile_id('https://other.example/v1', 'openai'),
+                'model': 'other-model',
+                'effort': 'default',
+            },
+        )
+    finally:
+        release.set()
+    result = wait(work, task)
+    assert result['status'] == 'complete', result['error']
+    assert seen and all(item == ('https://selected.example/v1', 'selected-model') for item in seen)
+
+
+def test_summary_has_a_short_chat_abstract_and_saves_the_complete_markdown(setup, monkeypatch):
+    import json
+
+    work, _, source, _, _, _ = setup
+    full = '# 完整整理\n\n' + '逐项核对的详细结果。' * 100
+
+    async def invoke(*args, **kwargs):
+        return json.dumps({'abstract': '资料有三项关键要求，详见完整成果。', 'summary': full}, ensure_ascii=False)
+
+    monkeypatch.setattr(document_models, 'invoke', invoke)
+    (source / 'source.txt').write_text('real task material', encoding='utf-8')
+    task = wait(work, submit(setup, 'source.txt'))
+    assert task['status'] == 'complete', task['error']
+    result = task['steps'][-1]['result']
+    assert result['summary'] == full
+    assert result['abstract'] == '资料有三项关键要求，详见完整成果。'
+    assert full in artifact_bytes(work, task['id'])[1].decode('utf-8')
+
+
 def test_full_word_reads_later_blocks_and_summary_uses_all_chunks_then_saves_copy(setup):
     from docx import Document
 
@@ -76,7 +160,7 @@ def test_full_word_reads_later_blocks_and_summary_uses_all_chunks_then_saves_cop
     assert any('原文第0段' in call for call in calls)
     assert len(calls) > 1 and task['context']['budget']['calls'] == len(calls)
     artifact, data = artifact_bytes(work, task['id'])
-    assert (output / artifact['path']).read_bytes() == data
+    assert (config.DATA_DIR / 'outputs' / artifact['path']).read_bytes() == data
     assert '阅读范围与来源'.encode() in data and 'source.docx'.encode() in data
     assert (source / 'source.docx').read_bytes() == original
 
@@ -159,14 +243,14 @@ def test_focused_question_only_sends_matching_ranges_and_discloses_scope(setup):
     assert any('target value' in call for call in calls)
 
 
-def test_missing_output_directory_preserves_summary_and_saving_does_not_call_model_again(setup):
-    work, _, source, output, _, calls = setup
-    with work.store.connect() as db:
-        db.execute('DELETE FROM work_settings')
+def test_unavailable_output_directory_preserves_summary_and_saving_does_not_call_model_again(setup):
+    work, _, source, _, _, calls = setup
+    blocked = config.DATA_DIR / 'outputs'
+    blocked.write_text('directory temporarily unavailable', encoding='utf-8')
     (source / 'source.txt').write_text('one source')
     task = wait(work, submit(setup, 'source.txt'))
     assert task['status'] == 'waiting_output' and len(calls) == 1
-    work.store.set_output_workspace(work.grant(str(output))['id'])
+    blocked.unlink()
     task = wait(work, work.continue_task(task['id'], True))
     assert task['status'] == 'complete' and len(calls) == 1
     assert artifact_bytes(work, task['id'])[1]

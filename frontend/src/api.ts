@@ -4,6 +4,11 @@ import { httpError } from './httpError';
 type Schemas = components['schemas'];
 type OptionalFields<T> = { [K in keyof T]?: Exclude<T[K], null> };
 export type ModelSettings = Schemas['SettingsOut'];
+export type UserProfile = Schemas['UserProfile'];
+export type HistorySource = Schemas['HistorySourceOut'];
+export type ModelChoice = Schemas['ModelChoice'];
+export type ModelChoiceOut = Schemas['ModelChoiceOut'];
+export type ConnectionOptions = Schemas['ConnectionOptions'];
 export type CloudVoice = Schemas['CloudVoiceOut'];
 export type Sticker = Schemas['StickerOut'];
 export type Workspace = Schemas['WorkspaceOut'];
@@ -54,6 +59,15 @@ export interface Provider {
   notice?: string;
 }
 export interface Features {
+  asr?: {
+    enabled: boolean;
+    configured: boolean;
+    base_url: string;
+    model: string;
+    profile_id: string;
+    timeout: number;
+    has_api_key: boolean;
+  };
   memory?: { auto_save: boolean; recall_history: boolean };
   tools: {
     weather_enabled: boolean;
@@ -111,6 +125,7 @@ export interface ReminderEvent {
   text: string;
   voice: boolean;
   created_at: string;
+  weather?: { city: string; observed_at: string; sources: Source[] };
 }
 export interface VoiceReference {
   id: string;
@@ -180,11 +195,17 @@ export async function streamChat(
   signal: AbortSignal,
   onEvent: (event: string, data: Record<string, unknown>) => void,
   attachments: string[] = [],
+  model_choice?: ModelChoice,
 ) {
   const response = await fetch('/api/chat', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ conversation_id, content, ...(attachments.length ? { attachments } : {}) }),
+    body: JSON.stringify({
+      conversation_id,
+      content,
+      ...(attachments.length ? { attachments } : {}),
+      ...(model_choice ? { model_choice } : {}),
+    }),
     signal,
   });
   if (!response.ok) {

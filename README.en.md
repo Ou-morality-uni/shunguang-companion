@@ -1,9 +1,10 @@
-# Shunguang Companion v0.5.5
+# Shunguang Companion v0.5.6
 
-[v0.5.5 release notes (Chinese)](versions/0.5.5/README.md) · [TTS setup (Chinese)](docs/tts.md)
+[v0.5.6 release notes (Chinese)](versions/0.5.6/README.md) · [TTS setup (Chinese)](docs/tts.md)
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.5.6](versions/0.5.6/README.md): Refresh the warm red-and-gold interface with flowing light, collapsible navigation, compact status and voice controls, and resizable file previews.
 - [v0.5.5](versions/0.5.5/README.md): Add chat attachments and background file tasks, resumable long-document reading with workload consent, saved Markdown summaries, and stage-based work speech.
 - [v0.5.4](versions/0.5.4/README.md): Add document uploads and reading, multi-file summaries, vision capability and fallback consent, varied work cues, and code-block speech filtering.
 - [v0.5.3](versions/0.5.3/README.md): Add a local workbench with folder grants, file tasks, deletion approval, operation history, cancellation, backups, and conflict-aware recovery.

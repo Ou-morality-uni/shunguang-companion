@@ -93,6 +93,44 @@ class TTSConfig(BaseModel):
         return value.strip()
 
 
+class ASRConfig(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    enabled: bool = False
+    base_url: str = Field(default='https://api.openai.com/v1', max_length=500)
+    model: str = Field(default='gpt-transcribe', max_length=150)
+    api_key: SecretStr = SecretStr('')
+    profile_id: str = Field(default='', max_length=64)
+    timeout: float = Field(default=60, ge=5, le=90)
+
+    @field_validator('base_url')
+    @classmethod
+    def url_valid(cls, value):
+        value = TTSConfig.url_valid(value)
+        urlparse(value).port  # Validate the port as well as the HTTPS origin.
+        return value
+
+    @field_validator('model')
+    @classmethod
+    def model_valid(cls, value):
+        value = TTSConfig.id_valid(value)
+        if any(char.isspace() for char in value):
+            raise ValueError('模型 ID 不正确')
+        return value
+
+
+def asr_secret(value: ASRConfig):
+    if value.profile_id:
+        item = next((item for item in config.saved_profiles() if item.get('id') == value.profile_id), None)
+        if not item:
+            return ''
+        profile = config.profile_config(item)
+        target, source = urlparse(value.base_url), urlparse(profile.llm_base_url)
+        if (target.scheme, target.hostname, target.port or 443) != (source.scheme, source.hostname, source.port or 443):
+            return ''
+        return profile.llm_api_key.get_secret_value()
+    return value.api_key.get_secret_value()
+
+
 class ReminderConfig(BaseModel):
     model_config = ConfigDict(extra='forbid')
     enabled: bool = False
@@ -139,6 +177,7 @@ class FeatureConfig(BaseModel):
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     tools: ToolsConfig = Field(default_factory=ToolsConfig)
     tts: TTSConfig = Field(default_factory=TTSConfig)
+    asr: ASRConfig = Field(default_factory=ASRConfig)
     reminders: ReminderConfig = Field(default_factory=ReminderConfig)
 
 
@@ -148,7 +187,7 @@ def load() -> FeatureConfig:
         if not path.exists():
             return FeatureConfig()
         record = json.loads(path.read_text(encoding='utf-8'))
-        for name in ('tools', 'tts'):
+        for name in ('tools', 'tts', 'asr'):
             block = record.setdefault(name, {})
             encrypted = block.pop('api_key_encrypted', '')
             block.pop('api_key', None)
@@ -167,8 +206,8 @@ def load() -> FeatureConfig:
 
 def save(value: FeatureConfig) -> None:
     with LOCK:
-        record = value.model_dump(exclude={'tools': {'api_key'}, 'tts': {'api_key'}})
-        for name in ('tools', 'tts'):
+        record = value.model_dump(exclude={'tools': {'api_key'}, 'tts': {'api_key'}, 'asr': {'api_key'}})
+        for name in ('tools', 'tts', 'asr'):
             secret = getattr(value, name).api_key.get_secret_value()
             if secret:
                 record[name]['api_key_encrypted'] = encrypt_secret(secret)
@@ -248,7 +287,9 @@ def capabilities(value: TTSConfig) -> dict:
 
 
 def public(value: FeatureConfig) -> dict:
-    result = value.model_dump(exclude={'tools': {'api_key'}, 'tts': {'api_key'}})
+    result = value.model_dump(exclude={'tools': {'api_key'}, 'tts': {'api_key'}, 'asr': {'api_key'}})
+    result['asr']['has_api_key'] = bool(value.asr.api_key.get_secret_value())
+    result['asr']['configured'] = bool(value.asr.model and asr_secret(value.asr))
     result['tools']['has_api_key'] = bool(value.tools.api_key.get_secret_value())
     result['tools']['coverage'] = {
         'public': '公开网页搜索，无需 API Key：DuckDuckGo 主查询，最多一次 Bing RSS 回退；公开服务可能限流或要求验证，不保证持续可用。',
@@ -282,7 +323,7 @@ def public(value: FeatureConfig) -> dict:
 
 def update(patch: dict) -> FeatureConfig:
     with LOCK:
-        if set(patch) - {'tools', 'tts', 'reminders', 'memory'}:
+        if set(patch) - {'tools', 'tts', 'asr', 'reminders', 'memory'}:
             raise ValueError('未知设置分类')
         current = load()
         record = current.model_dump()
@@ -290,7 +331,7 @@ def update(patch: dict) -> FeatureConfig:
             if not isinstance(block, dict):
                 raise ValueError('设置分类必须是对象')
             block = dict(block)
-            if name in ('tools', 'tts'):
+            if name in ('tools', 'tts', 'asr'):
                 clear = block.pop('clear_api_key', False)
                 submitted = block.pop('api_key', '')
                 if submitted is None:
@@ -304,6 +345,9 @@ def update(patch: dict) -> FeatureConfig:
                     block.get('provider', previous.provider) == previous.provider
                     and block.get('base_url', previous.base_url).rstrip('/') == previous.base_url
                 )
+                if name == 'asr':
+                    address = block.get('base_url', previous.base_url)
+                    same_origin = isinstance(address, str) and address.rstrip('/') == previous.base_url
                 if name == 'tts' and not same_origin:
                     cache_tts_profile(previous)
                 saved = (

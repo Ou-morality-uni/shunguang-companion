@@ -54,10 +54,14 @@ it('shows the destination, file, locations and cost before binding a selected vi
       onChanged={onChanged}
     />,
   );
-  await screen.findByRole('option', { name: 'vision.example / visual' });
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
   expect(screen.getByText(/report.pdf.*第 3 页/)).toBeTruthy();
   expect(request).toHaveBeenCalledTimes(1);
-  fireEvent.change(screen.getByLabelText('本任务的替代视觉服务'), { target: { value: 'v1' } });
+  const selector = screen.getByRole('combobox', { name: '本任务的替代视觉服务' });
+  expect(selector.tagName).toBe('BUTTON');
+  fireEvent.keyDown(selector, { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: 'vision.example / visual' }));
   expect(screen.getByText(/会将图像发送到本机之外/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: '同意本任务使用所选服务' }));
   await waitFor(() =>

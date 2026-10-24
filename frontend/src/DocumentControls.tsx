@@ -1,3 +1,4 @@
+import { GlideSelect } from './components/ui/glide-select';
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { request, type FileTaskInput, type Workspace } from './api';
@@ -169,14 +170,16 @@ export function VisionApproval({
       {typeof info.scope === 'string' && <p>{info.scope}</p>}
       <label className="field">
         本任务的替代视觉服务
-        <select value={chosen} onChange={(event) => setChosen(event.target.value)}>
-          <option value="">请选择已确认支持视觉的模型</option>
-          {profiles.map((profile) => (
-            <option key={profile.id} value={profile.id}>
-              {profile.service} / {profile.model}
-            </option>
-          ))}
-        </select>
+        <GlideSelect
+          label="本任务的替代视觉服务"
+          placeholder="请选择已确认支持视觉的模型"
+          value={chosen}
+          onValueChange={setChosen}
+          options={profiles.map((profile) => ({
+            value: profile.id,
+            label: `${profile.service} / ${profile.model}`,
+          }))}
+        />
       </label>
       {selected && (
         <p>
