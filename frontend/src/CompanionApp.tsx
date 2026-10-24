@@ -45,6 +45,7 @@ import { ConversationHistory } from './ConversationHistory';
 import { PreviewWorkspace } from './PreviewWorkspace';
 import { WorkSpace } from './WorkSpace';
 import { useWorkEvents } from './useWorkEvents';
+import { AnnotationProvider, type AnnotationSubmission } from './Annotations';
 
 const pages = [
   { key: 'chat', label: '陪伴对话', icon: MessageSquare },
@@ -314,13 +315,18 @@ export default function App() {
     chat.selectConversation(null);
     navigate('chat');
   }
-  async function send(text: string, attachments: string[] = [], modelChoice?: ModelChoice): Promise<boolean> {
+  async function send(
+    text: string,
+    attachments: string[] = [],
+    modelChoice?: ModelChoice,
+    annotations?: AnnotationSubmission,
+  ): Promise<boolean> {
     if (loading) return false;
     if (!settings?.configured && !modelChoice) {
       openPanel('model');
       return false;
     }
-    return chat.send(text, attachments, modelChoice);
+    return chat.send(text, attachments, modelChoice, annotations);
   }
   const title =
     page === 'chat'
@@ -470,7 +476,7 @@ export default function App() {
               </div>
               <div className="version">
                 <span className="version-dot" />
-                瞬光伴行 WEB<span>v0.6.0</span>
+                瞬光伴行 WEB<span>v0.6.1</span>
               </div>
             </div>
           </aside>
@@ -538,110 +544,116 @@ export default function App() {
               </div>
             </div>
             <div className="content-columns">
-              <PreviewWorkspace resetKey={`${page}:${active ?? ''}`} onSettings={() => openPanel('model')}>
-                <section className="chat-column" aria-label="主内容区域">
-                  {error && (
-                    <div role="alert" className="error-banner">
-                      <CircleHelp size={17} />
-                      <span>{error}</span>
-                      <button className="icon-button" aria-label="关闭提示" onClick={() => setError('')}>
-                        <X size={15} />
-                      </button>
-                    </div>
-                  )}
-                  {reminder && (
-                    <div className="reminder-banner" role="status">
-                      <Bell size={17} />
-                      <div className="reminder-copy">
-                        <span>{reminder.text}</span>
-                        {reminder.weather && (
-                          <small>
-                            天气数据：{reminder.weather.observed_at}{' '}
-                            <a
-                              href={safeSourceUrl(reminder.weather.sources[0]?.url)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                            >
-                              天气来源
-                            </a>
-                          </small>
-                        )}
-                      </div>
-                      <button
-                        className="icon-button"
-                        onClick={() => audio.enqueue(reminder.text, '关怀提醒')}
-                        aria-label="播放提醒"
-                      >
-                        <AudioLines size={16} />
-                      </button>
-                      <button className="icon-button" onClick={() => setReminder(null)} aria-label="关闭提醒">
-                        <X size={16} />
-                      </button>
-                    </div>
-                  )}
-                  <div className={`page-container ${page === 'chat' ? 'chat-page' : ''}`}>
-                    {weatherNotice && (
-                      <div className="settings-notice" role="status">
-                        {weatherNotice}{' '}
-                        <button type="button" className="text-link" onClick={() => navigate('memory')}>
-                          完善城市资料
+              <AnnotationProvider conversationId={active}>
+                <PreviewWorkspace resetKey={`${page}:${active ?? ''}`} onSettings={() => openPanel('model')}>
+                  <section className="chat-column" aria-label="主内容区域">
+                    {error && (
+                      <div role="alert" className="error-banner">
+                        <CircleHelp size={17} />
+                        <span>{error}</span>
+                        <button className="icon-button" aria-label="关闭提示" onClick={() => setError('')}>
+                          <X size={15} />
                         </button>
                       </div>
                     )}
-                    <AnimatePresence mode="wait">
-                      <motion.div
-                        key={page}
-                        className="page-transition"
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, y: -6 }}
-                        transition={{ duration: 0.2 }}
-                      >
-                        {page === 'chat' ? (
-                          <ChatThread
-                            key={active ?? 'new'}
-                            messages={messages}
-                            partial={partial}
-                            tools={currentTools}
-                            sources={currentSources}
-                            busy={busy}
-                            loading={loading || historyLoading}
-                            configured={!!settings?.configured}
-                            modelSettings={settings}
-                            asrSettings={features?.asr}
-                            onSend={send}
-                            onStop={() => void stopReply()}
-                            onSettings={() => openPanel('model')}
-                            onVoice={() => openPanel('voice')}
-                            onTools={() => openPanel('tools')}
-                            onWork={() => navigate('work')}
-                            conversationId={active}
-                            onTaskStatus={setFileStatus}
-                          />
-                        ) : page === 'memory' ? (
-                          <MemorySpace
-                            conversations={conversations}
-                            active={active}
-                            onChanged={() => void refreshMemory()}
-                          />
-                        ) : page === 'world' ? (
-                          <WorldArchive />
-                        ) : page === 'work' ? (
-                          <WorkSpace onModelSettings={() => openPanel('model')} />
-                        ) : (
-                          <ReminderSpace
-                            features={features}
-                            event={reminder}
-                            onSettings={() => openPanel('reminders')}
-                            onTest={() => void testReminder()}
-                            onPause={() => void pauseReminder()}
-                          />
-                        )}
-                      </motion.div>
-                    </AnimatePresence>
-                  </div>
-                </section>
-              </PreviewWorkspace>
+                    {reminder && (
+                      <div className="reminder-banner" role="status">
+                        <Bell size={17} />
+                        <div className="reminder-copy">
+                          <span>{reminder.text}</span>
+                          {reminder.weather && (
+                            <small>
+                              天气数据：{reminder.weather.observed_at}{' '}
+                              <a
+                                href={safeSourceUrl(reminder.weather.sources[0]?.url)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                              >
+                                天气来源
+                              </a>
+                            </small>
+                          )}
+                        </div>
+                        <button
+                          className="icon-button"
+                          onClick={() => audio.enqueue(reminder.text, '关怀提醒')}
+                          aria-label="播放提醒"
+                        >
+                          <AudioLines size={16} />
+                        </button>
+                        <button
+                          className="icon-button"
+                          onClick={() => setReminder(null)}
+                          aria-label="关闭提醒"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    )}
+                    <div className={`page-container ${page === 'chat' ? 'chat-page' : ''}`}>
+                      {weatherNotice && (
+                        <div className="settings-notice" role="status">
+                          {weatherNotice}{' '}
+                          <button type="button" className="text-link" onClick={() => navigate('memory')}>
+                            完善城市资料
+                          </button>
+                        </div>
+                      )}
+                      <AnimatePresence mode="wait">
+                        <motion.div
+                          key={page}
+                          className="page-transition"
+                          initial={{ opacity: 0, y: 8 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: -6 }}
+                          transition={{ duration: 0.2 }}
+                        >
+                          {page === 'chat' ? (
+                            <ChatThread
+                              key={active ?? 'new'}
+                              messages={messages}
+                              partial={partial}
+                              tools={currentTools}
+                              sources={currentSources}
+                              busy={busy}
+                              loading={loading || historyLoading}
+                              configured={!!settings?.configured}
+                              modelSettings={settings}
+                              asrSettings={features?.asr}
+                              onSend={send}
+                              onStop={() => void stopReply()}
+                              onSettings={() => openPanel('model')}
+                              onVoice={() => openPanel('voice')}
+                              onTools={() => openPanel('tools')}
+                              onWork={() => navigate('work')}
+                              conversationId={active}
+                              onTaskStatus={setFileStatus}
+                            />
+                          ) : page === 'memory' ? (
+                            <MemorySpace
+                              conversations={conversations}
+                              active={active}
+                              onChanged={() => void refreshMemory()}
+                            />
+                          ) : page === 'world' ? (
+                            <WorldArchive />
+                          ) : page === 'work' ? (
+                            <WorkSpace onModelSettings={() => openPanel('model')} />
+                          ) : (
+                            <ReminderSpace
+                              features={features}
+                              event={reminder}
+                              onSettings={() => openPanel('reminders')}
+                              onTest={() => void testReminder()}
+                              onPause={() => void pauseReminder()}
+                            />
+                          )}
+                        </motion.div>
+                      </AnimatePresence>
+                    </div>
+                  </section>
+                </PreviewWorkspace>
+              </AnnotationProvider>
             </div>
           </main>
           <CompanionSettings

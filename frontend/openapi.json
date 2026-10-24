@@ -1,6 +1,117 @@
 {
   "components": {
     "schemas": {
+      "AnnotationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Comment",
+            "type": "string"
+          },
+          "conversation_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "draft_scope": {
+            "default": "",
+            "maxLength": 80,
+            "pattern": "^[a-zA-Z0-9_-]*$",
+            "title": "Draft Scope",
+            "type": "string"
+          },
+          "quote": {
+            "default": "",
+            "maxLength": 20000,
+            "title": "Quote",
+            "type": "string"
+          },
+          "rect": {
+            "anyOf": [
+              {
+                "maxItems": 4,
+                "minItems": 4,
+                "prefixItems": [
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  },
+                  {
+                    "type": "number"
+                  }
+                ],
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rect"
+          },
+          "source": {
+            "$ref": "#/components/schemas/AnnotationSource"
+          },
+          "target_id": {
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "Target Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "source",
+          "target_id",
+          "comment"
+        ],
+        "title": "AnnotationRequest",
+        "type": "object"
+      },
+      "AnnotationSource": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "attachment",
+              "artifact",
+              "message"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "version": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "version"
+        ],
+        "title": "AnnotationSource",
+        "type": "object"
+      },
       "ApprovalRequest": {
         "additionalProperties": false,
         "properties": {
@@ -55,6 +166,20 @@
       },
       "ChatRequest": {
         "properties": {
+          "annotation_scope": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Annotation Scope",
+            "type": "string"
+          },
+          "annotations": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 30,
+            "title": "Annotations",
+            "type": "array"
+          },
           "attachments": {
             "items": {
               "type": "string"
@@ -188,6 +313,22 @@
           "model"
         ],
         "title": "CloudVoiceOut",
+        "type": "object"
+      },
+      "CommentUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "comment": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Comment",
+            "type": "string"
+          }
+        },
+        "required": [
+          "comment"
+        ],
+        "title": "CommentUpdate",
         "type": "object"
       },
       "ConnectionOptions": {
@@ -437,7 +578,8 @@
               "delete",
               "read_document",
               "summarize",
-              "upload"
+              "upload",
+              "office"
             ],
             "title": "Action",
             "type": "string"
@@ -875,6 +1017,14 @@
       },
       "MessageOut": {
         "properties": {
+          "annotations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Annotations",
+            "type": "array"
+          },
           "attachments": {
             "items": {
               "additionalProperties": true,
@@ -1088,6 +1238,144 @@
         "title": "ModelItem",
         "type": "object"
       },
+      "OfficeRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "conversation_id": {
+            "anyOf": [
+              {
+                "maxLength": 80,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Conversation Id"
+          },
+          "export_pdf": {
+            "default": false,
+            "title": "Export Pdf",
+            "type": "boolean"
+          },
+          "format": {
+            "enum": [
+              "docx",
+              "xlsx",
+              "pdf",
+              "pptx",
+              "png",
+              "jpeg",
+              "webp"
+            ],
+            "title": "Format",
+            "type": "string"
+          },
+          "instruction": {
+            "default": "",
+            "maxLength": 6000,
+            "title": "Instruction",
+            "type": "string"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "operation": {
+            "default": "create",
+            "enum": [
+              "create",
+              "edit",
+              "export"
+            ],
+            "title": "Operation",
+            "type": "string"
+          },
+          "outline": {
+            "default": "",
+            "maxLength": 4000,
+            "title": "Outline",
+            "type": "string"
+          },
+          "overwrite": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OverwriteTarget"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ResourceRef"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/ResourceRef"
+            },
+            "maxItems": 10,
+            "title": "Sources",
+            "type": "array"
+          },
+          "spec": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spec"
+          }
+        },
+        "required": [
+          "format",
+          "name"
+        ],
+        "title": "OfficeRequest",
+        "type": "object"
+      },
+      "OverwriteTarget": {
+        "additionalProperties": false,
+        "properties": {
+          "path": {
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          },
+          "version": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          },
+          "workspace_id": {
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Workspace Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "workspace_id",
+          "path",
+          "version"
+        ],
+        "title": "OverwriteTarget",
+        "type": "object"
+      },
       "PreviewRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1189,6 +1477,37 @@
           "audio_base64"
         ],
         "title": "ReferenceUpload",
+        "type": "object"
+      },
+      "ResourceRef": {
+        "additionalProperties": false,
+        "properties": {
+          "id": {
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "attachment",
+              "artifact"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "version": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id",
+          "version"
+        ],
+        "title": "ResourceRef",
         "type": "object"
       },
       "SettingsOut": {
@@ -1967,7 +2286,7 @@
   },
   "info": {
     "title": "瞬光伴行 API",
-    "version": "0.6.0"
+    "version": "0.6.1"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -3687,6 +4006,178 @@
         "summary": "Reference File"
       }
     },
+    "/api/work/annotations": {
+      "get": {
+        "operationId": "annotation_drafts_api_work_annotations_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "conversation_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maxLength": 80,
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Conversation Id"
+            }
+          },
+          {
+            "in": "query",
+            "name": "draft_scope",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 80,
+              "title": "Draft Scope",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Annotation Drafts"
+      },
+      "post": {
+        "operationId": "add_annotation_api_work_annotations_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnnotationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Annotation"
+      }
+    },
+    "/api/work/annotations/{annotation_id}": {
+      "delete": {
+        "operationId": "delete_annotation_api_work_annotations__annotation_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "annotation_id",
+            "required": true,
+            "schema": {
+              "title": "Annotation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Annotation"
+      },
+      "patch": {
+        "operationId": "edit_annotation_api_work_annotations__annotation_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "annotation_id",
+            "required": true,
+            "schema": {
+              "title": "Annotation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CommentUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Edit Annotation"
+      }
+    },
     "/api/work/artifacts/{task_id}": {
       "get": {
         "operationId": "download_artifact_api_work_artifacts__task_id__get",
@@ -3722,6 +4213,71 @@
           }
         },
         "summary": "Download Artifact"
+      }
+    },
+    "/api/work/artifacts/{task_id}/preview": {
+      "get": {
+        "operationId": "preview_artifact_api_work_artifacts__task_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "start",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "maximum": 1000000,
+              "minimum": 1,
+              "title": "Start",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Artifact"
+      }
+    },
+    "/api/work/capabilities": {
+      "get": {
+        "operationId": "file_capabilities_api_work_capabilities_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "File Capabilities"
       }
     },
     "/api/work/events": {
@@ -3903,6 +4459,44 @@
         "summary": "Preview Attachment"
       }
     },
+    "/api/work/office/tasks": {
+      "post": {
+        "operationId": "submit_office_api_work_office_tasks_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OfficeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileTaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Submit Office"
+      }
+    },
     "/api/work/output": {
       "get": {
         "operationId": "output_api_work_output_get",
@@ -3951,6 +4545,189 @@
           }
         },
         "summary": "Choose Output"
+      }
+    },
+    "/api/work/resources/{kind}/{resource_id}/image": {
+      "get": {
+        "operationId": "resource_image_api_work_resources__kind___resource_id__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "page",
+            "required": false,
+            "schema": {
+              "default": 1,
+              "minimum": 1,
+              "title": "Page",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resource Image"
+      }
+    },
+    "/api/work/resources/{kind}/{resource_id}/pages": {
+      "get": {
+        "operationId": "resource_pages_api_work_resources__kind___resource_id__pages_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^[0-9a-f]{64}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resource Pages"
+      }
+    },
+    "/api/work/resources/{kind}/{resource_id}/targets": {
+      "get": {
+        "operationId": "resource_targets_api_work_resources__kind___resource_id__targets_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resource Targets"
       }
     },
     "/api/work/tasks": {

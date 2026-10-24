@@ -1,6 +1,6 @@
 """Ordered, transactional upgrades from the pre-versioned database (version 0)."""
 
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 
 
 def migrate(db):
@@ -98,6 +98,17 @@ def migrate(db):
             PRIMARY KEY(conversation_id,start_seq,end_seq)
         )""")
         db.execute('PRAGMA user_version=8')
+    if version < 9:
+        db.execute("""CREATE TABLE annotations (
+            id TEXT PRIMARY KEY,
+            conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE,
+            draft_scope TEXT NOT NULL DEFAULT '', payload TEXT NOT NULL,
+            status TEXT NOT NULL DEFAULT 'draft',
+            submitted_message_id TEXT REFERENCES messages(id) ON DELETE CASCADE,
+            created_at TEXT NOT NULL, updated_at TEXT NOT NULL
+        )""")
+        db.execute('CREATE INDEX annotations_scope ON annotations(conversation_id,draft_scope,status)')
+        db.execute('PRAGMA user_version=9')
 
 
 LEGACY_SCHEMA = """

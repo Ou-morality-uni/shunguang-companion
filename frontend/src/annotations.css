@@ -1,0 +1,200 @@
+.annotation-target {
+  position: relative;
+  min-width: 0;
+}
+.annotation-trigger {
+  position: absolute;
+  top: 0;
+  right: 0;
+  opacity: 0;
+  background: #462a35e8;
+  border-radius: 8px;
+}
+.annotation-target:hover > .annotation-trigger,
+.annotation-trigger:focus-visible {
+  opacity: 1;
+}
+.annotation-menu {
+  z-index: 160;
+  min-width: 150px;
+  padding: 6px;
+  background: #301e28fa;
+  color: #f5e7df;
+  border: 1px solid #ad7d6955;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px #0005;
+}
+.annotation-menu [role='menuitem'] {
+  padding: 9px 12px;
+  border-radius: 7px;
+  cursor: pointer;
+  outline: none;
+}
+.annotation-menu [data-highlighted] {
+  background: #81536466;
+}
+.annotation-menu [data-disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+.annotation-dialog {
+  max-width: min(540px, calc(100vw - 24px));
+}
+.annotation-dialog textarea {
+  width: 100%;
+  padding: 12px;
+  resize: vertical;
+  border: 1px solid #ad7d6955;
+  background: #1c131b;
+  color: #f5e7df;
+  border-radius: 10px;
+  font: inherit;
+}
+.annotation-quote {
+  white-space: pre-wrap;
+  max-height: 140px;
+  overflow: auto;
+  margin: 0;
+  padding-left: 12px;
+  border-left: 2px solid #a97d62;
+  color: #d4bfc2;
+}
+.annotation-tray {
+  margin: 8px 0;
+  border: 1px solid #ad7d6938;
+  border-radius: 12px;
+  background: #38232d88;
+}
+.annotation-tray summary,
+.reply-annotations summary {
+  cursor: pointer;
+  padding: 9px 12px;
+  font-size: 13px;
+}
+.annotation-tray summary span {
+  margin-left: 10px;
+  color: #c0a9ae;
+}
+.annotation-drafts {
+  max-height: 190px;
+  overflow: auto;
+  padding: 0 12px 8px;
+}
+.annotation-drafts article {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 0;
+  border-top: 1px solid #ad7d6925;
+}
+.annotation-drafts article > div {
+  flex: 1;
+  min-width: 0;
+}
+.annotation-drafts strong {
+  font-size: 12px;
+  color: #ccb4b8;
+}
+.annotation-drafts p {
+  margin: 4px 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 13px;
+}
+.reply-annotations {
+  font-size: 12px;
+  color: #c7afb5;
+}
+.reply-annotations li {
+  margin-bottom: 6px;
+  overflow-wrap: anywhere;
+}
+.office-targets {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.office-sheet-scroll {
+  width: 100%;
+  overflow: auto;
+  max-height: 60vh;
+}
+.office-sheet {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.office-sheet th,
+.office-sheet td {
+  border: 1px solid #ad7d6944;
+  padding: 8px;
+  min-width: 68px;
+  max-width: 360px;
+  vertical-align: top;
+}
+.office-sheet th {
+  background: #4f313ccc;
+  position: sticky;
+  top: 0;
+}
+.office-sheet .annotation-target {
+  min-width: 70px;
+  padding-right: 24px;
+}
+.office-sheet .target-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.office-targets .annotation-target {
+  padding: 10px;
+  border-bottom: 1px solid #ad7d6930;
+}
+.office-targets .target-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  margin: 7px 0;
+}
+.region-surface {
+  display: inline-block;
+  position: relative;
+  max-width: 100%;
+  line-height: 0;
+}
+.region-surface img {
+  display: block;
+  max-width: 100%;
+  height: auto;
+}
+.office-preview .region-surface {
+  display: block;
+  width: 100%;
+}
+.office-preview .region-surface img {
+  width: 100%;
+  height: auto;
+  max-height: none;
+  margin: 0;
+}
+.region-surface.selecting {
+  touch-action: none;
+  cursor: crosshair;
+  user-select: none;
+}
+.region-selection {
+  position: absolute;
+  box-sizing: border-box;
+  border: 2px solid #e4b66e;
+  background: #f3b96620;
+  pointer-events: none;
+}
+@media (pointer: coarse) {
+  .annotation-trigger {
+    opacity: 1;
+  }
+}
+@media (max-width: 600px) {
+  .annotation-tray summary span {
+    display: block;
+    margin: 4px 0 0;
+  }
+}

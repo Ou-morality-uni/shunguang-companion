@@ -294,6 +294,10 @@ def test_registry_respects_enabled_tools_and_never_allows_model_approval(work):
         'recall_conversations',
         'workspace_files',
         'workspace_task',
+        'office_guide',
+        'office_import',
+        'office_inspect',
+        'office_files',
     } == set(registry.handlers)
     assert not asyncio.run(registry.execute('approve_delete', {'approved': True}))['ok']
     features.tools.weather_enabled = False
@@ -301,6 +305,7 @@ def test_registry_respects_enabled_tools_and_never_allows_model_approval(work):
     disabled = ToolRegistry(features, service.store, *context)
     assert 'weather' not in disabled.handlers and 'remember_user_fact' not in disabled.handlers
     assert 'workspace_files' not in disabled.handlers
+    assert {'office_guide', 'office_import', 'office_inspect', 'office_files'}.isdisjoint(disabled.handlers)
 
 
 def test_file_tool_schema_is_compatible_with_existing_provider_conversion(work):

@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { request, type FileTask, type FileTaskInput, type Workspace } from './api';
 import { DocumentResult, UploadDocuments, VisionApproval } from './DocumentControls';
 import { ArtifactCard, ContinueTask, OutputFolder, taskStatuses } from './FileTasks';
+import { OfficeCapabilities } from './OfficeCapabilities';
 
 type Step = FileTaskInput['steps'][number];
 const actions: Record<string, string> = {
@@ -113,6 +114,7 @@ export function WorkSpace({ onModelSettings }: { onModelSettings?: () => void })
       <section className="work-card glass" aria-label="成果目录">
         <h3>成果保存位置</h3>
         <OutputFolder />
+        <OfficeCapabilities />
       </section>
       <section className="work-card glass" aria-label="工作文件夹授权">
         <h3>

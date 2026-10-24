@@ -1,6 +1,7 @@
 import type { components } from './generated/api-schema';
 import { SseDecoder } from './sse';
 import { httpError } from './httpError';
+import type { AnnotationSubmission } from './Annotations';
 type Schemas = components['schemas'];
 type OptionalFields<T> = { [K in keyof T]?: Exclude<T[K], null> };
 export type ModelSettings = Schemas['SettingsOut'];
@@ -196,6 +197,7 @@ export async function streamChat(
   onEvent: (event: string, data: Record<string, unknown>) => void,
   attachments: string[] = [],
   model_choice?: ModelChoice,
+  annotationInput?: AnnotationSubmission,
 ) {
   const response = await fetch('/api/chat', {
     method: 'POST',
@@ -205,6 +207,9 @@ export async function streamChat(
       content,
       ...(attachments.length ? { attachments } : {}),
       ...(model_choice ? { model_choice } : {}),
+      ...(annotationInput?.ids.length
+        ? { annotations: annotationInput.ids, annotation_scope: annotationInput.scope }
+        : {}),
     }),
     signal,
   });

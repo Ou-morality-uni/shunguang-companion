@@ -34,6 +34,7 @@ import { backgroundStyles, type BackgroundStyle } from './Atmosphere';
 import { GlideSelect } from './components/ui/glide-select';
 import { effortLabels } from './ModelPicker';
 import { ASRSettings } from './ASRSettings';
+import { OfficeCapabilities } from './OfficeCapabilities';
 
 const categories = [
   { id: 'model', label: '模型连接', icon: Cpu },
@@ -1316,6 +1317,7 @@ export function CompanionSettings({
                 }}
               >
                 <h2>工具服务</h2>
+                <OfficeCapabilities />
                 <Toggle
                   label="天气查询"
                   description="真实天气服务；请在对话中写明城市，缺失或存在歧义时会澄清。"

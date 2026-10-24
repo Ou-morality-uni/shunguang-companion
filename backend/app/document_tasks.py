@@ -68,7 +68,7 @@ def pending(work, task, step, images, reason):
 
 def read(work, task, step, check):
     with work.gate:
-        root = work.root(task['workspace_id'])
+        root = work.root(step.get('workspace_id', task['workspace_id']))
         path = work.path(root, step['path'])
         stamp = work.fingerprint(path)
         if stamp is None:
@@ -138,7 +138,7 @@ def read(work, task, step, check):
             remaining = [item for item in images if item['location'] not in {block['location'] for block in recognized}]
             return pending(work, task, step, remaining, '识别服务配置发生变化，请重新核对并授权。')
         with work.gate:
-            root = work.root(task['workspace_id'])
+            root = work.root(step.get('workspace_id', task['workspace_id']))
             work.check_state(root, {step['path']: stamp})
         try:
             allowance(work, task, 'calls')

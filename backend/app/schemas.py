@@ -72,6 +72,7 @@ class MessageOut(BaseModel):
     sticker: StickerOut | None = None
     attachments: list[dict[str, Any]] = Field(default_factory=list)
     history_sources: list[HistorySourceOut] = Field(default_factory=list)
+    annotations: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class SettingsOut(BaseModel):
@@ -101,7 +102,7 @@ class WorkspaceOut(BaseModel):
 
 
 class FileStepOut(BaseModel):
-    action: Literal['list', 'read', 'write', 'move', 'delete', 'read_document', 'summarize', 'upload']
+    action: Literal['list', 'read', 'write', 'move', 'delete', 'read_document', 'summarize', 'upload', 'office']
     path: str
     destination: str | None = None
     state: str

@@ -1,0 +1,26 @@
+{
+  "repository": "https://github.com/hugohe3/ppt-master",
+  "version": "6.7.3",
+  "files": {
+    "LICENSE": {
+      "upstream_sha256": "80cefc234c1ec12a8cece4344f16300c634fa03df7891686fcf979e3828f0921",
+      "sha256": "80cefc234c1ec12a8cece4344f16300c634fa03df7891686fcf979e3828f0921"
+    },
+    "SKILL.md": {
+      "upstream_sha256": "39594a07cd92e894bfc61242034c78128fd2dfd94081ba3fd9a60d65dad835d5",
+      "sha256": "39594a07cd92e894bfc61242034c78128fd2dfd94081ba3fd9a60d65dad835d5"
+    },
+    "references/plan-core.md": {
+      "upstream_sha256": "50e623b83de90cfd3f860496e8a9a0b289f8f3aeb1546152c61df37a84d64c8a",
+      "sha256": "50e623b83de90cfd3f860496e8a9a0b289f8f3aeb1546152c61df37a84d64c8a"
+    },
+    "scripts/pptx_opc_validation.py": {
+      "upstream_sha256": "4b209dc4741b35314ecc4b8279c92c734aac79e9aa25e96c2911d231c67d7e4c",
+      "sha256": "26cae8c1cb6de9b5314bea66d172ad2c1f01fc50455beee007d081b94af3875c"
+    },
+    "scripts/hyperlink_contract.py": {
+      "upstream_sha256": "03a73fe47de091a6060b428f0430bf5bd8a1ceec1e86fda3c7a91157f0cdfe0c",
+      "sha256": "03a73fe47de091a6060b428f0430bf5bd8a1ceec1e86fda3c7a91157f0cdfe0c"
+    }
+  }
+}

@@ -1,0 +1,43 @@
+{
+  "repository": "https://github.com/NousResearch/hermes-agent",
+  "commit": "bda3a363e9695e3f63fce4a7ca85ba17b5fecb61",
+  "files": {
+    "LICENSE": {
+      "upstream_path": "LICENSE",
+      "sha256": "821556e6336796450ab852d375117b48a4887e71d255794fd6318d99982a5ab6",
+      "local_sha256": "821556e6336796450ab852d375117b48a4887e71d255794fd6318d99982a5ab6"
+    },
+    "docx/SKILL.md": {
+      "upstream_path": "skills/productivity/docx/SKILL.md",
+      "sha256": "9678b14d5e7841d588b969f6a4696cd46bcc46c3e4ac1479edc7656a051aa5ff",
+      "local_sha256": "9678b14d5e7841d588b969f6a4696cd46bcc46c3e4ac1479edc7656a051aa5ff"
+    },
+    "docx/scripts/docx_create.py": {
+      "upstream_path": "skills/productivity/docx/scripts/docx_create.py",
+      "sha256": "8391869c97ab804374dddadff4fbebc060120c0b973d06133f84487cc2c442d5",
+      "local_sha256": "8391869c97ab804374dddadff4fbebc060120c0b973d06133f84487cc2c442d5"
+    },
+    "xlsx/SKILL.md": {
+      "upstream_path": "skills/productivity/xlsx/SKILL.md",
+      "sha256": "b302d7ac997843a757ab3c11513ea012889ebdae32f842edb44faa9a4485f19b",
+      "local_sha256": "b302d7ac997843a757ab3c11513ea012889ebdae32f842edb44faa9a4485f19b"
+    },
+    "xlsx/scripts/xlsx_create.py": {
+      "upstream_path": "skills/productivity/xlsx/scripts/xlsx_create.py",
+      "sha256": "f6be8af8dfe1ad70c3456cf3063276e74d9453b7f1d2b65e08b0dad5bfeed417",
+      "local_sha256": "f6be8af8dfe1ad70c3456cf3063276e74d9453b7f1d2b65e08b0dad5bfeed417"
+    },
+    "pdf/SKILL.md": {
+      "upstream_path": "skills/productivity/pdf/SKILL.md",
+      "sha256": "c16b9c159a3a0b49353bfcd10c498b02aef3d319207b1019aa7dc8db129d06ab",
+      "local_sha256": "c16b9c159a3a0b49353bfcd10c498b02aef3d319207b1019aa7dc8db129d06ab"
+    },
+    "pdf/scripts/pdf_create.py": {
+      "upstream_path": "skills/productivity/pdf/scripts/pdf_create.py",
+      "sha256": "2a7a7c06c608e82cc11684bb67ff9cdb3bf8cbe6df38c6f4b1096dd2686f993c",
+      "local_sha256": "631d8988ea3a0b59c3055eddc82ec1de54c4051ff5b4c27e7584fc40c28161ba"
+    }
+  },
+  "usage": "Selected generation helpers only. Application adapters enforce paths, specs and copy-on-write. No Hermes runtime is required.",
+  "hash_notes": "sha256 identifies the verified original at the pinned commit; local_sha256 identifies this distributed copy. See CHANGES.md for adaptations."
+}

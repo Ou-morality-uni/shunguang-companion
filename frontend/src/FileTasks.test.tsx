@@ -1,7 +1,14 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { request, type FileTask } from './api';
-import { ArtifactCard, AttachmentCard, ChatFileTasks, DocumentMarkdown, OutputFolder } from './FileTasks';
+import {
+  ArtifactCard,
+  AttachmentCard,
+  ChatFileTasks,
+  ContinueTask,
+  DocumentMarkdown,
+  OutputFolder,
+} from './FileTasks';
 import { PreviewWorkspace } from './PreviewWorkspace';
 
 vi.mock('./api', async (importOriginal) => ({
@@ -69,6 +76,27 @@ it('shows the conversation task and only resumes a workload pause after an expli
   expect(request).toHaveBeenCalledWith('/work/tasks?conversation_id=c1&compact=true', expect.anything());
 });
 
+it('requires an explicit overwrite-and-backup action rather than generic task continuation', async () => {
+  vi.mocked(request).mockResolvedValue({});
+  render(
+    <ContinueTask
+      task={{
+        ...task,
+        context: { pause: { kind: 'overwrite', reason: '覆盖 C:/authorized/report.docx，原件将备份。' } },
+      }}
+      onChanged={vi.fn()}
+    />,
+  );
+  expect(request).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: '确认覆盖并保留备份' }));
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith('/work/tasks/t1/continue', {
+      method: 'POST',
+      body: JSON.stringify({ approved: true }),
+    }),
+  );
+});
+
 it('previews the actual saved Markdown file and exposes a download without another model call', async () => {
   const fetchMock = vi.fn().mockResolvedValue(new Response('# 保存的成品\n\n真实内容。'));
   vi.stubGlobal('fetch', fetchMock);
@@ -86,6 +114,38 @@ it('previews the actual saved Markdown file and exposes a download without anoth
   await screen.findByRole('heading', { name: '保存的成品' });
   expect(fetchMock).toHaveBeenCalledWith('/api/work/artifacts/t1');
   expect(request).not.toHaveBeenCalled();
+});
+
+it('shows every saved Office artifact even if a later export failed and previews binary content safely', async () => {
+  const fetchMock = vi.fn();
+  vi.stubGlobal('fetch', fetchMock);
+  vi.mocked(request).mockResolvedValue({
+    blocks: [{ location: '正文第 1 块', text: '已保存的报告内容' }],
+    warnings: [],
+  });
+  render(
+    <ArtifactCard
+      task={{
+        ...task,
+        status: 'failed',
+        context: {
+          artifacts: [
+            { name: 'report.docx', path: '任务-t1/report.docx', workspace_id: 'out' },
+            { name: 'report.pdf', path: '任务-t1/report.pdf', workspace_id: 'out' },
+          ],
+        },
+      }}
+    />,
+  );
+  const links = screen.getAllByRole('link', { name: '下载成果' });
+  expect(links.map((link) => link.getAttribute('href'))).toEqual([
+    '/api/work/artifacts/t1',
+    '/api/work/artifacts/t1~1',
+  ]);
+  fireEvent.click(screen.getByRole('button', { name: '预览成果 report.docx' }));
+  await screen.findByText('已保存的报告内容');
+  expect(request).toHaveBeenCalledWith('/work/artifacts/t1/preview');
+  expect(fetchMock).not.toHaveBeenCalled();
 });
 
 it('renders Office content and source locations through the local preview route', async () => {

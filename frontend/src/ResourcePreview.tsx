@@ -7,6 +7,8 @@ import { DocumentMarkdown } from './DocumentMarkdown';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCompanionAudio } from './useAudioQueue';
+import { useAnnotations } from './Annotations';
+import { OfficePreview } from './OfficePreview';
 
 export function ResourcePreview({
   resource,
@@ -15,10 +17,13 @@ export function ResourcePreview({
   resource: PreviewResource;
   onSettings?: () => void;
 }) {
+  const annotations = useAnnotations();
   return resource.kind === 'history' ? (
     <HistoryResource resource={resource} />
   ) : resource.kind === 'task' ? (
     <TaskResource resource={resource} onSettings={onSettings} />
+  ) : annotations && /\.(docx|xlsx|pptx|pdf|png|jpe?g|webp|bmp|tiff?|gif|md|txt)$/i.test(resource.title) ? (
+    <OfficePreview resource={resource} />
   ) : (
     <FileResourcePreview resource={resource} />
   );
@@ -119,13 +124,14 @@ function FileResourcePreview({ resource }: { resource: PreviewResource }) {
   const [busy, setBusy] = useState(true);
   const [start, setStart] = useState(1);
   const [page, setPage] = useState(1);
+  const textArtifact = resource.kind === 'artifact' && /\.(md|txt)$/i.test(resource.title);
   useEffect(() => {
     const abort = new AbortController();
     setBusy(true);
     setNotice('');
     async function load() {
       try {
-        if (resource.kind === 'artifact') {
+        if (textArtifact) {
           const response = await fetch(`/api/work/artifacts/${encodeURIComponent(resource.id)}`, {
             signal: abort.signal,
           });
@@ -134,7 +140,7 @@ function FileResourcePreview({ resource }: { resource: PreviewResource }) {
           if (!abort.signal.aborted) setText(result);
         } else {
           const result = await request<Record<string, unknown>>(
-            `/work/files/${encodeURIComponent(resource.id)}/preview?start=${start}`,
+            `/work/${resource.kind === 'artifact' ? 'artifacts' : 'files'}/${encodeURIComponent(resource.id)}/preview?start=${start}`,
             { signal: abort.signal },
           );
           if (!abort.signal.aborted) setDocument(result);
@@ -147,14 +153,14 @@ function FileResourcePreview({ resource }: { resource: PreviewResource }) {
     }
     void load();
     return () => abort.abort();
-  }, [resource.id, resource.kind, start]);
+  }, [resource.id, resource.kind, start, textArtifact]);
   const pdf = /\.pdf$/i.test(resource.title);
   const image = /\.(png|jpe?g|webp|bmp|tiff?|gif)$/i.test(resource.title);
   return (
     <div className="file-preview">
       {busy && <p role="status">正在读取预览…</p>}
       {notice && <p role="status">{notice}</p>}
-      {resource.kind === 'artifact' ? (
+      {textArtifact ? (
         <>
           {audio && (
             <Button disabled={busy || !text} onClick={() => audio.enqueueDocument(text, resource.title)}>
@@ -165,7 +171,7 @@ function FileResourcePreview({ resource }: { resource: PreviewResource }) {
         </>
       ) : (
         <>
-          {(image || pdf) && (
+          {resource.kind !== 'artifact' && (image || pdf) && (
             <img
               loading="lazy"
               src={`/api/work/files/${encodeURIComponent(resource.id)}/image?page=${page}`}
@@ -208,7 +214,7 @@ function FileResourcePreview({ resource }: { resource: PreviewResource }) {
         }
         download
       >
-        下载{resource.kind === 'artifact' ? '总结' : '原文件副本'}
+        下载{resource.kind === 'artifact' ? '成果' : '原文件副本'}
       </a>
     </div>
   );

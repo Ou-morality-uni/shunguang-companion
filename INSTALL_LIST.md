@@ -29,13 +29,13 @@
 
 ## 可选 Office 引擎：需要用户手动安装
 
-此项是开发中的 0.6.1 办公能力准备，不属于 `Install.bat` 的默认下载，也不是 0.6.0 聊天、文件文字阅读和 Markdown 总结的必需依赖。
+此项用于 0.6.1 的 Office 页面预览、PDF 导出和 Excel 公式重算，不属于 `Install.bat` 的默认下载；普通聊天、文件内容阅读和 Markdown 总结无需安装它。
 
 | 组件 | 用途 | 下载与安装位置 |
 |---|---|---|
-| LibreOffice Windows x64 主程序 | 支持后续 Office 页面预览、Office 转 PDF、Excel 公式重算 | 官方网站或维护者发布后的 Releases 附件；安装包可存 `tools/installers/`，自定义安装到 `tools/LibreOffice/` |
+| LibreOffice Windows x64 主程序 | 支持 Office 页面预览、Office 转 PDF、Excel 公式重算 | 官方网站或维护者发布后的 Releases 附件；安装包可存 `tools/installers/`，自定义安装到 `tools/LibreOffice/` |
 
-按 [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md) 完成安装及 PATH 配置后，重启后端，并在支持的应用版本中重新检测。已有 LibreOffice 可沿用。ZIP 解压不能代替 MSI 安装；这些本机程序和安装包不提交到源码仓库。
+按 [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md) 完成安装后重启后端并重新检测。0.6.1 自动识别推荐的项目相对目录，其他自定义位置可按指南配置 PATH。已有 LibreOffice 可沿用。ZIP 解压不能代替 MSI 安装；这些本机程序和安装包不提交到源码仓库。
 
 ## 自动创建或构建：不需要下载数据库服务
 
@@ -46,7 +46,7 @@
 | 索引元数据 | 保存资料版本、哈希、切分数和构建状态 | `data/rag/index-state.json` |
 | 推理验证 | 执行真实本地embedding、建索引和身份资料检索；成功后才标记检索环境可用 | `data/install/retrieval.json`、`.venv-rag/rag-runtime.json` |
 | 前端产物 | TypeScript检查与Vite生产构建 | `frontend/dist/` |
-| 文件任务成果（0.6.0） | 任务产生时保存 Markdown 等结果，不是安装时附带的示例成品 | `data/outputs/任务-<任务ID>/` |
+| 文件任务成果 | 任务产生时保存 Markdown、Office、PDF 或图片等结果，不是安装时附带的示例成品 | `data/outputs/任务-<任务ID>/` |
 | 下载缓存 | 模型下载缓存与断点文件，重新运行可尝试续传 | `data/install/model-cache/` |
 | 实际安装清单 | 本次pip处理、已安装npm包、模型与存储位置；失败也记录阶段 | `data/install-list.md` |
 
@@ -60,6 +60,6 @@
 
 Double-click `Install.bat`. Python3.11 and Node.js24 are prerequisites, not downloads. If missing, it downloads the signed Microsoft Visual C++ runtime from Microsoft. The installer installs the pinned backend/frontend dependencies, FFmpeg bundled with its Python wheel, PyTorch, Transformers, Qdrant's local Python runtime, and the full verified BGE-M3 release. It creates an empty SQLite database, builds the bundled knowledge index, and builds the frontend. No MySQL, Docker, CUDA Toolkit, or separate Qdrant service is needed.
 
-LibreOffice is a separate, manually installed dependency for the in-development 0.6.1 Office features. Neither installation nor startup downloads it. See the [installation guide (Chinese)](versions/0.6.1/LibreOffice-install.md); a custom `tools/LibreOffice/` installation requires its full `program` directory in PATH. It is not required for 0.6.0 chat or Markdown summaries.
+LibreOffice is a separate, manually installed dependency for 0.6.1 Office previews, PDF export, and formula recalculation. Neither installation nor startup downloads it. See the [installation guide (Chinese)](versions/0.6.1/LibreOffice-install.md); 0.6.1 detects the recommended project-local `tools/LibreOffice/program` directory automatically. Other custom locations can use PATH. It is not required for chat or Markdown summaries.
 
 See the linked lock files for exact package versions. Each run writes a detailed local receipt to `data/install-list.md`, identifying pip actions, installed npm packages, model hashes/sources, and storage paths. Existing packages may be reused and package managers may use caches. A failed run is clearly marked failed. No API service calls or reference-audio uploads happen during installation.

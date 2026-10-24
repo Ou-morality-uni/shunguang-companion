@@ -23,6 +23,9 @@ class ToolRegistry:
         self.add(tools.schemas(features), network)
         self.add(memory.schemas(features.memory), user_memory)
         if work:
+            from . import office_tools
+
+            office_tools.register(self, store, message, work)
             workspaces = [item for item in store.list_workspaces() if item['enabled']]
             if workspaces:
 

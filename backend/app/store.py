@@ -209,6 +209,15 @@ class Store:
                 'INSERT INTO messages(id,conversation_id,role,content,status,created_at,metadata) VALUES (:id,:conversation_id,:role,:content,:status,:created_at,:metadata)',
                 {**record, 'metadata': json.dumps(metadata or {}, ensure_ascii=False)},
             )
+            for annotation in (metadata or {}).get('annotations', []):
+                changed = db.execute(
+                    "UPDATE annotations SET status='submitted',conversation_id=?,submitted_message_id=?,updated_at=? WHERE id=? AND status='draft' AND updated_at=?",
+                    (conversation_id, record['id'], now(), annotation['id'], annotation['updated_at']),
+                ).rowcount
+                if changed != 1:
+                    from .filework import WorkError
+
+                    raise WorkError('批注草稿刚刚变化，请刷新后重新发送。')
             db.execute(
                 "UPDATE conversations SET title=CASE WHEN title='新的对话' THEN ? ELSE title END, updated_at=? WHERE id=?",
                 (content[:24], now(), conversation_id),
@@ -266,6 +275,7 @@ class Store:
                         'tools': metadata.get('tools', []),
                         'sticker': metadata.get('sticker'),
                         'attachments': metadata.get('attachments', []),
+                        'annotations': metadata.get('annotations', []),
                         'history_sources': [
                             {**source, 'text': source['text'][:1800]}
                             for item in metadata.get('history_sources', [])

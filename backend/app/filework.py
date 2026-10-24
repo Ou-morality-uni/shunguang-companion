@@ -455,6 +455,8 @@ class FileWork:
                 from .work_artifacts import output_root
 
                 output_root(self)
+            if task['context'].get('pause', {}).get('kind') == 'overwrite':
+                task['context']['overwrite_approved'] = True
             task['context'].pop('pause', None)
             task['context']['budget'] = {}
             task.update(status='queued', error='')
@@ -472,7 +474,7 @@ class FileWork:
                 raise WorkError('任务已处理，不能重复授权。')
             step = next(item for item in task['steps'] if item['state'] == 'waiting_vision')
             if approved:
-                root = self.root(task['workspace_id'])
+                root = self.root(step.get('workspace_id', task['workspace_id']))
                 self.check_state(root, {step['path']: step['read_stamp']})
                 if document_models.selected(profile_id, expected_signature) is None:
                     raise WorkError('请选择已确认支持视觉的模型；配置变化时需要重新核对授权卡。', 422)
@@ -645,7 +647,7 @@ class FileWork:
 
     def run(self, task_id, stop, restore):
         task = self.task(task_id)
-        document_task = any(step['action'] in ('read_document', 'summarize') for step in task['steps'])
+        document_task = any(step['action'] in ('read_document', 'summarize', 'office') for step in task['steps'])
         deadline = time.monotonic() + (1800 if document_task else 60)
 
         def check():
@@ -666,6 +668,15 @@ class FileWork:
                 step = task['steps'][index]
                 if not restore and step['state'] in ('applied', 'complete'):
                     continue
+                if not restore and step['action'] == 'office':
+                    from . import office_tasks
+
+                    check()
+                    if not office_tasks.run(self, task, step, check):
+                        return
+                    step['state'] = 'complete'
+                    self.store.save_file_task(task)
+                    continue
                 if not restore and step['action'] in ('read_document', 'summarize'):
                     from . import document_tasks
 
@@ -684,7 +695,7 @@ class FileWork:
                     continue
                 with self.gate:
                     self.checkpoint(stop, deadline)
-                    root = self.root(task['workspace_id'])
+                    root = self.root(step.get('workspace_id', task['workspace_id']))
                     step = task['steps'][index]
                     if restore:
                         if step['state'] in ('prepared', 'applied', 'restoring'):

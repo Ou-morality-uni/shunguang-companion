@@ -147,30 +147,66 @@ export function AttachmentCard({ attachment }: { attachment: Attachment }) {
   );
 }
 
+type SavedArtifact = {
+  name: string;
+  path: string;
+  workspace_id: string;
+  validation?: Record<string, unknown>;
+};
+
 export function ArtifactCard({ task, enter = false }: { task: FileTask; enter?: boolean }) {
+  const artifacts = (task.context?.artifacts ??
+    (task.context?.artifact ? [task.context.artifact] : [])) as SavedArtifact[];
+  return (
+    <>
+      {artifacts.map((artifact, index) => (
+        <SavedArtifactCard
+          key={artifact.path}
+          artifact={artifact}
+          identity={task.id + (index ? `~${index}` : '')}
+          enter={enter}
+        />
+      ))}
+    </>
+  );
+}
+
+function SavedArtifactCard({
+  artifact,
+  identity,
+  enter,
+}: {
+  artifact: SavedArtifact;
+  identity: string;
+  enter: boolean;
+}) {
   const openResource = useResourcePreview();
   const previewButton = useRef<HTMLButtonElement>(null);
-  const artifact = task.context?.artifact as { name: string; path: string; workspace_id: string } | undefined;
+  const markdown = /\.(md|txt)$/i.test(artifact.name);
+  const [officePreview, setOfficePreview] = useState<Record<string, unknown> | null>(null);
   const [preview, setPreview] = useState<string | null>(null),
     [notice, setNotice] = useState('');
   const [location, setLocation] = useState(''),
     [busy, setBusy] = useState(false);
-  if (!artifact || task.status !== 'complete') return null;
   async function load() {
     if (openResource) {
-      openResource({ kind: 'artifact', id: task.id, title: artifact!.name }, previewButton.current);
+      openResource({ kind: 'artifact', id: identity, title: artifact.name }, previewButton.current);
       return;
     }
-    if (preview !== null) {
+    if (preview !== null || officePreview !== null) {
       setPreview(null);
+      setOfficePreview(null);
       return;
     }
     setBusy(true);
     setNotice('');
     try {
-      const response = await fetch(`/api/work/artifacts/${task.id}`);
-      if (!response.ok) throw new Error('成果文件暂不可读取，可能已被移动、修改或撤销授权；请查看保存位置。');
-      setPreview(await response.text());
+      if (markdown) {
+        const response = await fetch(`/api/work/artifacts/${identity}`);
+        if (!response.ok)
+          throw new Error('成果文件暂不可读取，可能已被移动、修改或撤销授权；请查看保存位置。');
+        setPreview(await response.text());
+      } else setOfficePreview(await request(`/work/artifacts/${identity}/preview`));
     } catch (error) {
       setNotice((error as Error).message);
     } finally {
@@ -191,15 +227,28 @@ export function ArtifactCard({ task, enter = false }: { task: FileTask; enter?: 
     }
   }
   return (
-    <article className={`file-card ${enter ? 'content-arrive' : ''}`} tabIndex={-1} aria-label="总结成品">
+    <article
+      className={`file-card ${enter ? 'content-arrive' : ''}`}
+      tabIndex={-1}
+      aria-label={markdown ? '总结成品' : `成果：${artifact.name}`}
+    >
       <strong>{artifact.name}</strong>
-      <p>根据本任务已读取的资料整理，包含来源和阅读范围；单独保存为新文件。</p>
+      <p>
+        {markdown
+          ? '根据本任务已读取的资料整理，包含来源和阅读范围；单独保存为新文件。'
+          : '本任务已保存的新副本，原文件保留。'}
+      </p>
+      {artifact.validation?.calculation === 'passed' && <p className="space-note">公式已完成实际重算。</p>}
       <div className="work-actions">
         <Button ref={previewButton} variant="outline" disabled={busy} onClick={() => void load()}>
-          {preview === null ? '预览总结文件' : '收起总结预览'}
+          {preview !== null || officePreview !== null
+            ? '收起成果预览'
+            : markdown
+              ? '预览总结文件'
+              : `预览成果 ${artifact.name}`}
         </Button>
-        <a className="text-link" href={`/api/work/artifacts/${task.id}`} download>
-          下载总结
+        <a className="text-link" href={`/api/work/artifacts/${identity}`} download>
+          {markdown ? '下载总结' : '下载成果'}
         </a>
         <Button variant="ghost" onClick={() => void showLocation()}>
           查看保存位置
@@ -212,6 +261,11 @@ export function ArtifactCard({ task, enter = false }: { task: FileTask; enter?: 
           <DocumentMarkdown text={preview} />
         </div>
       )}
+      {officePreview !== null && (
+        <div className="standalone-preview">
+          <DocumentResult result={officePreview} />
+        </div>
+      )}
     </article>
   );
 }
@@ -220,7 +274,7 @@ export function ContinueTask({ task, onChanged }: { task: FileTask; onChanged: (
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState('');
   if (!['waiting_limit', 'waiting_output'].includes(task.status)) return null;
-  const pause = task.context?.pause as { reason?: string } | undefined;
+  const pause = task.context?.pause as { reason?: string; kind?: string; outline?: string } | undefined;
   async function decide(approved: boolean) {
     setBusy(true);
     setNotice('');
@@ -239,12 +293,19 @@ export function ContinueTask({ task, onChanged }: { task: FileTask; onChanged: (
   return (
     <div className="work-approval" role="group" aria-label="任务继续确认">
       <p>{pause?.reason}</p>
+      {pause?.outline && <DocumentMarkdown text={pause.outline} />}
       {task.status === 'waiting_output' && (
         <p>检查项目 data/outputs 目录是否可写后，点击保存；无需重新总结。</p>
       )}
       <div className="work-actions">
         <Button disabled={busy} onClick={() => void decide(true)}>
-          {task.status === 'waiting_output' ? '保存总结文件' : '继续下一轮处理'}
+          {pause?.kind === 'overwrite'
+            ? '确认覆盖并保留备份'
+            : pause?.kind === 'outline'
+              ? '确认提纲并制作'
+              : task.status === 'waiting_output'
+                ? '重新保存成果'
+                : '继续下一轮处理'}
         </Button>
         <Button variant="outline" disabled={busy} onClick={() => void decide(false)}>
           取消任务并保留记录
@@ -271,7 +332,13 @@ export function TaskDetails({
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState('');
   const initiallyComplete = useRef(task.status === 'complete');
-  const summary = task.steps.find((step) => step.action === 'summarize')?.result;
+  const openResource = useResourcePreview();
+  const sources = (task.context?.sources ?? []) as {
+    kind: 'attachment' | 'artifact';
+    id: string;
+    name: string;
+  }[];
+  const summary = task.steps.find((step) => ['summarize', 'office'].includes(step.action))?.result;
   async function action(operation: string, approved?: boolean) {
     setBusy(true);
     setNotice('');
@@ -298,6 +365,21 @@ export function TaskDetails({
         <span role="status">{taskStatuses[task.status]}</span>
       </div>
       {task.error && <p role="status">{task.error}</p>}
+      {openResource && sources.length > 0 && (
+        <div className="work-actions">
+          {sources.map((source, index) => (
+            <Button
+              key={`${source.id}:${index}`}
+              variant="outline"
+              onClick={(event) =>
+                openResource({ kind: source.kind, id: source.id, title: source.name }, event.currentTarget)
+              }
+            >
+              预览来源 {source.name}
+            </Button>
+          ))}
+        </div>
+      )}
       {task.steps
         .filter((step) => step.action === 'read_document')
         .map((step, index) => (
@@ -341,6 +423,16 @@ export function TaskDetails({
         </>
       )}
       <ArtifactCard task={task} enter={!initiallyComplete.current} />
+      {Array.isArray(summary?.annotation_results) && (
+        <ul className="space-note">
+          {summary.annotation_results.map((entry: { id: string; location: string; status: string }) => (
+            <li key={entry.id}>
+              {entry.location}：
+              {entry.status === 'applied' ? '已修订该目标，请核对结果' : '已生成修订稿，请核对此项意见'}
+            </li>
+          ))}
+        </ul>
+      )}
       <ContinueTask task={task} onChanged={onChanged} />
       {task.status === 'waiting_approval' && (
         <div className="work-approval" role="group" aria-label="删除授权">
@@ -366,6 +458,11 @@ export function TaskDetails({
       {['queued', 'running', 'waiting_vision'].includes(task.status) && (
         <Button variant="outline" disabled={busy} onClick={() => void action('cancel')}>
           取消文件任务
+        </Button>
+      )}
+      {task.can_restore && (
+        <Button variant="outline" disabled={busy} onClick={() => void action('restore')}>
+          恢复本次文件修改
         </Button>
       )}
       {notice && <p role="status">{notice}</p>}
@@ -447,7 +544,7 @@ export function ChatFileTasks({
     <section className="chat-file-tasks compact-file-tasks" aria-label="聊天文件任务">
       {notice && <p role="status">{notice}</p>}
       {tasks.slice(0, 8).map((task) => {
-        const result = task.steps.find((step) => step.action === 'summarize')?.result;
+        const result = task.steps.find((step) => ['summarize', 'office'].includes(step.action))?.result;
         const abstract =
           typeof result?.abstract === 'string'
             ? result.abstract

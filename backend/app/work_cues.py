@@ -55,6 +55,14 @@ PHRASES = {
         '总结已经理好了，不过保存的地方暂时打不开。内容先留着，修好后就能接着存。',
         '札记还在，保存时遇到了一点麻烦。咱们看看目录的情况，不用重新整理。',
     ],
+    'outline': [
+        '我先拟好了一份提纲，你看看这样安排合不合适？点头后我再开始做。',
+        '卷宗的脉络理出来了，先请你过目这份提纲，我们再往下做。',
+    ],
+    'overwrite': [
+        '新副本已经收好了。要替换原件的话，还得请你核对位置；确认后我会先留好备份。',
+        '这里要改动原文件啦。你先看清目标，我会备份好再动笔。',
+    ],
     'recognizing': ['这里有些图像线索，我来仔细辨一辨。', '接下来看看这些图表，细节也得照顾到。'],
     'summarizing': [
         '读到的线索准备好了，我来把它们串起来。',
@@ -76,7 +84,8 @@ class WorkCues:
 
     def emit(self, task, kind, phrases=None):
         with self.lock:
-            bank = phrases or PHRASES[kind]
+            phase = task.get('context', {}).get('pause', {}).get('kind') if kind == 'waiting_limit' else None
+            bank = phrases or PHRASES[phase if phase in ('outline', 'overwrite') else kind]
             choices = [text for text in bank if text not in self.recent] or bank
             text = secrets.choice(choices)
             self.recent.append(text)

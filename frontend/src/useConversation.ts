@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
+import type { AnnotationSubmission } from './Annotations';
 import {
   request,
   streamChat,
@@ -96,7 +97,12 @@ export function useConversation(
     }
   }
 
-  async function send(text: string, attachments: string[] = [], modelChoice?: ModelChoice) {
+  async function send(
+    text: string,
+    attachments: string[] = [],
+    modelChoice?: ModelChoice,
+    annotations?: AnnotationSubmission,
+  ) {
     text = text.trim();
     if (!text || busyRef.current || historyLoading) return false;
     busyRef.current = true;
@@ -160,6 +166,7 @@ export function useConversation(
         },
         attachments,
         modelChoice,
+        annotations,
       );
     } catch (failure) {
       if ((failure as Error).name !== 'AbortError') setError((failure as Error).message);

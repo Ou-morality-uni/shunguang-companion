@@ -1,9 +1,10 @@
-# Shunguang Companion v0.6.0
+# Shunguang Companion v0.6.1
 
-[v0.6.0 release notes (Chinese)](versions/0.6.0/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice preparation for 0.6.1 (Chinese)](versions/0.6.1/LibreOffice-install.md)
+[v0.6.1 release notes (Chinese)](versions/0.6.1/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.6.1](versions/0.6.1/README.md): Add built-in Office skills, editable documents and targeted revisions, PDF export, basic image operations, and annotation drafts.
 - [v0.6.0](versions/0.6.0/README.md): Integrate chat file workspaces, automatic cross-chat memory, weather reminders, online voice input, per-chat model choices, and global animated backgrounds.
 - [v0.5.6](versions/0.5.6/README.md): Refresh the warm red-and-gold interface with flowing light, collapsible navigation, compact status and voice controls, and resizable file previews.
 - [v0.5.5](versions/0.5.5/README.md): Add chat attachments and background file tasks, resumable long-document reading with workload consent, saved Markdown summaries, and stage-based work speech.
@@ -42,13 +43,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -C
 
 ## LibreOffice: optional manual installation
 
-**The current code version is 0.6.0. Office authoring/editing, page-layout previews, Office-to-PDF export, and Excel recalculation remain part of the in-development 0.6.1 release.** A dependency release does not mean these application features have shipped. Chat, extracted document content, and Markdown summaries in 0.6.0 do not require LibreOffice.
+**In 0.6.1, Office page previews, Office-to-PDF export, and Excel recalculation require LibreOffice.** Chat, extracted content, and Markdown summaries do not. See the separate release notes for Office authoring and annotations.
 
 See the [LibreOffice installation guide (Chinese)](versions/0.6.1/LibreOffice-install.md):
 
 1. Download the Windows x64 main installer from the [official website](https://www.libreoffice.org/download/download-libreoffice/). After the maintainer publishes it, the [project Releases page](https://github.com/Ou-morality-uni/shunguang-companion/releases) may also offer `LibreOffice-26.8.1-Windows-x64-installer-bundle.zip` and its `.zip.sha256`. GitHub's automatically generated **Source code (zip)** is not the installer.
 2. Verify the bundle SHA-256, extract it, and run the MSI. Keep downloads in `tools/installers/` and use Custom installation to choose `tools/LibreOffice/` under the project root, supplying its full absolute path. Reuse an existing installation where available.
-3. For this custom location, add the full `tools/LibreOffice/program` directory to your user PATH and restart the backend. In an application version that includes Office dependency detection, click the recheck button. The standard system installation location is also supported.
+3. Version 0.6.1 detects the project-local `tools/LibreOffice/program` directory and standard system locations. Restart the backend and recheck capabilities. Other custom locations can use PATH as explained in the guide.
 
 Neither `Install.bat` nor `Start_up.bat` installs LibreOffice. The bundle is an installer with documentation, not a portable distribution. LibreOffice keeps its own licenses; this project's noncommercial code license does not replace them.
 
@@ -95,10 +96,10 @@ Each user has their own `data/` directory for encrypted keys, settings, chat his
 
 Development progress documents, delivery checklists, acceptance reports, private logs, and original development Git history are excluded. Installation does not enter API keys, purchase services, train voices, or upload reference audio.
 
-## Using 0.6.0
+## Using 0.6.1
 
 - **Models**: save working API connections in settings, then select a provider, model, and supported reasoning level in the composer. Each conversation remembers its selection; new conversations use the default.
-- **Files**: upload or drop files into chat and send your request. Tasks run in the background; open their shortcut to view progress, sources, and complete Markdown results in right-side tabs. New results are saved under `data/outputs/任务-<task ID>/`. Convert legacy `.doc/.xls/.ppt` files to `.docx/.xlsx/.pptx` first. Office document editing and PDF export are not included in 0.6.0.
+- **Files**: upload or drop files into chat and send your request. Tasks run in the background; open their shortcut to view progress, sources, and complete Markdown results in right-side tabs. New results are saved under `data/outputs/任务-<task ID>/`. Convert legacy `.doc/.xls/.ppt` files to `.docx/.xlsx/.pptx` first. See the [0.6.1 release notes](versions/0.6.1/README.md) for Office authoring, targeted edits, and PDF export.
 - **Voice input**: configure a supported HTTPS audio-transcription endpoint, model, and credentials under Audio & Playback → Voice Input. Click to start and again to stop; review the resulting draft before sending. Transcription and TTS have separate configuration, and text/image support does not imply audio support. Your browser requests microphone permission.
 - **Profile and care**: set your preferred form of address, home city, and age in Memory Space. A city is sufficient for weather reminders; a street address is unnecessary. Automatic memory and cross-chat processing can be disabled in memory settings. Weather reminders stop when the page closes.
 

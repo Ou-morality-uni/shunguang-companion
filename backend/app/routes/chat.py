@@ -46,6 +46,8 @@ class ChatRequest(BaseModel):
     content: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
     attachments: list[str] = Field(default_factory=list, max_length=10)
     model_choice: ModelChoice | None = None
+    annotations: list[str] = Field(default_factory=list, max_length=30)
+    annotation_scope: str = Field(default='', max_length=80)
 
     @field_validator('content')
     @classmethod
@@ -175,6 +177,30 @@ async def chat(payload: ChatRequest, request: Request = None):
             attachments.append(await asyncio.to_thread(invoke, attachment, runtime.work, attachment_id))
     # Reserve before yielding to I/O. Deletion shares the gate; never discard a live lock.
     async with runtime.mutation_lock:
+        annotation_items = []
+        if payload.annotations:
+            from .. import annotations
+            from ..filework import WorkError
+            from ..work_artifacts import attachment
+
+            if not local_request(request) or runtime.work is None:
+                raise HTTPException(403, '本机批注仅能由本机对话使用。')
+            try:
+                annotation_items = await asyncio.to_thread(
+                    annotations.prepare,
+                    runtime.store,
+                    runtime.work,
+                    payload.annotations,
+                    payload.conversation_id,
+                    payload.annotation_scope,
+                )
+                for item in annotation_items:
+                    if item['source']['kind'] == 'attachment' and not any(
+                        reference['id'] == item['source']['id'] for reference in attachments
+                    ):
+                        attachments.append(await asyncio.to_thread(attachment, runtime.work, item['source']['id']))
+            except WorkError as error:
+                raise HTTPException(error.status, error.message)
         if payload.conversation_id:
             await asyncio.to_thread(require_conversation, payload.conversation_id)
             if payload.conversation_id in runtime.busy:
@@ -198,12 +224,17 @@ async def chat(payload: ChatRequest, request: Request = None):
                 'effort': config.llm_effort,
             }
         model = await asyncio.to_thread(build_model, config)
-        user_message = await asyncio.to_thread(
-            runtime.store.begin_turn,
-            payload.conversation_id,
-            payload.content,
-            {'attachments': attachments, 'model_choice': selected},
-        )
+        from ..filework import WorkError
+
+        try:
+            user_message = await asyncio.to_thread(
+                runtime.store.begin_turn,
+                payload.conversation_id,
+                payload.content,
+                {'attachments': attachments, 'model_choice': selected, 'annotations': annotation_items},
+            )
+        except WorkError as error:
+            raise HTTPException(error.status, error.message)
         conversation_id = user_message['conversation_id']
         await asyncio.to_thread(runtime.store.set_conversation_model, conversation_id, selected)
         runtime.busy.add(conversation_id)
@@ -219,7 +250,13 @@ async def chat(payload: ChatRequest, request: Request = None):
     async def stream():
         text = ''
         persisted = False
-        metadata = {'sources': [], 'context_sources': [], 'tools': [], 'model_choice': selected}
+        metadata = {
+            'sources': [],
+            'context_sources': [],
+            'tools': [],
+            'model_choice': selected,
+            'annotations': annotation_items,
+        }
         assistant = None
         try:
             assistant = await io(runtime.store.add_message, conversation_id, 'assistant', '', 'streaming')
@@ -320,6 +357,10 @@ async def chat(payload: ChatRequest, request: Request = None):
                             )
                         )
                     )
+            if annotation_items:
+                from ..annotations import model_context
+
+                history.append(HumanMessage(content=await io(model_context, runtime.store, annotation_items)))
             count, last_save = 0, time.monotonic()
             sticker_hint = ''
             async with asyncio.timeout(CHAT_TIMEOUT):

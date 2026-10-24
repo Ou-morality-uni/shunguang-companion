@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from .. import runtime
+from ..annotations import AnnotationRequest, CommentUpdate
 from ..filework import MAX_FILE_BYTES, FileTaskRequest, WorkError, local_request, public_task
 from ..schemas import DocumentUploadOut, FileTaskOut, WorkspaceOut
 
@@ -21,6 +22,23 @@ def service(request: Request):
 
 
 router = APIRouter(prefix='/api/work', dependencies=[Depends(service)])
+
+
+@router.get('/capabilities')
+def file_capabilities():
+    from ..office_runtime import capabilities
+
+    return capabilities()
+
+
+from ..office_tasks import OfficeRequest
+
+
+@router.post('/office/tasks', status_code=201, response_model=FileTaskOut)
+def submit_office(payload: OfficeRequest, work=Depends(service)):
+    from ..office_tasks import submit
+
+    return invoke(submit, work, payload)
 
 
 class GrantRequest(BaseModel):
@@ -186,6 +204,88 @@ def download_artifact(task_id: str, work=Depends(service)):
     from ..work_artifacts import artifact_bytes
 
     return download_response(*invoke(artifact_bytes, work, task_id))
+
+
+@router.get('/artifacts/{task_id}/preview')
+def preview_artifact(task_id: str, start: int = Query(default=1, ge=1, le=1000000), work=Depends(service)):
+    from .. import document_readers
+    from ..work_artifacts import artifact_bytes
+
+    item, data = invoke(artifact_bytes, work, task_id)
+    try:
+        result, _ = document_readers.extract(data, item['name'], start, 5)
+        result['version'] = item['sha256']
+        result['validation'] = item.get('validation', {})
+        return result
+    except document_readers.DocumentError as error:
+        raise HTTPException(422, str(error))
+
+
+@router.get('/resources/{kind}/{resource_id}/targets')
+def resource_targets(kind: str, resource_id: str, work=Depends(service)):
+    from ..office_resources import targets
+
+    return invoke(targets, work, kind, resource_id)
+
+
+@router.get('/resources/{kind}/{resource_id}/pages')
+def resource_pages(
+    kind: str,
+    resource_id: str,
+    version: str | None = Query(default=None, pattern=r'^[0-9a-f]{64}$'),
+    work=Depends(service),
+):
+    from ..office_resources import page_info
+
+    return invoke(page_info, work, kind, resource_id, version)
+
+
+@router.get('/resources/{kind}/{resource_id}/image')
+def resource_image(
+    kind: str,
+    resource_id: str,
+    page: int = Query(default=1, ge=1),
+    version: str | None = Query(default=None, pattern=r'^[0-9a-f]{64}$'),
+    work=Depends(service),
+):
+    from ..office_resources import page_image
+
+    data = invoke(page_image, work, kind, resource_id, page, version)
+    return Response(
+        data, media_type='image/jpeg', headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'}
+    )
+
+
+@router.get('/annotations')
+def annotation_drafts(
+    conversation_id: str | None = Query(default=None, max_length=80),
+    draft_scope: str = Query(default='', max_length=80),
+    work=Depends(service),
+):
+    from .. import annotations
+
+    return annotations.list_drafts(work.store, conversation_id, draft_scope)
+
+
+@router.post('/annotations', status_code=201)
+def add_annotation(payload: AnnotationRequest, work=Depends(service)):
+    from .. import annotations
+
+    return invoke(annotations.create, work.store, work, payload)
+
+
+@router.patch('/annotations/{annotation_id}')
+def edit_annotation(annotation_id: str, payload: CommentUpdate, work=Depends(service)):
+    from .. import annotations
+
+    return invoke(annotations.update, work.store, annotation_id, payload.comment)
+
+
+@router.delete('/annotations/{annotation_id}')
+def delete_annotation(annotation_id: str, work=Depends(service)):
+    from .. import annotations
+
+    return invoke(annotations.update, work.store, annotation_id, None, True)
 
 
 @router.get('/files/{attachment_id}/preview')

@@ -1,6 +1,6 @@
 # LibreOffice 下载与安装指南（Windows）
 
-本指南随 0.6.1 开发提供，不表示该版本已完成验收。LibreOffice 是独立的第三方软件，用于 Office 页面预览、Office 转 PDF 和 Excel 公式重算。普通聊天和已有文件的文字内容阅读不要求安装它。
+本指南适用于 0.6.1。LibreOffice 是独立的第三方软件，用于 Office 页面预览、Office 转 PDF 和 Excel 公式重算。普通聊天和已有文件的文字内容阅读不要求安装它。
 
 `Install.bat` 和 `Start_up.bat` 当前均不会下载或安装 LibreOffice。把安装包放进项目目录或 GitHub Releases，也不会自动安装。
 
@@ -50,7 +50,9 @@ Get-Content -LiteralPath .\LibreOffice-26.8.1-Windows-x64-installer-bundle.zip.s
 
 ## 3. 让小光找到项目内的安装
 
-**当前检测逻辑检查 PATH 和系统常见安装位置，不会自动扫描 `tools/LibreOffice/`。使用上面的自定义位置，还需要完成以下配置。**
+**0.6.1 会优先检测项目 `tools/LibreOffice/program/soffice.com`，再检查 PATH 和系统常见位置。按推荐位置安装后，无需配置 PATH；重启后端，在“陪伴设置 → 工具服务”或工作台点击“重新检测”即可。**
+
+若安装在其他自定义目录，或仍使用较旧版本，可按下面步骤配置 PATH：
 
 1. 在 Windows 开始菜单搜索并打开“编辑账户的环境变量”。
 2. 在“用户变量”中选中 `Path`，点击“编辑”，再点击“新建”；保留已有条目。
@@ -64,7 +66,7 @@ Get-Content -LiteralPath .\LibreOffice-26.8.1-Windows-x64-installer-bundle.zip.s
 soffice.com --version
 ```
 
-正常时会显示 LibreOffice 版本。若提示找不到命令，先检查 PATH 中的目录是否正确、安装是否完成，以及终端是否已经重新打开。检测成功只说明引擎可启动，实际文档转换效果仍取决于文件内容、字体和格式兼容性。
+正常时会显示 LibreOffice 版本。未配置 PATH 时可在项目根目录运行 `& .\tools\LibreOffice\program\soffice.com --version`。检测成功只说明引擎可启动，实际文档转换效果仍取决于文件内容、字体和格式兼容性。
 
 ## 4. 移动项目、更新和公开发布
 

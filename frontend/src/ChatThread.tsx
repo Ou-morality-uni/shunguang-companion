@@ -45,6 +45,14 @@ import { useCompanionAudio } from './useAudioQueue';
 import { ResourceImage } from './ResourceImage';
 import { MessageSticker } from './MessageSticker';
 import { MAX_MESSAGE_LENGTH } from './generated/limits';
+import {
+  AnnotationTarget,
+  AnnotationTray,
+  ReplyAnnotations,
+  useAnnotations,
+  type AnnotationSubmission,
+  type AnnotationAnchor,
+} from './Annotations';
 const MarkdownText = () => <MarkdownTextPrimitive defer smooth remarkPlugins={[remarkGfm]} />;
 const MessagesContext = createContext<Message[]>([]);
 const HistoryContext = createContext<Set<string>>(new Set());
@@ -97,7 +105,26 @@ function ChatMessage() {
             )}
           </div>
           <div className="message-text">
-            <MessagePrimitive.Parts components={{ Text: MarkdownText }} />
+            {!user && record?.status === 'complete' ? (
+              <AnnotationTarget
+                label="这条回复"
+                prepare={async () => {
+                  const value = await request<{ version: string }>(
+                    `/work/resources/message/${encodeURIComponent(message.id)}/targets`,
+                  );
+                  return {
+                    source: { kind: 'message', id: message.id, version: value.version },
+                    target_id: 'message',
+                    name: '小光的回复',
+                    location: '聊天回复',
+                  } satisfies AnnotationAnchor;
+                }}
+              >
+                <MessagePrimitive.Parts components={{ Text: MarkdownText }} />
+              </AnnotationTarget>
+            ) : (
+              <MessagePrimitive.Parts components={{ Text: MarkdownText }} />
+            )}
             {message.content.every((part) => part.type === 'text' && !part.text) && (
               <span className="thinking">
                 正在组织语言<span>…</span>
@@ -108,6 +135,7 @@ function ChatMessage() {
             <MessageSticker key={record.sticker.id} sticker={record.sticker} />
           )}
           <ToolFeedback tools={record?.tools} />
+          <ReplyAnnotations items={record?.annotations} />
           {record?.attachments?.map((attachment) => (
             <AttachmentCard key={attachment.id} attachment={attachment} />
           ))}
@@ -146,7 +174,12 @@ type Props = {
   asrSettings?: Features['asr'];
   tools?: ToolEvent[];
   sources?: Source[];
-  onSend: (text: string, attachments?: string[], modelChoice?: ModelChoice) => Promise<boolean>;
+  onSend: (
+    text: string,
+    attachments?: string[],
+    modelChoice?: ModelChoice,
+    annotations?: AnnotationSubmission,
+  ) => Promise<boolean>;
   onStop: () => void;
   onSettings: () => void;
   onVoice: () => void;
@@ -176,6 +209,7 @@ export function ChatThread({
   onWork,
 }: Props) {
   const audio = useCompanionAudio();
+  const annotations = useAnnotations();
   const [modelChoice, setModelChoice] = useState<ModelChoice>();
   const [voiceBusy, setVoiceBusy] = useState(false);
   const history = useRef(new Set(messages.map((message) => message.id)));
@@ -287,18 +321,37 @@ export function ChatThread({
         runtime.thread.composer.setText(text);
         return;
       }
-      if (
-        !(await onSend(
-          text,
-          attachments.map((item) => item.id),
-          modelChoice,
-        ))
-      )
-        runtime.thread.composer.setText(text);
-      else setAttachments([]);
+      const submission = annotations?.submission();
+      annotations?.setSending(true);
+      try {
+        const accepted = submission
+          ? await onSend(
+              text || '请按这些批注修改。',
+              attachments.map((item) => item.id),
+              modelChoice,
+              submission,
+            )
+          : await onSend(
+              text,
+              attachments.map((item) => item.id),
+              modelChoice,
+            );
+        if (!accepted) runtime.thread.composer.setText(text);
+        else {
+          setAttachments([]);
+          if (submission) annotations?.submitted(submission.ids);
+        }
+      } finally {
+        annotations?.setSending(false);
+      }
     },
     onCancel: async () => onStop(),
   });
+  useEffect(() => {
+    if (annotations?.drafts.length && !runtime.thread.composer.getState().text.trim()) {
+      runtime.thread.composer.setText('请按这些批注修改。');
+    }
+  }, [annotations?.drafts.length, conversationId, runtime]);
   function suggestion(text: string) {
     runtime.thread.composer.setText(text);
     document.getElementById('chat-input')?.focus();
@@ -407,6 +460,7 @@ export function ChatThread({
                 </button>
               )}
               <ComposerPrimitive.Root className="composer">
+                <AnnotationTray />
                 <input
                   ref={fileInput}
                   type="file"

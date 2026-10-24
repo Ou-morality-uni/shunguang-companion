@@ -1,9 +1,10 @@
-# 瞬光伴行 v0.6.0
+# 瞬光伴行 v0.6.1
 
-[v0.6.0 更新说明](versions/0.6.0/README.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南（0.6.1 准备）](versions/0.6.1/LibreOffice-install.md)
+[v0.6.1 更新说明](versions/0.6.1/README.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md)
 
 [English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.6.1](versions/0.6.1/README.md)：加入内置办公技能、Word／Excel／PPT 成品与局部修订、PDF 导出、基础图片处理和定位批注。
 - [v0.6.0](versions/0.6.0/README.md)：整合聊天文件工作区、自动跨会话记忆、天气关怀、在线语音输入、会话模型选择与全局动态光效。
 - [v0.5.6](versions/0.5.6/README.md)：更新暖霞红金布局与动态光效，支持导航折叠、紧凑状态与语音控制、可调宽及放大的独立文件预览。
 - [v0.5.5](versions/0.5.5/README.md)：打通聊天附件与后台文件任务，支持长资料分批阅读、超限确认续接、总结自动另存和关键节点工作语音。
@@ -42,13 +43,13 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -C
 
 ## LibreOffice：按需手动安装
 
-**当前代码版本为 0.6.0；Office 创作编辑、页面排版预览、Office 转 PDF 和 Excel 重算仍属于开发中的 0.6.1。** 发布 LibreOffice 依赖包不代表这些应用功能已经交付。使用 0.6.0 的聊天、资料文字阅读和 Markdown 总结，无需为此安装 LibreOffice。
+**0.6.1 的 Office 页面预览、Office 转 PDF 和 Excel 公式重算需要 LibreOffice；普通聊天、资料内容阅读和 Markdown 总结无需安装它。** 办公成品和批注用法见独立版本说明。
 
-准备使用后续办公能力时，请阅读 [LibreOffice 下载与安装指南](versions/0.6.1/LibreOffice-install.md)：
+使用办公能力前，请阅读 [LibreOffice 下载与安装指南](versions/0.6.1/LibreOffice-install.md)：
 
 1. 从 [LibreOffice 官网](https://www.libreoffice.org/download/download-libreoffice/) 下载 Windows x64 主程序；也可查看 [本项目 Releases](https://github.com/Ou-morality-uni/shunguang-companion/releases)，在维护者发布附件后下载 `LibreOffice-26.8.1-Windows-x64-installer-bundle.zip` 和同名 `.zip.sha256`。自动生成的 **Source code (zip)** 不是 LibreOffice 安装包。
 2. ZIP 下载后先核对同页 SHA-256，再解压并运行其中的 MSI。推荐将下载包放在项目 `tools/installers/`，在自定义安装中把程序安装到项目 `tools/LibreOffice/`；安装向导需要填写完整路径。已有安装可直接沿用。
-3. 自定义目录安装后，按指南将完整的 `tools/LibreOffice/program` 目录加入用户 PATH，重启小光后端；安装了支持 Office 检测的应用版本后，再点击“重新检测”。系统默认安装目录也受支持。
+3. 0.6.1 自动检测项目 `tools/LibreOffice/program` 和系统常见安装目录；重启后端后点击“重新检测”。其他自定义位置可按指南配置 PATH。
 
 `Install.bat` 和 `Start_up.bat` **不会自动下载或安装 LibreOffice**。这个 ZIP 是主程序安装包与说明，不是免安装便携版；只把它解压到项目内不能启用引擎。LibreOffice 保留其原有许可，不适用本项目原创代码的非商业限制。
 
@@ -95,10 +96,10 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -M
 
 工程进度、交付清单、验收报告、私人日志和原开发Git历史不在公开仓库；README与安装清单是面向使用者的操作文档。安装不会替你填写API、购买服务、训练声音或上传参考音频。
 
-## 开始使用 0.6.0
+## 开始使用 0.6.1
 
 - **模型选择**：在设置中保存可用的 API 连接后，可从输入区按服务切换模型及支持的思考强度；每个聊天独立记住选择，新聊天使用默认配置。
-- **文件任务**：在聊天中拖入或上传文件，再发送自然语言要求。任务在后台执行，聊天显示短摘要；点击资料或成果入口打开右侧多标签工作区，查看进度、来源及完整 Markdown，支持主动朗读和下载。新成果保存在 `data/outputs/任务-<任务ID>/`。旧 `.doc/.xls/.ppt` 请先另存为 `.docx/.xlsx/.pptx`；0.6.0 不提供 Office 成品编辑或 PDF 导出。
+- **文件任务**：在聊天中拖入或上传文件，再发送自然语言要求。任务在后台执行，聊天显示短摘要；点击资料或成果入口打开右侧多标签工作区，查看进度、来源及完整 Markdown，支持主动朗读和下载。新成果保存在 `data/outputs/任务-<任务ID>/`。旧 `.doc/.xls/.ppt` 请先另存为 `.docx/.xlsx/.pptx`；Office 创作、局部编辑和 PDF 导出见 [0.6.1 更新说明](versions/0.6.1/README.md)。
 - **语音输入**：在“声音与播放 → 语音输入”配置实际支持音频转写的 HTTPS 接口、模型和密钥。点击开始录音，再点击结束；文字先进入草稿，检查后自行发送。它与 TTS 朗读分别配置，文字模型或看图模型不一定支持转写。浏览器会请求麦克风权限。
 - **个人资料与关怀**：在记忆空间填写称呼、常住城市和年龄；默认称呼为“小师妹”。城市供天气关怀使用，不需要填写详细住址。自动记忆与跨聊天整理可在长期记忆设置关闭；网页关闭后不继续天气提醒。
 
@@ -160,6 +161,6 @@ Required Notice: 瞬光伴行 — https://github.com/Ou-morality-uni/shunguang-c
 
 ## 开发与长期维护
 
-模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](versions/0.6.0/README.md)。
+模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](versions/0.6.1/README.md)。
 
 开发环境安装 `backend/requirements-dev.txt` 后，可用 `python scripts/dev.py verify` 统一运行检查；接口变化后用 `python scripts/dev.py contracts` 更新契约。生产安装继续使用运行时锁文件。数据库升级会先自动备份旧库；升级后不要用旧程序直接打开新库。

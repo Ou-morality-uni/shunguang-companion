@@ -1,0 +1,12 @@
+{
+  "repository": "https://github.com/google/fonts",
+  "path": "ofl/notosanssc/NotoSansSC[wght].ttf",
+  "license": "SIL Open Font License 1.1; see OFL.txt",
+  "upstream_git_blob": "fb0637bafbcd804fe32152370a1225990745b4bc",
+  "license_git_blob": "1c9f43281b8f216c5461fe9ac729afbade7724e4",
+  "modifications": "Derived static weight 400 using fontTools 4.60.1; family renamed Shunguang Sans SC. Original copyright and SIL OFL 1.1 retained. No fontTools runtime dependency.",
+  "retrieved": "2026-10-24",
+  "upstream_sha256": "a3041811a78c361b1de50f953c805e0244951c21c5bd412f7232ef0d899af0da",
+  "file": "ShunguangSansSC-Regular.ttf",
+  "sha256": "a6b7ca084b8a7a7c1e2ae0cb94a5648510ace1abfb8ebd73120503e065df1196"
+}

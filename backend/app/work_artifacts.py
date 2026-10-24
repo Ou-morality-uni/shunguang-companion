@@ -20,6 +20,7 @@ def attachment(work, task_id):
         'path': step['path'],
         'name': step.get('result', {}).get('name', step['path']),
         'bytes': step['after'][step['path']]['bytes'],
+        'version': step['after'][step['path']]['sha256'],
     }
 
 
@@ -36,6 +37,41 @@ def attachment_bytes(work, task_id):
 def output_root(work):
     workspace = work.default_output_workspace()
     return workspace, work.root(workspace['id'])
+
+
+def save_file(work, task, name, data, validation):
+    from .filework import MAX_FILE_BYTES
+
+    if len(data) > MAX_FILE_BYTES:
+        raise WorkError('成果超过单文件 20 MiB 上限，请缩小任务范围。', 422)
+    with work.gate:
+        workspace, root = output_root(work)
+        relative_directory = f'任务-{task["id"]}'
+        directory = work.path(root, relative_directory)
+        owner = {'workspace_id': workspace['id'], 'path': relative_directory}
+        if directory.exists():
+            if task['context'].get('output_directory') != owner:
+                raise WorkError('本次成果目录已被其他程序创建，请检查后重试。')
+        else:
+            directory.mkdir()
+            task['context']['output_directory'] = owner
+            work.store.save_file_task(task)
+        no_link(directory)
+        path = work.path(root, relative_directory + '/' + name)
+        item = {
+            'id': str(len(task['context'].get('artifacts', []))),
+            'workspace_id': workspace['id'],
+            'path': relative_directory + '/' + name,
+            'name': name,
+            'sha256': hashlib.sha256(data).hexdigest(),
+            'bytes': len(data),
+            'validation': validation,
+        }
+        work.put(path, data, None, mode=0o600)
+        task['context'].setdefault('artifacts', []).append(item)
+        task['context'].setdefault('artifact', item)
+        work.store.save_file_task(task)
+        return item
 
 
 def save_summary(work, task):
@@ -89,7 +125,15 @@ def save_summary(work, task):
 
 def artifact_bytes(work, task_id):
     with work.gate:
-        item = work.task(task_id)['context'].get('artifact')
+        index = 0
+        if '~' in task_id:
+            task_id, raw_index = task_id.rsplit('~', 1)
+            if not raw_index.isdigit() or len(raw_index) > 3:
+                raise WorkError('成果不存在。', 404)
+            index = int(raw_index)
+        context = work.task(task_id)['context']
+        artifacts = context.get('artifacts') or ([context['artifact']] if context.get('artifact') else [])
+        item = artifacts[index] if index < len(artifacts) else None
         if not item:
             raise WorkError('本任务还没有已保存的总结文件。', 404)
         root = work.root(item['workspace_id'])
