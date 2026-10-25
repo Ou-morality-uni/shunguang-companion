@@ -1,7 +1,7 @@
 {
   "name": "shunguang-companion-web",
   "private": true,
-  "version": "0.6.1",
+  "version": "0.6.2",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
@@ -22,17 +22,21 @@
     "@radix-ui/react-slot": "^1.4.0",
     "@radix-ui/react-switch": "^1.3.8",
     "@radix-ui/react-tabs": "^1.1.22",
+    "@tesseract.js-data/chi_sim": "1.0.0",
+    "@tesseract.js-data/eng": "1.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cn": "^0.4.0",
     "lucide-react": "^0.468.0",
     "motion": "^14.1.0",
+    "pdfjs-dist": "6.4.299",
     "radix-ui": "^1.7.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "10.1.0",
     "remark-gfm": "^4.0.1",
-    "tailwind-merge": "^3.7.0"
+    "tailwind-merge": "^3.7.0",
+    "tesseract.js": "7.0.0"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

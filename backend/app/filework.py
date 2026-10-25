@@ -68,6 +68,7 @@ class FileTaskRequest(BaseModel):
     title: str = Field(default='文件任务', min_length=1, max_length=120)
     steps: list[FileStep] = Field(min_length=1, max_length=50)
     instruction: str = Field(default='', max_length=4000)
+    save_result: bool = False
 
     @model_validator(mode='after')
     def bounded_content(self):
@@ -296,7 +297,7 @@ class FileWork:
             raise WorkError('任务不存在。', 404)
         return record
 
-    def submit(self, payload, origin='workbench', conversation_id=None, model_choice=None):
+    def submit(self, payload, origin='workbench', conversation_id=None, model_choice=None, source_message_id=None):
         with self.gate:
             self.jobs = {key: job for key, job in self.jobs.items() if not job[0].done()}
             if self.closed or len(self.jobs) >= 8:
@@ -353,6 +354,18 @@ class FileWork:
             task = self.store.create_file_task(
                 payload.workspace_id, payload.title, steps, status, origin, conversation_id
             )
+            task['context'].update(save_result=payload.save_result, source_message_id=source_message_id)
+            if source_message_id and conversation_id:
+                message = next(
+                    (item for item in self.store.messages(conversation_id) if item['id'] == source_message_id), {}
+                )
+                task['context']['sources'] = [
+                    {'kind': 'attachment', 'id': item['id'], 'name': item['name']}
+                    for item in message.get('attachments', [])
+                    if item.get('workspace_id') == payload.workspace_id
+                    and any(step.path == item.get('path') for step in payload.steps)
+                ]
+            self.store.save_file_task(task)
             if payload.instruction or any(step.action == 'read_document' for step in payload.steps):
                 from .model_choices import default_choice
 
@@ -711,7 +724,11 @@ class FileWork:
                     step['result'] = self.operate(root, step)
                     step['state'] = 'applied' if step['before'] else 'complete'
                     self.store.save_file_task(task)
-            if not restore and any(item['action'] == 'summarize' for item in task['steps']):
+            if (
+                not restore
+                and task['context'].get('save_result', True)
+                and any(item['action'] == 'summarize' for item in task['steps'])
+            ):
                 from .work_artifacts import save_summary
 
                 check()

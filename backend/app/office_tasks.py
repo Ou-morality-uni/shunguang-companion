@@ -58,7 +58,7 @@ class OfficeRequest(BaseModel):
         return self
 
 
-def submit(work, payload, origin='workbench', model_choice=None, annotations=None):
+def submit(work, payload, origin='workbench', model_choice=None, annotations=None, source_message_id=None):
     with work.gate:
         work.jobs = {key: job for key, job in work.jobs.items() if not job[0].done()}
         if work.closed or len(work.jobs) >= 8:
@@ -136,6 +136,7 @@ def submit(work, payload, origin='workbench', model_choice=None, annotations=Non
             task['context']['model_choice'] = choice
         if annotations:
             task['context']['annotations'] = annotations
+        task['context']['source_message_id'] = source_message_id
         task['context']['sources'] = []
         for reference in [*payload.sources, *([payload.source] if payload.source else [])]:
             item, _ = resource_bytes(work, reference.kind, reference.id, reference.version)

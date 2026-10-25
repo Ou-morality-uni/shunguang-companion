@@ -77,9 +77,10 @@ def test_model_menu_groups_saved_connections_and_only_lists_verified_effort_cont
     assert response.status_code == 200
     entries = {item['id']: item for item in response.json()}
     custom = entries[config.profile_id('https://one.example/v1', 'openai')]
-    assert custom['models'][0]['efforts'] == ['default']
+    assert custom['models'][0]['efforts'] == []
     native = entries[config.profile_id('https://api.deepseek.com', 'openai')]
-    assert native['models'][0]['efforts'] == ['default', 'off', 'low', 'high', 'max']
+    assert native['models'][0]['efforts'] == ['low', 'high', 'max']
+    assert native['models'][0]['initial_effort'] == 'high'
     assert 'private-deepseek' not in response.text
 
 

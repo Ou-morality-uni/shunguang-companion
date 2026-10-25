@@ -1,6 +1,43 @@
 {
   "components": {
     "schemas": {
+      "AnnotationRegion": {
+        "additionalProperties": false,
+        "properties": {
+          "page": {
+            "maximum": 100000.0,
+            "minimum": 1.0,
+            "title": "Page",
+            "type": "integer"
+          },
+          "rect": {
+            "maxItems": 4,
+            "minItems": 4,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Rect",
+            "type": "array"
+          }
+        },
+        "required": [
+          "page",
+          "rect"
+        ],
+        "title": "AnnotationRegion",
+        "type": "object"
+      },
       "AnnotationRequest": {
         "additionalProperties": false,
         "properties": {
@@ -62,6 +99,14 @@
             ],
             "title": "Rect"
           },
+          "regions": {
+            "items": {
+              "$ref": "#/components/schemas/AnnotationRegion"
+            },
+            "maxItems": 30,
+            "title": "Regions",
+            "type": "array"
+          },
           "source": {
             "$ref": "#/components/schemas/AnnotationSource"
           },
@@ -69,6 +114,15 @@
             "maxLength": 150,
             "minLength": 1,
             "title": "Target Id",
+            "type": "string"
+          },
+          "text_origin": {
+            "default": "native",
+            "enum": [
+              "native",
+              "ocr"
+            ],
+            "title": "Text Origin",
             "type": "string"
           }
         },
@@ -748,6 +802,11 @@
             "title": "Instruction",
             "type": "string"
           },
+          "save_result": {
+            "default": false,
+            "title": "Save Result",
+            "type": "boolean"
+          },
           "steps": {
             "items": {
               "$ref": "#/components/schemas/FileStep"
@@ -1228,6 +1287,11 @@
           },
           "id": {
             "title": "Id",
+            "type": "string"
+          },
+          "initial_effort": {
+            "default": "default",
+            "title": "Initial Effort",
             "type": "string"
           }
         },
@@ -2286,7 +2350,7 @@
   },
   "info": {
     "title": "瞬光伴行 API",
-    "version": "0.6.1"
+    "version": "0.6.2"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4547,6 +4611,62 @@
         "summary": "Choose Output"
       }
     },
+    "/api/work/resources/{kind}/{resource_id}/document": {
+      "get": {
+        "operationId": "resource_document_api_work_resources__kind___resource_id__document_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Version",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resource Document"
+      }
+    },
     "/api/work/resources/{kind}/{resource_id}/image": {
       "get": {
         "operationId": "resource_image_api_work_resources__kind___resource_id__image_get",
@@ -4619,6 +4739,52 @@
           }
         },
         "summary": "Resource Image"
+      }
+    },
+    "/api/work/resources/{kind}/{resource_id}/info": {
+      "get": {
+        "operationId": "resource_info_api_work_resources__kind___resource_id__info_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "resource_id",
+            "required": true,
+            "schema": {
+              "title": "Resource Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resource Info"
       }
     },
     "/api/work/resources/{kind}/{resource_id}/pages": {
@@ -5130,6 +5296,22 @@
           }
         },
         "summary": "Upload"
+      }
+    },
+    "/api/work/uploads": {
+      "get": {
+        "operationId": "uploads_api_work_uploads_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Uploads"
       }
     },
     "/api/work/vision/probe": {

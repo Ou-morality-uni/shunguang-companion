@@ -35,6 +35,7 @@ import { GlideSelect } from './components/ui/glide-select';
 import { effortLabels } from './ModelPicker';
 import { ASRSettings } from './ASRSettings';
 import { OfficeCapabilities } from './OfficeCapabilities';
+import { FilePermissions } from './WorkSpace';
 
 const categories = [
   { id: 'model', label: '模型连接', icon: Cpu },
@@ -652,47 +653,50 @@ export function CompanionSettings({
                       ]}
                     />
                   </label>
-                  <label className="field">
-                    接口协议
-                    <GlideSelect
-                      label="接口协议"
-                      value={draft.protocol || 'openai'}
-                      onValueChange={(value) =>
-                        setDraft({
-                          ...draft,
-                          protocol: value as 'openai' | 'anthropic',
-                          vision: 'unknown',
-                          effort: 'default',
-                          efforts: ['default'],
-                        })
-                      }
-                      options={[
-                        { value: 'openai', label: 'OpenAI 兼容' },
-                        { value: 'anthropic', label: 'Anthropic 兼容' },
-                      ]}
-                    />
-                    <span className="field-hint">协议决定请求和流式解析方式，请匹配提供商的实际接口。</span>
-                  </label>
-                  <label className="field">
-                    API 地址
-                    <Input
-                      aria-label="模型 API 地址"
-                      type="url"
-                      required
-                      value={draft.base_url}
-                      onChange={(e) =>
-                        setDraft({
-                          ...draft,
-                          base_url: e.target.value,
-                          vision: 'unknown',
-                          effort: 'default',
-                          efforts: ['default'],
-                          has_api_key: e.target.value === settings?.base_url && !!settings.has_api_key,
-                        })
-                      }
-                      maxLength={500}
-                    />
-                  </label>
+                  <details className="reference-panel" open={draft.provider === 'custom' || undefined}>
+                    <summary>接口地址与协议</summary>
+                    <label className="field">
+                      接口协议
+                      <GlideSelect
+                        label="接口协议"
+                        value={draft.protocol || 'openai'}
+                        onValueChange={(value) =>
+                          setDraft({
+                            ...draft,
+                            protocol: value as 'openai' | 'anthropic',
+                            vision: 'unknown',
+                            effort: 'default',
+                            efforts: ['default'],
+                          })
+                        }
+                        options={[
+                          { value: 'openai', label: 'OpenAI 兼容' },
+                          { value: 'anthropic', label: 'Anthropic 兼容' },
+                        ]}
+                      />
+                      <span className="field-hint">协议决定请求和流式解析方式，请匹配提供商的实际接口。</span>
+                    </label>
+                    <label className="field">
+                      API 地址
+                      <Input
+                        aria-label="模型 API 地址"
+                        type="url"
+                        required
+                        value={draft.base_url}
+                        onChange={(e) =>
+                          setDraft({
+                            ...draft,
+                            base_url: e.target.value,
+                            vision: 'unknown',
+                            effort: 'default',
+                            efforts: ['default'],
+                            has_api_key: e.target.value === settings?.base_url && !!settings.has_api_key,
+                          })
+                        }
+                        maxLength={500}
+                      />
+                    </label>
+                  </details>
                   <label className="field">
                     API 密钥
                     <Input
@@ -779,106 +783,117 @@ export function CompanionSettings({
                       maxLength={150}
                     />
                   </label>
-                  <label className="field">
-                    新聊天的默认思考强度
-                    <GlideSelect
-                      label="新聊天的默认思考强度"
-                      value={draft.effort || 'default'}
-                      options={(draft.efforts || ['default']).map((value) => ({
-                        value,
-                        label: effortLabels[value] || value,
-                      }))}
-                      disabled={busy || (draft.efforts || ['default']).length === 1}
-                      onValueChange={(effort) => setDraft({ ...draft, effort })}
-                    />
-                    <span className="field-hint">保存连接后显示已核实的支持项；不改变已有聊天的选择。</span>
-                  </label>
-                  <div className="field-row">
+                  <details className="model-advanced reference-panel">
+                    <summary>模型高级设置</summary>
+                    {(draft.efforts || []).some((value) => value !== 'default') && (
+                      <>
+                        <label className="field">
+                          新聊天的默认思考强度
+                          <GlideSelect
+                            label="新聊天的默认思考强度"
+                            value={draft.effort || 'default'}
+                            options={(draft.efforts || [])
+                              .filter((value) => value !== 'default')
+                              .map((value) => ({
+                                value,
+                                label: effortLabels[value] || value,
+                              }))}
+                            disabled={busy || (draft.efforts || ['default']).length === 1}
+                            onValueChange={(effort) => setDraft({ ...draft, effort })}
+                          />
+                          <span className="field-hint">
+                            保存连接后显示已核实的支持项；不改变已有聊天的选择。
+                          </span>
+                        </label>
+                      </>
+                    )}
+                    <div className="field-row">
+                      <label className="field">
+                        温度
+                        <Input
+                          type="number"
+                          min={0}
+                          max={2}
+                          step={0.1}
+                          value={draft.temperature}
+                          onChange={(e) => setDraft({ ...draft, temperature: Number(e.target.value) })}
+                        />
+                      </label>
+                      <label className="field">
+                        超时（秒）
+                        <Input
+                          type="number"
+                          min={5}
+                          max={120}
+                          value={draft.timeout}
+                          onChange={(e) => setDraft({ ...draft, timeout: Number(e.target.value) })}
+                        />
+                      </label>
+                    </div>
                     <label className="field">
-                      温度
+                      最大输出 Token
                       <Input
                         type="number"
-                        min={0}
-                        max={2}
-                        step={0.1}
-                        value={draft.temperature}
-                        onChange={(e) => setDraft({ ...draft, temperature: Number(e.target.value) })}
+                        min={128}
+                        max={8192}
+                        value={draft.max_tokens}
+                        onChange={(e) => setDraft({ ...draft, max_tokens: Number(e.target.value) })}
                       />
+                      <span className="field-hint">更长的输出可能增加费用。请求失败不会自动重试。</span>
                     </label>
                     <label className="field">
-                      超时（秒）
-                      <Input
-                        type="number"
-                        min={5}
-                        max={120}
-                        value={draft.timeout}
-                        onChange={(e) => setDraft({ ...draft, timeout: Number(e.target.value) })}
+                      当前模型的图像理解能力
+                      <GlideSelect
+                        label="当前模型的图像理解能力"
+                        value={draft.vision ?? 'unknown'}
+                        onValueChange={(value) =>
+                          setDraft({ ...draft, vision: value as ModelSettings['vision'] })
+                        }
+                        options={[
+                          { value: 'unknown', label: '尚未确认（需要替代识别时询问）' },
+                          { value: 'supported', label: '已确认支持（必要图像直接交给当前模型）' },
+                          { value: 'unsupported', label: '不支持图像输入' },
+                        ]}
                       />
+                      <span className="field-hint">
+                        仅看图能力，不代表支持生图或改图。切换模型、协议或地址后需要重新确认。
+                      </span>
                     </label>
-                  </div>
-                  <label className="field">
-                    最大输出 Token
-                    <Input
-                      type="number"
-                      min={128}
-                      max={8192}
-                      value={draft.max_tokens}
-                      onChange={(e) => setDraft({ ...draft, max_tokens: Number(e.target.value) })}
-                    />
-                    <span className="field-hint">更长的输出可能增加费用。请求失败不会自动重试。</span>
-                  </label>
-                  <label className="field">
-                    当前模型的图像理解能力
-                    <GlideSelect
-                      label="当前模型的图像理解能力"
-                      value={draft.vision ?? 'unknown'}
-                      onValueChange={(value) =>
-                        setDraft({ ...draft, vision: value as ModelSettings['vision'] })
-                      }
-                      options={[
-                        { value: 'unknown', label: '尚未确认（需要替代识别时询问）' },
-                        { value: 'supported', label: '已确认支持（必要图像直接交给当前模型）' },
-                        { value: 'unsupported', label: '不支持图像输入' },
-                      ]}
-                    />
-                    <span className="field-hint">
-                      仅看图能力，不代表支持生图或改图。切换模型、协议或地址后需要重新确认。
-                    </span>
-                  </label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    disabled={busy}
-                    onClick={() => {
-                      if (
-                        draft.model !== settings?.model ||
-                        draft.base_url !== settings?.base_url ||
-                        draft.protocol !== settings?.protocol ||
-                        modelKey ||
-                        clearModelKey
-                      ) {
-                        setNotice('请先保存当前模型配置，再测试图像理解。');
-                        return;
-                      }
-                      setBusy(true);
-                      setNotice('正在用测试图片验证当前已保存模型，可能产生服务调用费用。');
-                      void request<{ settings: ModelSettings; message: string }>('/work/vision/probe', {
-                        method: 'POST',
-                      })
-                        .then((result) => {
-                          setDraft(result.settings);
-                          onModelSaved(result.settings);
-                          setNotice(result.message);
-                          return request<Array<ModelSettings & { id: string }>>('/providers/profiles').then(
-                            setProfiles,
-                          );
+                    <Button
+                      type="button"
+                      variant="outline"
+                      disabled={busy}
+                      onClick={() => {
+                        if (
+                          draft.model !== settings?.model ||
+                          draft.base_url !== settings?.base_url ||
+                          draft.protocol !== settings?.protocol ||
+                          modelKey ||
+                          clearModelKey
+                        ) {
+                          setNotice('请先保存当前模型配置，再测试图像理解。');
+                          return;
+                        }
+                        setBusy(true);
+                        setNotice('正在用测试图片验证当前已保存模型，可能产生服务调用费用。');
+                        void request<{ settings: ModelSettings; message: string }>('/work/vision/probe', {
+                          method: 'POST',
                         })
-                        .catch((error: Error) => setNotice(error.message))
-                        .finally(() => setBusy(false));
-                    }}
-                  >
-                    测试图像理解（调用已保存模型）
-                  </Button>
+                          .then((result) => {
+                            setDraft(result.settings);
+                            onModelSaved(result.settings);
+                            setNotice(result.message);
+                            return request<Array<ModelSettings & { id: string }>>('/providers/profiles').then(
+                              setProfiles,
+                            );
+                          })
+                          .catch((error: Error) => setNotice(error.message))
+                          .finally(() => setBusy(false));
+                      }}
+                    >
+                      测试图像理解（调用已保存模型）
+                    </Button>
+                  </details>
                   <div className="key-note">
                     <ShieldCheck size={19} />
                     <p>调用会把对话和必要上下文发送给你选择的模型服务。密钥只用于该服务，不保存到浏览器。</p>
@@ -1309,6 +1324,7 @@ export function CompanionSettings({
                 </div>
               </>
             )}
+            {panel === 'tools' && <FilePermissions />}
             {panel === 'tools' && tools && (
               <form
                 onSubmit={(e) => {

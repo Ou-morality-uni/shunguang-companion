@@ -1,0 +1,119 @@
+.continuous-preview {
+  min-width: 0;
+}
+.document-toolbar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 12px;
+}
+.document-toolbar button {
+  padding: 5px 9px;
+  min-height: 30px;
+  height: auto;
+}
+.document-surface {
+  position: relative;
+  min-width: 0;
+  background: #302c30;
+  isolation: isolate;
+}
+.document-surface:has(.document-scroll) {
+  height: min(70vh, 780px);
+  min-height: 260px;
+}
+.document-scroll {
+  position: absolute;
+  inset: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.document-scroll .pdfViewer {
+  --scale-factor: 1;
+}
+.document-scroll .pdfViewer .page {
+  margin: 8px auto;
+  border: 0;
+  box-shadow: 0 2px 12px #0005;
+}
+.document-scroll .pdfViewer .textLayer {
+  color: transparent;
+}
+.document-scroll .pdfViewer .textLayer span {
+  color: transparent;
+}
+.document-scroll .pdfViewer .textLayer ::selection,
+.ocr-text-layer ::selection {
+  background: #b97778a6;
+  color: transparent;
+}
+.comment-highlight {
+  position: absolute;
+  pointer-events: none;
+  outline: 2px solid #e2b584;
+  background: #e2b58426;
+  z-index: 8;
+}
+.comment-mode .textLayer span,
+.comment-mode img {
+  cursor: crosshair;
+}
+.image-page {
+  position: relative;
+  width: 100%;
+}
+.office-preview .image-page > img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: none;
+  object-fit: contain;
+}
+.ocr-text-layer {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  pointer-events: none;
+  overflow: hidden;
+}
+.ocr-text-layer span {
+  position: absolute;
+  color: transparent;
+  white-space: pre;
+  user-select: text;
+  pointer-events: auto;
+  line-height: 1;
+  overflow: hidden;
+}
+.office-preview .document-scroll canvas {
+  max-width: none;
+}
+
+.preview-body:has(.document-scroll) {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.office-preview:has(.document-scroll),
+.continuous-preview:has(.document-scroll) {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  height: 100%;
+}
+.document-surface:has(.document-scroll) {
+  flex: 1;
+  height: auto;
+  min-height: 160px;
+}
+.document-toolbar,
+.continuous-preview > .space-note {
+  flex-shrink: 0;
+}
+.continuous-preview > .space-note {
+  margin: 6px 0;
+  font-size: 11px;
+}

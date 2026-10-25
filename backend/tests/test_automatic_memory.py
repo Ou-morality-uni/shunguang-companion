@@ -46,6 +46,47 @@ def test_new_chat_automatically_recalls_a_relevant_old_message_and_returns_its_s
         assert record['history_sources'][0]['conversation_id'] == old
 
 
+def test_automatic_recall_keeps_useful_decisions_and_ignores_tool_failures_and_greetings(setup):
+    store, seen = setup
+    old = store.create_conversation()['id']
+    useful = store.add_message(old, 'user', '项目预算表的交通费定为320元，后面都按这个方案核对。')
+    store.add_message(
+        old,
+        'assistant',
+        '预算表调用失败：文件任务参数无效。',
+        metadata={'tools': [{'status': 'error', 'result': {'ok': False}}]},
+    )
+    store.add_message(old, 'assistant', '你好呀，我们来看看预算表吧！')
+    with TestClient(main.app) as client:
+        cid = client.post('/api/conversations').json()['id']
+        client.post('/api/chat', json={'conversation_id': cid, 'content': '核对项目预算表里的交通费。'})
+        record = client.get(f'/api/conversations/{cid}/messages').json()[-1]
+        assert [item['message_id'] for item in record['history_sources']] == [useful['id']]
+        assert '文件任务参数无效' not in str(seen)
+
+
+def test_greeting_does_not_hide_a_user_preference_in_the_same_message(setup):
+    store, _ = setup
+    old = store.create_conversation()['id']
+    useful = store.add_message(old, 'user', '你好，我喜欢吃苹果，买水果时记得选苹果。')
+    assert [item['message_id'] for item in store.recall_history('买什么水果', 'new', automatic=True)] == [useful['id']]
+
+
+def test_automatic_recall_skips_old_temporary_plans_and_unanswered_generic_questions(setup, monkeypatch):
+    from backend.app import store as store_module
+
+    store, _ = setup
+    old = store.create_conversation()['id']
+    with monkeypatch.context() as patch:
+        patch.setattr(store_module, 'now', lambda: '2000-01-01T12:00:00+00:00')
+        store.add_message(old, 'user', '明天去南宁玩两天。')
+    store.add_message(old, 'user', '南宁有哪些景点？')
+    useful = store.add_message(old, 'user', '我常住南宁，出行都从南宁出发。')
+    assert [item['message_id'] for item in store.recall_history('南宁出行怎么安排', 'new', automatic=True)] == [
+        useful['id']
+    ]
+
+
 def test_background_summary_extracts_stable_facts_without_holding_up_chat_and_keeps_progress_on_restart(
     setup, monkeypatch
 ):

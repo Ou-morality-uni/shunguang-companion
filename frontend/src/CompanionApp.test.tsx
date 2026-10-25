@@ -102,6 +102,21 @@ it('uses a keyboard accessible sliding search selector and one compact saved-ser
   );
 });
 
+it('grants a file folder from settings without also saving unrelated tool settings', async () => {
+  render(<App />);
+  await screen.findByText('模型已配置');
+  fireEvent.click(screen.getAllByRole('button', { name: '工具设置' })[0]);
+  fireEvent.click(await screen.findByText('本机文件夹授权', { exact: true }));
+  fireEvent.change(screen.getByLabelText('本机文件夹完整路径'), { target: { value: 'D:\\work' } });
+  fireEvent.click(screen.getByRole('button', { name: '授权此文件夹' }));
+  await screen.findByText('工作文件夹已授权。');
+  expect(
+    vi
+      .mocked(fetch)
+      .mock.calls.some(([url, options]) => url === '/api/features' && options?.method === 'PATCH'),
+  ).toBe(false);
+});
+
 it('sends a new conversation with its selected saved connection even when the global default is unconfigured', async () => {
   const fallback = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation(async (input, options) => {
@@ -151,7 +166,7 @@ it('sends a new conversation with its selected saved connection even when the gl
         body: JSON.stringify({
           conversation_id: null,
           content: '使用选定模型',
-          model_choice: { profile_id: 'secondary', model: 'second-model', effort: 'default' },
+          model_choice: { profile_id: 'secondary', model: 'second-model', effort: 'high' },
         }),
       }),
     ),

@@ -39,8 +39,8 @@ import {
 } from './api';
 import { ModelPicker } from './ModelPicker';
 import { VoiceInput } from './VoiceInput';
-import { AttachmentCard, ChatFileTasks } from './FileTasks';
-import { Sources, ToolFeedback, HistorySources } from './Evidence';
+import { AttachmentCard, FileTasksProvider, MessageFileTasks } from './FileTasks';
+import { Sources, ToolFeedback } from './Evidence';
 import { useCompanionAudio } from './useAudioQueue';
 import { ResourceImage } from './ResourceImage';
 import { MessageSticker } from './MessageSticker';
@@ -76,7 +76,21 @@ const starters = [
 function ChatMessage() {
   const message = useAuiState((state) => state.message);
   const user = message.role === 'user';
-  const record = useContext(MessagesContext).find((item) => item.id === message.id);
+  const messages = useContext(MessagesContext);
+  const record = messages.find((item) => item.id === message.id);
+  const position = messages.findIndex((item) => item.id === message.id);
+  const before = messages.slice(0, position < 0 ? messages.length : position);
+  const requestIndex = before.map((item) => item.role).lastIndexOf('user');
+  const requestId =
+    !user && !before.slice(requestIndex + 1).some((item) => item.role === 'assistant')
+      ? before[requestIndex]?.id
+      : undefined;
+  const taskIds = (record?.tools ?? []).flatMap((item) => {
+    const result = item.result as { task?: { id?: string } } | undefined;
+    return ['workspace_files', 'office_files'].includes(item.name ?? '') && result?.task?.id
+      ? [result.task.id]
+      : [];
+  });
   const audio = useCompanionAudio();
   const history = useContext(HistoryContext);
   const enter = !history.has(message.id) && (user || message.status?.type === 'running');
@@ -140,7 +154,13 @@ function ChatMessage() {
             <AttachmentCard key={attachment.id} attachment={attachment} />
           ))}
           <Sources sources={record?.sources} />
-          <HistorySources sources={record?.history_sources} />
+          {!user && (
+            <MessageFileTasks
+              requestId={requestId}
+              taskIds={taskIds}
+              attachments={before[requestIndex]?.attachments ?? []}
+            />
+          )}
           <ActionBarPrimitive.Root className="message-actions">
             <ActionBarPrimitive.Copy className="copy-button" aria-label="复制消息">
               <Copy size={13} />
@@ -360,224 +380,219 @@ export function ChatThread({
     <MessagesContext.Provider value={threadMessages}>
       <HistoryContext.Provider value={history.current}>
         <AssistantRuntimeProvider runtime={runtime}>
-          <ThreadPrimitive.Root
-            className="thread-root"
-            onDragOver={(event) => {
-              if (event.dataTransfer.types.includes('Files')) event.preventDefault();
-            }}
-            onDrop={(event) => {
-              if (event.dataTransfer.files.length) {
-                event.preventDefault();
-                void upload(Array.from(event.dataTransfer.files));
-              }
-            }}
-          >
-            <ThreadPrimitive.Viewport
-              ref={viewport}
-              className={`conversation-scroll ${hasMessages ? '' : 'welcome-scroll'}`}
-              autoScroll={hasMessages}
-              scrollToBottomOnInitialize={hasMessages}
-              scrollToBottomOnThreadSwitch={hasMessages}
+          <FileTasksProvider conversationId={conversationId} onWork={onWork} onTaskStatus={onTaskStatus}>
+            <ThreadPrimitive.Root
+              className="thread-root"
+              onDragOver={(event) => {
+                if (event.dataTransfer.types.includes('Files')) event.preventDefault();
+              }}
+              onDrop={(event) => {
+                if (event.dataTransfer.files.length) {
+                  event.preventDefault();
+                  void upload(Array.from(event.dataTransfer.files));
+                }
+              }}
             >
-              {threadMessages.length === 0 ? (
-                <motion.div
-                  className="welcome"
-                  initial={{ opacity: 0, y: 6 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.25 }}
-                >
-                  <ResourceImage className="welcome-portrait" src={avatarUrl} alt="叶瞬光默认头像" />
-                  <div className="welcome-kicker">叶瞬光 · 暖霞拾光</div>
-                  <h1>
-                    把今天，<em>说给我听。</em>
-                  </h1>
-                  <p className="welcome-description">聊聊今天，或附上一份资料。我们一起慢慢理清。</p>
-                  <div className="starter-cards">
-                    {starters.map(({ icon: Icon, label, sub, text }) => (
-                      <button key={label} onClick={() => suggestion(text)}>
-                        <span className="starter-icon">
-                          <Icon size={18} strokeWidth={1.5} />
-                        </span>
-                        <strong>{label}</strong>
-                        <small>{sub}</small>
-                        <ArrowUpRight className="starter-arrow" size={14} />
-                      </button>
-                    ))}
-                  </div>
-                  <div className="welcome-footnote">
-                    <span className="subtle-dot" /> 资料有来处，记忆随时可管理
-                  </div>
-                </motion.div>
-              ) : (
-                <div className="message-list">
-                  <div className="chat-date">
-                    {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} ·
-                    拾起日常的微光
-                  </div>
-                  <ThreadPrimitive.Messages>{() => <ChatMessage />}</ThreadPrimitive.Messages>
-                </div>
-              )}
-              <ChatFileTasks
-                conversationId={conversationId}
-                onTaskStatus={onTaskStatus}
-                onSettings={onSettings}
-                onWork={onWork}
-                attachments={messages.flatMap((message) => message.attachments ?? [])}
-              />
-            </ThreadPrimitive.Viewport>
-            <div className="composer-area">
-              {hasMessages && (
-                <ThreadPrimitive.ScrollToBottom className="scroll-bottom" aria-label="回到最新消息">
-                  <ArrowDown size={14} /> 最新消息
-                </ThreadPrimitive.ScrollToBottom>
-              )}
-              {(audio.busy || audio.error) && (
-                <div className="chat-playback" role="status">
-                  <AudioLines size={15} />
-                  <span>
-                    {audio.error ||
-                      `${audio.playing ? '播放中' : '合成中'} · ${audio.label}${audio.queued ? ` · 队列 ${audio.queued}` : ''}`}
-                  </span>
-                  {audio.busy && (
-                    <button type="button" className="text-link" onClick={audio.stop}>
-                      <Square size={14} />
-                      停止
-                    </button>
-                  )}
-                  <button type="button" className="text-link" onClick={onVoice}>
-                    语音设置
-                  </button>
-                </div>
-              )}
-              {!configured && !modelChoice && !loading && (
-                <button className="setup-prompt" onClick={onSettings}>
-                  <span>
-                    <span className="subtle-dot" /> 连接模型，开启我们的第一段对话
-                  </span>
-                  <span>
-                    去设置 <ArrowUpRight size={13} />
-                  </span>
-                </button>
-              )}
-              <ComposerPrimitive.Root className="composer">
-                <AnnotationTray />
-                <input
-                  ref={fileInput}
-                  type="file"
-                  multiple
-                  hidden
-                  aria-label="上传聊天附件"
-                  disabled={busy || uploading}
-                  onChange={(event) => {
-                    const files = Array.from(event.target.files ?? []);
-                    event.target.value = '';
-                    void upload(files);
-                  }}
-                />
-                {!!attachments.length && (
-                  <div className="composer-attachments">
-                    {attachments.map((item) => (
-                      <span className="attachment-chip" key={item.id}>
-                        {item.name}
-                        <button
-                          type="button"
-                          aria-label={`移除附件 ${item.name}`}
-                          disabled={uploading || busy}
-                          onClick={() =>
-                            setAttachments((items) => items.filter((value) => value.id !== item.id))
-                          }
-                        >
-                          <X size={13} />
+              <ThreadPrimitive.Viewport
+                ref={viewport}
+                className={`conversation-scroll ${hasMessages ? '' : 'welcome-scroll'}`}
+                autoScroll={hasMessages}
+                scrollToBottomOnInitialize={hasMessages}
+                scrollToBottomOnThreadSwitch={hasMessages}
+              >
+                {threadMessages.length === 0 ? (
+                  <motion.div
+                    className="welcome"
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25 }}
+                  >
+                    <ResourceImage className="welcome-portrait" src={avatarUrl} alt="叶瞬光默认头像" />
+                    <div className="welcome-kicker">叶瞬光 · 暖霞拾光</div>
+                    <h1>
+                      把今天，<em>说给我听。</em>
+                    </h1>
+                    <p className="welcome-description">聊聊今天，或附上一份资料。我们一起慢慢理清。</p>
+                    <div className="starter-cards">
+                      {starters.map(({ icon: Icon, label, sub, text }) => (
+                        <button key={label} onClick={() => suggestion(text)}>
+                          <span className="starter-icon">
+                            <Icon size={18} strokeWidth={1.5} />
+                          </span>
+                          <strong>{label}</strong>
+                          <small>{sub}</small>
+                          <ArrowUpRight className="starter-arrow" size={14} />
                         </button>
-                      </span>
-                    ))}
+                      ))}
+                    </div>
+                    <div className="welcome-footnote">
+                      <span className="subtle-dot" /> 资料有来处，记忆随时可管理
+                    </div>
+                  </motion.div>
+                ) : (
+                  <div className="message-list">
+                    <div className="chat-date">
+                      {new Date().toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' })} ·
+                      拾起日常的微光
+                    </div>
+                    <ThreadPrimitive.Messages>{() => <ChatMessage />}</ThreadPrimitive.Messages>
                   </div>
                 )}
-                <ComposerPrimitive.Input
-                  id="chat-input"
-                  aria-label="给瞬光伴行发送消息"
-                  placeholder="有什么想说的？慢慢来，我在听。"
-                  maxLength={MAX_MESSAGE_LENGTH}
-                  minRows={1}
-                  maxRows={5}
-                  submitMode="enter"
-                  unstable_insertNewlineOnTouchEnter
-                  addAttachmentOnPaste={false}
-                  disabled={busy || uploading}
-                />
-                <div className="composer-bottom">
-                  <div className="composer-tools">
-                    <VoiceInput
-                      settings={asrSettings}
-                      composer={runtime.thread.composer}
-                      disabled={busy || loading || uploading}
-                      onSettings={onVoice}
-                      onBusyChange={setVoiceBusy}
-                    />
-                    <button
-                      type="button"
-                      className="icon-button"
-                      aria-label="添加文件附件"
-                      title="上传文件，也可以拖入聊天"
-                      disabled={busy || uploading || voiceBusy}
-                      onClick={() => fileInput.current?.click()}
-                    >
-                      <Paperclip size={17} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      onClick={onVoice}
-                      aria-label="语音设置"
-                      title="语音设置"
-                    >
-                      <AudioLines size={17} />
-                    </button>
-                    <button
-                      type="button"
-                      className="icon-button"
-                      onClick={onTools}
-                      aria-label="工具设置"
-                      title="工具设置"
-                    >
-                      <Wrench size={16} />
+              </ThreadPrimitive.Viewport>
+              <div className="composer-area">
+                {hasMessages && (
+                  <ThreadPrimitive.ScrollToBottom className="scroll-bottom" aria-label="回到最新消息">
+                    <ArrowDown size={14} /> 最新消息
+                  </ThreadPrimitive.ScrollToBottom>
+                )}
+                {(audio.busy || audio.error) && (
+                  <div className="chat-playback" role="status">
+                    <AudioLines size={15} />
+                    <span>
+                      {audio.error ||
+                        `${audio.playing ? '播放中' : '合成中'} · ${audio.label}${audio.queued ? ` · 队列 ${audio.queued}` : ''}`}
+                    </span>
+                    {audio.busy && (
+                      <button type="button" className="text-link" onClick={audio.stop}>
+                        <Square size={14} />
+                        停止
+                      </button>
+                    )}
+                    <button type="button" className="text-link" onClick={onVoice}>
+                      语音设置
                     </button>
                   </div>
-                  <span className="composer-right">
-                    <ModelPicker
-                      conversationId={conversationId}
-                      disabled={busy || loading || uploading || voiceBusy}
-                      onChange={setModelChoice}
-                      onSettings={onSettings}
-                      revision={modelSettings}
-                    />
-                    {busy ? (
-                      <ComposerPrimitive.Cancel className="send-button" aria-label="停止回复">
-                        <Square size={15} fill="currentColor" />
-                      </ComposerPrimitive.Cancel>
-                    ) : (
-                      <ComposerPrimitive.Send
-                        className="send-button"
-                        aria-label="发送消息"
-                        disabled={voiceBusy}
+                )}
+                {!configured && !modelChoice && !loading && (
+                  <button className="setup-prompt" onClick={onSettings}>
+                    <span>
+                      <span className="subtle-dot" /> 连接模型，开启我们的第一段对话
+                    </span>
+                    <span>
+                      去设置 <ArrowUpRight size={13} />
+                    </span>
+                  </button>
+                )}
+                <ComposerPrimitive.Root className="composer">
+                  <AnnotationTray />
+                  <input
+                    ref={fileInput}
+                    type="file"
+                    multiple
+                    hidden
+                    aria-label="上传聊天附件"
+                    disabled={busy || uploading}
+                    onChange={(event) => {
+                      const files = Array.from(event.target.files ?? []);
+                      event.target.value = '';
+                      void upload(files);
+                    }}
+                  />
+                  {!!attachments.length && (
+                    <div className="composer-attachments">
+                      {attachments.map((item) => (
+                        <span className="attachment-chip" key={item.id}>
+                          {item.name}
+                          <button
+                            type="button"
+                            aria-label={`移除附件 ${item.name}`}
+                            disabled={uploading || busy}
+                            onClick={() =>
+                              setAttachments((items) => items.filter((value) => value.id !== item.id))
+                            }
+                          >
+                            <X size={13} />
+                          </button>
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                  <ComposerPrimitive.Input
+                    id="chat-input"
+                    aria-label="给瞬光伴行发送消息"
+                    placeholder="有什么想说的？慢慢来，我在听。"
+                    maxLength={MAX_MESSAGE_LENGTH}
+                    minRows={1}
+                    maxRows={5}
+                    submitMode="enter"
+                    unstable_insertNewlineOnTouchEnter
+                    addAttachmentOnPaste={false}
+                    disabled={busy || uploading}
+                  />
+                  <div className="composer-bottom">
+                    <div className="composer-tools">
+                      <button
+                        type="button"
+                        className="icon-button"
+                        aria-label="添加文件附件"
+                        title="上传文件，也可以拖入聊天"
+                        disabled={busy || uploading || voiceBusy}
+                        onClick={() => fileInput.current?.click()}
                       >
-                        <ArrowUp size={20} />
-                      </ComposerPrimitive.Send>
-                    )}
-                  </span>
+                        <Paperclip size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={onVoice}
+                        aria-label="语音设置"
+                        title="语音设置"
+                      >
+                        <AudioLines size={17} />
+                      </button>
+                      <button
+                        type="button"
+                        className="icon-button"
+                        onClick={onTools}
+                        aria-label="工具设置"
+                        title="工具设置"
+                      >
+                        <Wrench size={16} />
+                      </button>
+                    </div>
+                    <span className="composer-right">
+                      <ModelPicker
+                        conversationId={conversationId}
+                        disabled={busy || loading || uploading || voiceBusy}
+                        onChange={setModelChoice}
+                        onSettings={onSettings}
+                        revision={modelSettings}
+                      />
+                      <VoiceInput
+                        settings={asrSettings}
+                        composer={runtime.thread.composer}
+                        disabled={busy || loading || uploading}
+                        onSettings={onVoice}
+                        onBusyChange={setVoiceBusy}
+                      />
+                      {busy ? (
+                        <ComposerPrimitive.Cancel className="send-button" aria-label="停止回复">
+                          <Square size={15} fill="currentColor" />
+                        </ComposerPrimitive.Cancel>
+                      ) : (
+                        <ComposerPrimitive.Send
+                          className="send-button"
+                          aria-label="发送消息"
+                          disabled={voiceBusy}
+                        >
+                          <ArrowUp size={20} />
+                        </ComposerPrimitive.Send>
+                      )}
+                    </span>
+                  </div>
+                </ComposerPrimitive.Root>
+                {uploadNotice && (
+                  <p className="attachment-notice" role="status">
+                    {uploadNotice}
+                  </p>
+                )}
+                <div className="composer-caption">
+                  <span>Enter 发送 · Shift + Enter 换行</span>
+                  <span>AI 回复可能有误，请核实重要信息</span>
                 </div>
-              </ComposerPrimitive.Root>
-              {uploadNotice && (
-                <p className="attachment-notice" role="status">
-                  {uploadNotice}
-                </p>
-              )}
-              <div className="composer-caption">
-                <span>Enter 发送 · Shift + Enter 换行</span>
-                <span>AI 回复可能有误，请核实重要信息</span>
               </div>
-            </div>
-          </ThreadPrimitive.Root>
+            </ThreadPrimitive.Root>
+          </FileTasksProvider>
         </AssistantRuntimeProvider>
       </HistoryContext.Provider>
     </MessagesContext.Provider>

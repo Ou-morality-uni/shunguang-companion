@@ -38,7 +38,13 @@ def chat_model_default():
     value = load_config()
     if not value.llm_model:
         return None
-    return {**default_choice(value), 'configured': public_config(value)['configured'], 'efforts': effort_options(value)}
+    public = public_config(value)
+    return {
+        **default_choice(value),
+        'configured': public['configured'],
+        'efforts': public['efforts'],
+        'effort': public['effort'],
+    }
 
 
 @router.get('/api/model-options', response_model=list[ConnectionOptions])

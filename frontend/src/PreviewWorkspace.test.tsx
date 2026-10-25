@@ -231,7 +231,7 @@ it('opens an attachment beside chat, supports keyboard resizing and restores foc
       <AttachmentCard
         attachment={{
           id: 'u1',
-          name: '报告.docx',
+          name: '报告.txt',
           workspace_id: 'w1',
           path: 'copy.docx',
           bytes: 1024,
@@ -239,7 +239,7 @@ it('opens an attachment beside chat, supports keyboard resizing and restores foc
       />
     </PreviewWorkspace>,
   );
-  const trigger = screen.getByRole('button', { name: '预览 报告.docx' });
+  const trigger = screen.getByRole('button', { name: '预览 报告.txt' });
   trigger.focus();
   fireEvent.click(trigger);
   const panel = await screen.findByRole('region', { name: '文件预览' });
@@ -277,7 +277,8 @@ it('keeps keyboard focus inside a narrow-window preview and returns to chat on E
   trigger.focus();
   fireEvent.click(trigger);
   const panel = await screen.findByRole('region', { name: '文件预览' });
-  within(panel).getByRole('link', { name: '下载原文件副本' }).focus();
+  const buttons = Array.from(panel.querySelectorAll<HTMLButtonElement>('button'));
+  buttons.at(-1)!.focus();
   fireEvent.keyDown(panel, { key: 'Tab' });
   expect(document.activeElement).toBe(within(panel).getByRole('button', { name: '放大预览' }));
   fireEvent.keyDown(panel, { key: 'Escape' });

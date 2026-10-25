@@ -186,6 +186,7 @@ export default function App() {
     try {
       localStorage.setItem('shunguang-ui-effects', effects ? 'on' : 'off');
       localStorage.setItem('shunguang-ui-reduce-motion', reduceMotion ? 'on' : 'off');
+      document.documentElement.dataset.reduceMotion = String(reduceMotion);
       localStorage.setItem('shunguang-ui-background', backgroundStyle);
     } catch {
       /* Private mode remains usable. */
@@ -476,7 +477,7 @@ export default function App() {
               </div>
               <div className="version">
                 <span className="version-dot" />
-                瞬光伴行 WEB<span>v0.6.1</span>
+                瞬光伴行 WEB<span>v0.6.2</span>
               </div>
             </div>
           </aside>

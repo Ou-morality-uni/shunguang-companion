@@ -22,7 +22,8 @@ export function ResourcePreview({
     <HistoryResource resource={resource} />
   ) : resource.kind === 'task' ? (
     <TaskResource resource={resource} onSettings={onSettings} />
-  ) : annotations && /\.(docx|xlsx|pptx|pdf|png|jpe?g|webp|bmp|tiff?|gif|md|txt)$/i.test(resource.title) ? (
+  ) : (annotations || /\.(docx|pptx|pdf|png|jpe?g|webp|bmp|tiff?|gif)$/i.test(resource.title)) &&
+    /\.(docx|xlsx|pptx|pdf|png|jpe?g|webp|bmp|tiff?|gif|md|txt)$/i.test(resource.title) ? (
     <OfficePreview resource={resource} />
   ) : (
     <FileResourcePreview resource={resource} />
@@ -205,17 +206,19 @@ function FileResourcePreview({ resource }: { resource: PreviewResource }) {
           )}
         </>
       )}
-      <a
-        className="text-link"
-        href={
-          resource.kind === 'artifact'
-            ? `/api/work/artifacts/${encodeURIComponent(resource.id)}`
-            : `/api/work/files/${encodeURIComponent(resource.id)}`
-        }
-        download
-      >
-        下载{resource.kind === 'artifact' ? '成果' : '原文件副本'}
-      </a>
+      {resource.kind === 'artifact' && (
+        <a
+          className="text-link"
+          href={
+            resource.kind === 'artifact'
+              ? `/api/work/artifacts/${encodeURIComponent(resource.id)}`
+              : `/api/work/files/${encodeURIComponent(resource.id)}`
+          }
+          download
+        >
+          下载成果
+        </a>
+      )}
     </div>
   );
 }

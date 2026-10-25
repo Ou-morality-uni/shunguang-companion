@@ -1,9 +1,10 @@
-# Shunguang Companion v0.6.1
+# Shunguang Companion v0.6.2
 
-[v0.6.1 release notes (Chinese)](versions/0.6.1/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
+[v0.6.2 release notes (Chinese)](versions/0.6.2/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.6.2](versions/0.6.2/README.md): Add continuous original-layout previews, positioned comments and on-demand local OCR; simplify chat tasks, model choices and the workbench, and filter low-value recall.
 - [v0.6.1](versions/0.6.1/README.md): Add built-in Office skills, editable documents and targeted revisions, PDF export, basic image operations, and annotation drafts.
 - [v0.6.0](versions/0.6.0/README.md): Integrate chat file workspaces, automatic cross-chat memory, weather reminders, online voice input, per-chat model choices, and global animated backgrounds.
 - [v0.5.6](versions/0.5.6/README.md): Refresh the warm red-and-gold interface with flowing light, collapsible navigation, compact status and voice controls, and resizable file previews.
@@ -96,10 +97,10 @@ Each user has their own `data/` directory for encrypted keys, settings, chat his
 
 Development progress documents, delivery checklists, acceptance reports, private logs, and original development Git history are excluded. Installation does not enter API keys, purchase services, train voices, or upload reference audio.
 
-## Using 0.6.1
+## Using 0.6.2
 
 - **Models**: save working API connections in settings, then select a provider, model, and supported reasoning level in the composer. Each conversation remembers its selection; new conversations use the default.
-- **Files**: upload or drop files into chat and send your request. Tasks run in the background; open their shortcut to view progress, sources, and complete Markdown results in right-side tabs. New results are saved under `data/outputs/任务-<task ID>/`. Convert legacy `.doc/.xls/.ppt` files to `.docx/.xlsx/.pptx` first. See the [0.6.1 release notes](versions/0.6.1/README.md) for Office authoring, targeted edits, and PDF export.
+- **Files**: upload or drop files into chat and send your request. Tasks run in the background and keep their conclusions at the initiating chat turn. Ordinary reading does not create Markdown automatically; explicitly request a saved file when needed. Open previews in right-side tabs to read the original layout and add comments. Folder grants and Office detection are under Companion Settings → Tools. New results are saved under `data/outputs/任务-<task ID>/`. Convert legacy `.doc/.xls/.ppt` files to `.docx/.xlsx/.pptx` first. See the [0.6.1 release notes](versions/0.6.1/README.md) for Office authoring, targeted edits, and PDF export.
 - **Voice input**: configure a supported HTTPS audio-transcription endpoint, model, and credentials under Audio & Playback → Voice Input. Click to start and again to stop; review the resulting draft before sending. Transcription and TTS have separate configuration, and text/image support does not imply audio support. Your browser requests microphone permission.
 - **Profile and care**: set your preferred form of address, home city, and age in Memory Space. A city is sufficient for weather reminders; a street address is unnecessary. Automatic memory and cross-chat processing can be disabled in memory settings. Weather reminders stop when the page closes.
 

@@ -61,14 +61,13 @@ it('previews a workbook as a coordinate-labelled table with per-cell annotations
   await screen.findByRole('dialog', { name: '添加批注' });
 });
 
-it('opens a Word object as readable content and lets the user comment on that object', async () => {
+it('opens Word in the full-layout viewer instead of showing an extracted text list', async () => {
   vi.mocked(request).mockImplementation(async (path) => {
     if (String(path).includes('/annotations')) return [];
-    if (String(path).includes('/capabilities')) return { office: { ready: false } };
     return {
       version: 'a'.repeat(64),
       name: '报告.docx',
-      targets: [{ id: 'p:0', kind: 'paragraph', text: '定位到这段正文', location: '正文第 1 段' }],
+      targets: [{ id: 'p:0', kind: 'paragraph', text: '不应单独显示的提取正文', location: '正文第 1 段' }],
     };
   });
   render(
@@ -76,7 +75,8 @@ it('opens a Word object as readable content and lets the user comment on that ob
       <ResourcePreview resource={{ kind: 'artifact', id: 'task-1', title: '报告.docx' }} />
     </AnnotationProvider>,
   );
-  expect(await screen.findByText('定位到这段正文')).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: '批注正文第 1 段' }));
-  expect(await screen.findByRole('textbox', { name: '修改意见' })).toBeInTheDocument();
+  expect(await screen.findByLabelText('完整文档连续预览')).toBeInTheDocument();
+  expect(screen.queryByText('不应单独显示的提取正文')).toBeNull();
+  expect(screen.queryByLabelText('预览页码')).toBeNull();
+  expect(screen.queryByText('框选区域')).toBeNull();
 });

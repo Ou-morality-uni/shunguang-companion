@@ -119,7 +119,7 @@ def find_saved_config(base_url, protocol):
 
 
 def public_config(config: ModelConfig) -> dict:
-    from .model_choices import effort_options
+    from .model_choices import initial_effort, selectable_efforts
 
     return {
         'base_url': config.llm_base_url,
@@ -132,6 +132,6 @@ def public_config(config: ModelConfig) -> dict:
         'provider': config.llm_provider,
         'protocol': config.llm_protocol,
         'vision': config.llm_vision,
-        'effort': config.llm_effort,
-        'efforts': effort_options(config),
+        'effort': initial_effort(config) if config.llm_effort == 'default' else config.llm_effort,
+        'efforts': selectable_efforts(config),
     }

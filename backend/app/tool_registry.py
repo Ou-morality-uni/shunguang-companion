@@ -72,7 +72,12 @@ class ToolRegistry:
                     try:
                         payload = FileTaskRequest.model_validate(args)
                         task = await asyncio.to_thread(
-                            work.submit, payload, 'chat', message.get('conversation_id'), message.get('model_choice')
+                            work.submit,
+                            payload,
+                            'chat',
+                            message.get('conversation_id'),
+                            message.get('model_choice'),
+                            message.get('id'),
                         )
                         return {
                             'ok': True,
@@ -80,8 +85,19 @@ class ToolRegistry:
                             'task': {key: task[key] for key in ('id', 'title', 'status', 'conversation_id')},
                             'message': '后台任务已提交。请等待任务卡报告实际进度和结果；目前不能声称已经读取、总结或修改完成。需要授权时会在聊天任务卡和工作台显示。',
                         }
-                    except ValidationError:
-                        return {'ok': False, 'message': '文件任务参数无效。'}
+                    except ValidationError as error:
+                        issues = [
+                            {'field': '.'.join(map(str, item['loc'])) or 'task', 'message': item['msg'][:180]}
+                            for item in error.errors(include_input=False, include_context=False)[:8]
+                        ]
+                        return {
+                            'ok': False,
+                            'code': 'invalid_arguments',
+                            'validation_errors': issues,
+                            'message': '请修正文件任务参数后重试：'
+                            + '；'.join(f'{item["field"]}: {item["message"]}' for item in issues)
+                            + '。start 从 1 开始，limit 最多 50；非 move/write 操作的 destination/content 请省略或设为 null。',
+                        }
                     except WorkError as error:
                         return {'ok': False, 'message': error.message}
 
@@ -99,6 +115,7 @@ class ToolRegistry:
                                 'start 从1开始，limit最多50：分别代表页、正文块、工作表、幻灯片或文本行；图片只读第一帧。'
                                 '需要理解 PDF 矢量图表或整页视觉内容时设 visual=true，页面将按视觉能力与授权规则处理。'
                                 'instruction 可选，用于综合总结多个阅读步骤的结果。内容截断时如实说明，并按 next_start 继续读取。'
+                                '普通阅读仅在对应聊天显示简要结论，不保存文件；仅用户明确要求保存 Markdown 时传 save_result=true。'
                                 'scope=full 自动分批读取整份文件；focused 按 query 关键词定位相关范围；range 仅读指定范围。整份总结不要拆成多个重复任务。'
                                 '统计、排名、最高最低、合计和全局比较必须使用 full，不能只匹配表头或局部内容后作全局结论。'
                                 '路径相对工作文件夹。单任务最多50步，不重复修改同一路径；父文件夹必须已存在。'

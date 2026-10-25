@@ -14,6 +14,8 @@ export type AnnotationAnchor = {
   location?: string;
   quote?: string;
   rect?: [number, number, number, number];
+  regions?: { page: number; rect: [number, number, number, number] }[];
+  text_origin?: 'native' | 'ocr';
 };
 export type AnnotationDraft = AnnotationAnchor & {
   id: string;
@@ -62,6 +64,8 @@ export function AnnotationProvider({
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
   const scope = conversationId ?? `new:${newScope}`;
+  const [draftOwner, setDraftOwner] = useState(scope);
+  const visibleDrafts = draftOwner === scope ? drafts : [];
   const current = useRef(scope);
   const changes = useRef(new Map<string, AnnotationDraft | null>());
   current.current = scope;
@@ -80,6 +84,7 @@ export function AnnotationProvider({
     const abort = new AbortController();
     const localChanges = new Map<string, AnnotationDraft | null>();
     changes.current = localChanges;
+    setDraftOwner(scope);
     setDrafts([]);
     setEditor(null);
     setError('');
@@ -135,6 +140,8 @@ export function AnnotationProvider({
                   target_id: editor.target_id,
                   quote: editor.quote || '',
                   ...(editor.rect ? { rect: editor.rect } : {}),
+                  ...(editor.regions ? { regions: editor.regions } : {}),
+                  ...(editor.text_origin ? { text_origin: editor.text_origin } : {}),
                   comment: editor.comment,
                 },
           ),
@@ -168,7 +175,7 @@ export function AnnotationProvider({
   return (
     <Context.Provider
       value={{
-        drafts,
+        drafts: visibleDrafts,
         begin,
         edit: setEditor,
         remove,
@@ -180,7 +187,7 @@ export function AnnotationProvider({
           setDrafts((items) => items.filter((item) => !ids.includes(item.id)));
         },
         submission: () =>
-          drafts.length ? { ids: drafts.map((item) => item.id), scope: newScope } : undefined,
+          visibleDrafts.length ? { ids: visibleDrafts.map((item) => item.id), scope: newScope } : undefined,
       }}
     >
       {children}

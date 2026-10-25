@@ -1,6 +1,6 @@
 [project]
 name = "shunguang-companion"
-version = "0.6.1"
+version = "0.6.2"
 description = "Local-first companion service"
 requires-python = ">=3.11"
 

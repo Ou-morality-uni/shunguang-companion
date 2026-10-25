@@ -60,7 +60,7 @@ it('shows the conversation task and only resumes a workload pause after an expli
       <ChatFileTasks conversationId="c1" onSettings={vi.fn()} onWork={vi.fn()} />
     </PreviewWorkspace>,
   );
-  const open = await screen.findByRole('button', { name: '查看任务：阅读资料' });
+  const open = await screen.findByRole('button', { name: '预览资料：阅读资料' });
   expect(screen.queryByRole('region', { name: '文件预览' })).toBeNull();
   expect(screen.queryByRole('group', { name: '任务继续确认' })).toBeNull();
   fireEvent.click(open);
@@ -148,20 +148,31 @@ it('shows every saved Office artifact even if a later export failed and previews
   expect(fetchMock).not.toHaveBeenCalled();
 });
 
-it('renders Office content and source locations through the local preview route', async () => {
-  vi.mocked(request).mockResolvedValue({
-    blocks: [{ location: '正文第 8 块', text: '原文内容' }],
-    warnings: [],
-  });
+it('uses the continuous layout preview even when an attachment card is rendered standalone', async () => {
+  vi.mocked(request).mockResolvedValue({ version: 'a'.repeat(64), name: '报告.docx', targets: [] });
   render(
     <AttachmentCard
       attachment={{ id: 'u1', name: '报告.docx', workspace_id: 'w1', path: 'copy.docx', bytes: 1024 }}
     />,
   );
   fireEvent.click(screen.getByRole('button', { name: '预览 报告.docx' }));
-  await screen.findByText('正文第 8 块');
-  expect(screen.getByText('原文内容')).toBeTruthy();
-  expect(request).toHaveBeenCalledWith('/work/files/u1/preview?start=1');
+  await screen.findByLabelText('完整文档连续预览');
+  expect(screen.queryByLabelText('预览页码')).toBeNull();
+  expect(request).toHaveBeenCalledWith('/work/resources/attachment/u1/info', expect.anything());
+});
+
+it('retains readable code previews when an attachment card is rendered standalone', async () => {
+  vi.mocked(request).mockResolvedValue({
+    blocks: [{ location: '第 1 行', text: 'print("ready")' }],
+    warnings: [],
+  });
+  render(
+    <AttachmentCard
+      attachment={{ id: 'code', name: 'example.py', workspace_id: 'files', path: 'copy.py', bytes: 14 }}
+    />,
+  );
+  fireEvent.click(screen.getByRole('button', { name: '预览 example.py' }));
+  expect(await screen.findByText('print("ready")')).toBeTruthy();
 });
 
 it('does not load document-supplied remote images or execute raw HTML', () => {

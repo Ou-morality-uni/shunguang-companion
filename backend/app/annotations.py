@@ -20,6 +20,19 @@ class AnnotationSource(BaseModel):
     version: str = Field(pattern=r'^[0-9a-f]{64}$')
 
 
+class AnnotationRegion(BaseModel):
+    model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
+    page: int = Field(ge=1, le=100000)
+    rect: tuple[float, float, float, float]
+
+    @model_validator(mode='after')
+    def valid(self):
+        x, y, width, height = self.rect
+        if x < 0 or y < 0 or width <= 0 or height <= 0 or x + width > 1.000001 or y + height > 1.000001:
+            raise ValueError('选区超出页面')
+        return self
+
+
 class AnnotationRequest(BaseModel):
     model_config = ConfigDict(extra='forbid', allow_inf_nan=False)
     conversation_id: str | None = Field(default=None, max_length=80)
@@ -29,6 +42,8 @@ class AnnotationRequest(BaseModel):
     quote: str = Field(default='', max_length=20000)
     comment: str = Field(min_length=1, max_length=2000)
     rect: tuple[float, float, float, float] | None = None
+    regions: list[AnnotationRegion] = Field(default_factory=list, max_length=30)
+    text_origin: Literal['native', 'ocr'] = 'native'
 
     @model_validator(mode='after')
     def valid(self):
@@ -67,6 +82,8 @@ def validate_source(store, work, payload):
             raise WorkError('只能批注当前聊天中已完成的小光回复。', 404)
         if hashlib.sha256(row['content'].encode()).hexdigest() != source.version or payload.target_id != 'message':
             raise WorkError('原回复版本已变化，请重新选择。')
+        if payload.regions:
+            raise WorkError('聊天回复不接受文件页面坐标。', 422)
         text, location, name = row['content'], '聊天回复', '小光的回复'
     else:
         if (
@@ -78,26 +95,77 @@ def validate_source(store, work, payload):
         if resource['version'] != source.version:
             raise WorkError('原文件版本已变化，请重新选择。')
         selected = next((item for item in resource['targets'] if item['id'] == payload.target_id), None)
-        if (
-            not selected
-            and payload.rect
-            and re.fullmatch(r'page:[1-9][0-9]{0,4}', payload.target_id)
-            and resource['name'].lower().endswith(('.docx', '.xlsx', '.pptx', '.pdf'))
-        ):
-            from .office_resources import page_info
+        if re.fullmatch(r'page:[1-9][0-9]{0,4}', payload.target_id):
+            import pypdfium2 as pdfium
 
-            count = page_info(work, source.kind, source.id, source.version)['pages']
-            page = int(payload.target_id.split(':')[1])
-            if page <= count:
-                selected = {'kind': 'page', 'text': '', 'location': f'第 {page} 页的选区'}
+            from .document_readers import PDF_LOCK
+            from .office_resources import preview_pdf
+
+            data = preview_pdf(work, source.kind, source.id, source.version)
+            start = int(payload.target_id.split(':')[1])
+            pages = sorted({start, *(region.page for region in payload.regions)})
+            texts = []
+            with PDF_LOCK, pdfium.PdfDocument(data) as document:
+                if any(page > len(document) for page in pages):
+                    raise WorkError('批注页码超出文档范围。', 422)
+                for index in pages:
+                    page = document[index - 1]
+                    text_page = page.get_textpage()
+                    try:
+                        texts.append(text_page.get_text_bounded())
+                    finally:
+                        text_page.close()
+                        page.close()
+            selected = {
+                'kind': 'page',
+                'text': '\n'.join(texts),
+                'location': '第 ' + '、'.join(map(str, pages)) + ' 页',
+            }
         if not selected:
             raise WorkError('批注目标已不存在或不在当前读取范围。', 404)
         if payload.rect and selected['kind'] not in ('page', 'image', 'shape'):
             raise WorkError('该对象不支持区域批注。', 422)
+        if payload.regions and not payload.target_id.startswith('page:'):
+            if selected['kind'] == 'image':
+                if any(region.page != 1 for region in payload.regions):
+                    raise WorkError('图片批注页码无效。', 422)
+            elif resource['name'].lower().endswith(('.docx', '.pptx', '.xlsx')):
+                from .office_resources import page_info
+
+                count = page_info(work, source.kind, source.id, source.version)['pages']
+                if any(region.page > count for region in payload.regions):
+                    raise WorkError('批注页码超出文档范围。', 422)
+            else:
+                raise WorkError('此对象不支持文件页面坐标。', 422)
+        if payload.text_origin == 'ocr' and selected['kind'] not in ('page', 'image'):
+            raise WorkError('OCR 引用只能定位页面或图片。', 422)
         text, location, name = selected['text'], selected['location'], resource['name']
-    if payload.quote and normalized(payload.quote) not in normalized(text):
+    if payload.text_origin == 'ocr':
+        if source.kind == 'message' or not payload.regions:
+            raise WorkError('识别文字批注需要文件页面及定位区域。', 422)
+        if payload.target_id == 'image' and any(region.page != 1 for region in payload.regions):
+            raise WorkError('图片批注页码无效。', 422)
+        location += '（本机 OCR 识别文字，需核对原图）'
+    elif payload.quote and normalized(payload.quote) not in normalized(text):
         raise WorkError('选中文字与原文不符，请重新选择。')
-    return {'name': name, 'location': location}
+    details = {'name': name, 'location': location}
+    if (
+        source.kind != 'message'
+        and payload.target_id.startswith('page:')
+        and name.lower().endswith(('.docx', '.pptx'))
+        and payload.quote
+        and payload.text_origin == 'native'
+    ):
+        matches = [
+            item
+            for item in resource['targets']
+            if item.get('text') and normalized(payload.quote) in normalized(item['text'])
+        ]
+        if len(matches) == 1 and not payload.rect:
+            details.update(target_id=matches[0]['id'], location=location + ' · ' + matches[0]['location'])
+        else:
+            details['location'] += '（未唯一定位源对象，修订前需核对）'
+    return details
 
 
 def record(row):
@@ -190,7 +258,21 @@ def model_context(store, items):
             remaining -= len(text)
             originals.append({'message_id': source['id'], 'text': text, 'partial': len(text) < len(row['content'])})
     feedback = [
-        {key: item.get(key) for key in ('id', 'source', 'target_id', 'quote', 'comment', 'rect', 'name', 'location')}
+        {
+            key: item.get(key)
+            for key in (
+                'id',
+                'source',
+                'target_id',
+                'quote',
+                'comment',
+                'rect',
+                'regions',
+                'text_origin',
+                'name',
+                'location',
+            )
+        }
         for item in items
     ]
     return (

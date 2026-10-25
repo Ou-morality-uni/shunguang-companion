@@ -2,13 +2,18 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, expect, it, vi } from 'vitest';
 import { request } from './api';
 import { ChatThread } from './ChatThread';
+import { AnnotationProvider } from './Annotations';
 const originalScrollTo = HTMLElement.prototype.scrollTo;
 
 vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   request: vi.fn(),
 }));
-vi.mock('./FileTasks', () => ({ AttachmentCard: () => null, ChatFileTasks: () => null }));
+vi.mock('./FileTasks', () => ({
+  AttachmentCard: () => null,
+  MessageFileTasks: () => null,
+  FileTasksProvider: ({ children }: { children: import('react').ReactNode }) => children,
+}));
 vi.mock('./useAudioQueue', () => ({
   useCompanionAudio: () => ({ busy: false, error: null, setInputActive: vi.fn() }),
 }));
@@ -68,8 +73,8 @@ it('chooses a saved service model for a new conversation without sending or losi
   await waitFor(() => expect(models.textContent).toContain('first'));
   fireEvent.keyDown(models, { key: 'ArrowDown' });
   fireEvent.click(await screen.findByRole('option', { name: 'second' }));
-  fireEvent.keyDown(screen.getByRole('combobox', { name: '思考强度' }), { key: 'ArrowDown' });
-  fireEvent.click(await screen.findByRole('option', { name: '低' }));
+  fireEvent.click(await screen.findByRole('radio', { name: 'Low' }));
+  fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
   expect(input.value).toBe('请帮我核对资料');
   expect(onSend).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: '发送消息' }));
@@ -80,7 +85,12 @@ it('chooses a saved service model for a new conversation without sending or losi
       effort: 'low',
     }),
   );
-  expect(vi.mocked(request).mock.calls.every(([, options]) => !options?.method)).toBe(true);
+  expect(
+    vi
+      .mocked(request)
+      .mock.calls.filter(([, options]) => options?.method === 'POST')
+      .every(([path]) => String(path).endsWith('/refresh')),
+  ).toBe(true);
 });
 
 it('records on two clicks, releases the microphone and appends editable transcription without sending', async () => {
@@ -276,4 +286,61 @@ it('stages an uploaded file without starting a task, then sends its reference wi
   fireEvent.change(screen.getByLabelText('给瞬光伴行发送消息'), { target: { value: '总结整份资料' } });
   fireEvent.click(screen.getByRole('button', { name: '发送消息' }));
   await waitFor(() => expect(onSend).toHaveBeenCalledWith('总结整份资料', ['u1'], undefined));
+});
+
+it('does not fill a new conversation composer with another conversation annotation prompt', async () => {
+  HTMLElement.prototype.scrollTo = vi.fn();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  vi.mocked(request).mockImplementation(async (path) => {
+    if (String(path).includes('/annotations'))
+      return String(path).includes('conversation_id=one')
+        ? [
+            {
+              id: 'draft',
+              comment: 'Only for the first chat',
+              source: { kind: 'message', id: 'reply', version: 'a'.repeat(64) },
+              target_id: 'message',
+              status: 'draft',
+            },
+          ]
+        : [];
+    return path === '/model-options' ? [] : null;
+  });
+  const chat = (id: string) => (
+    <AnnotationProvider conversationId={id}>
+      <ChatThread
+        key={id}
+        messages={[]}
+        partial={null}
+        busy={false}
+        loading={false}
+        configured
+        conversationId={id}
+        onSend={vi.fn()}
+        onStop={vi.fn()}
+        onSettings={vi.fn()}
+        onVoice={vi.fn()}
+        onTools={vi.fn()}
+        onWork={vi.fn()}
+      />
+    </AnnotationProvider>
+  );
+  const view = render(chat('one'));
+  await waitFor(() =>
+    expect((screen.getByLabelText('给瞬光伴行发送消息') as HTMLTextAreaElement).value).toBe(
+      '请按这些批注修改。',
+    ),
+  );
+  view.rerender(chat('two'));
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith('/work/annotations?conversation_id=two', expect.anything()),
+  );
+  expect((screen.getByLabelText('给瞬光伴行发送消息') as HTMLTextAreaElement).value).toBe('');
 });

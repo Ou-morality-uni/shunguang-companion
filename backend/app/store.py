@@ -133,6 +133,26 @@ class Store:
                 ]
             return records
 
+    def list_uploads(self, limit=200):
+        with self.connect() as db:
+            rows = db.execute(
+                "SELECT id,steps,created_at FROM file_tasks WHERE status='complete' AND json_array_length(steps)=1 AND json_extract(steps,'$[0].action')='upload' ORDER BY created_at DESC LIMIT ?",
+                (limit,),
+            )
+            result = []
+            for row in rows:
+                step = json.loads(row['steps'])[0]
+                stamp = step['after'].get(step['path']) or {}
+                result.append(
+                    {
+                        'id': row['id'],
+                        'name': step.get('result', {}).get('name', step['path']),
+                        'bytes': stamp.get('bytes', 0),
+                        'created_at': row['created_at'],
+                    }
+                )
+            return result
+
     def save_file_task(self, record):
         record['updated_at'] = now()
         with self.connect() as db:
@@ -596,6 +616,12 @@ class Store:
                 '一下',
                 '早上',
                 '晚上',
+                '文件',
+                '资料',
+                '文档',
+                '内容',
+                '总结',
+                '读取',
             }
             if not terms and not re.search(r'上个聊天|另一个聊天|上次聊|昨天聊', query):
                 return []
@@ -627,6 +653,44 @@ class Store:
         for row in rows:
             if SENSITIVE.search(row['content']):
                 continue
+            explicit = bool(re.search(r'上个聊天|另一个聊天|上次聊|昨天聊|报错|失败原因', query))
+            if automatic and not explicit:
+                content = row['content'].strip()
+                if (
+                    row['role'] == 'user'
+                    and len(content) < 100
+                    and content.endswith(('?', '？'))
+                    and not re.search(
+                        r'我(?:喜欢|偏好|叫|住|想|计划|打算)|定为|决定|确定|约定|[0-9]+(?:元|人|页|份|次)', content
+                    )
+                ):
+                    continue
+                if re.search(r'今天|明天|今晚|这两天|临时', content) and not re.search(r'每周|长期|常住|以后', content):
+                    try:
+                        created = datetime.fromisoformat(row['created_at'].replace('Z', '+00:00'))
+                        if (
+                            datetime.now(timezone.utc) - created.replace(tzinfo=created.tzinfo or timezone.utc)
+                        ).total_seconds() > 48 * 3600:
+                            continue
+                    except ValueError:
+                        pass
+                metadata = json.loads(row['metadata'] or '{}')
+                failed = any(
+                    item.get('status') in ('error', 'failed') or item.get('result', {}).get('ok') is False
+                    for item in metadata.get('tools', [])
+                    if isinstance(item, dict) and isinstance(item.get('result', {}), dict)
+                )
+                if failed or (
+                    row['role'] == 'assistant'
+                    and re.search(r'调用失败|参数无效|正在读取|已经提交.*任务|稍等.*整理', content)
+                ):
+                    continue
+                if (
+                    row['role'] == 'assistant'
+                    and len(content) < 65
+                    and re.search(r'^(你好|早上好|晚上好|谢谢|不客气|嗨|我们来看看)', content)
+                ):
+                    continue
             if any(row['seq'] <= b['through_seq'] and b['value'] in row['content'] for b in blocks):
                 continue
             score = sum(term.casefold() in row['content'].casefold() for term in terms)
@@ -636,7 +700,12 @@ class Store:
                 ranked.append((score, row['seq'], row))
         ranked.sort(key=lambda item: (item[0], item[1]), reverse=True)
         unique = {}
+        seen_text = set()
         for score, seq, row in ranked:
+            fingerprint = re.sub(r'\s+', '', row['content']).casefold()
+            if fingerprint in seen_text:
+                continue
+            seen_text.add(fingerprint)
             unique.setdefault(row['id'], (score, seq, row))
         return [
             {

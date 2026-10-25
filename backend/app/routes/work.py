@@ -95,6 +95,11 @@ def tasks(
     return records
 
 
+@router.get('/uploads')
+def uploads(work=Depends(service)):
+    return work.store.list_uploads()
+
+
 @router.post('/tasks', status_code=201, response_model=FileTaskOut)
 def submit(payload: FileTaskRequest, work=Depends(service)):
     return invoke(work.submit, payload)
@@ -228,6 +233,14 @@ def resource_targets(kind: str, resource_id: str, work=Depends(service)):
     return invoke(targets, work, kind, resource_id)
 
 
+@router.get('/resources/{kind}/{resource_id}/info')
+def resource_info(kind: str, resource_id: str, work=Depends(service)):
+    from ..office_resources import resource_bytes
+
+    item, _ = invoke(resource_bytes, work, kind, resource_id)
+    return {'version': item['version'], 'name': item['name'], 'targets': []}
+
+
 @router.get('/resources/{kind}/{resource_id}/pages')
 def resource_pages(
     kind: str,
@@ -238,6 +251,26 @@ def resource_pages(
     from ..office_resources import page_info
 
     return invoke(page_info, work, kind, resource_id, version)
+
+
+@router.get('/resources/{kind}/{resource_id}/document')
+def resource_document(
+    kind: str,
+    resource_id: str,
+    version: str = Query(pattern=r'^[0-9a-f]{64}$'),
+    work=Depends(service),
+):
+    from ..office_resources import preview_pdf
+
+    data = invoke(preview_pdf, work, kind, resource_id, version)
+    return Response(
+        data,
+        media_type='application/pdf',
+        headers={
+            'Cache-Control': 'no-store',
+            'X-Content-Type-Options': 'nosniff',
+        },
+    )
 
 
 @router.get('/resources/{kind}/{resource_id}/image')

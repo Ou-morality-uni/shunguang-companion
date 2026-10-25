@@ -37,3 +37,14 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+
+## PDF.js continuous document preview (v0.6.2)
+
+Uses `pdfjs-dist@6.4.299` without modifying upstream files: the official PDFViewer, rendering queue, text layer, worker, CMaps, standard fonts, image decoding WASM and ICC data. Copyright Mozilla Foundation and contributors; Apache-2.0 and the accompanying font/codec licenses. Copies are in `licenses/pdfjs/`, and the build includes those notices with same-origin runtime assets. Source: https://github.com/mozilla/pdf.js .
+
+## Local OCR (v0.6.2)
+
+Uses `tesseract.js@7.0.0`, its locked `tesseract.js-core` engine, and unmodified `@tesseract.js-data/chi_sim@1.0.0` / `eng@1.0.0` `4.0.0_best_int` dictionaries. Tesseract.js and core use Apache-2.0. The npm dictionary package metadata declares MIT; the actual upstream tessdata distribution includes Apache-2.0. Preserve its license at `licenses/ocr/traineddata-LICENSE` (https://github.com/naptha/tessdata/blob/gh-pages/LICENSE), alongside the JS/core licenses. Dictionaries and workers are served from this application, not a runtime CDN. User files are recognized locally only after pressing the OCR button.
+
+React Bits MCP was consulted for GlareHover examples; this version reuses the project's existing button treatment and Radix/Motion controls, without copying another hover component.

@@ -45,11 +45,30 @@ def wait(work, task):
     return asyncio.run(work.wait(task['id']))
 
 
+def test_file_tool_explains_invalid_fields_so_the_model_can_correct_and_retry(setup):
+    from backend.app import feature_config
+    from backend.app.tool_registry import ToolRegistry
+
+    work, workspace_id, source, _, cid, _ = setup
+    (source / 'source.txt').write_text('known source', encoding='utf-8')
+    registry = ToolRegistry(feature_config.load(), work.store, {'conversation_id': cid}, [], work)
+    args = {'workspace_id': workspace_id, 'steps': [{'action': 'read_document', 'path': 'source.txt', 'limit': 100}]}
+    failed = asyncio.run(registry.execute('workspace_files', args))
+    assert failed['ok'] is False
+    assert failed['validation_errors'][0]['field'] == 'steps.0.limit'
+    assert '50' in failed['message']
+    args['steps'][0]['limit'] = 50
+    corrected = asyncio.run(registry.execute('workspace_files', args))
+    assert corrected['ok'] is True
+    assert wait(work, corrected['task'])['status'] == 'complete'
+
+
 def submit(setup, filename, scope='full', **kwargs):
     work, workspace_id, _, _, conversation_id, _ = setup
     return work.submit(
         FileTaskRequest(
             workspace_id=workspace_id,
+            save_result=True,
             instruction='根据资料回答并标注来源',
             steps=[{'action': 'read_document', 'path': filename, 'scope': scope, **kwargs}],
         ),
@@ -69,6 +88,49 @@ def test_new_summary_uses_project_outputs_without_changing_existing_files(setup)
     assert expected.is_file()
     assert expected.read_bytes() == data
     assert (old_output / 'existing.md').read_text(encoding='utf-8') == 'keep this result'
+
+
+def test_ordinary_chat_reading_returns_a_summary_without_automatically_creating_a_file(setup):
+    work, workspace_id, source, _, cid, _ = setup
+    (source / 'source.txt').write_text('Known material', encoding='utf-8')
+    task = wait(
+        work,
+        work.submit(
+            FileTaskRequest(
+                workspace_id=workspace_id,
+                instruction='简要总结',
+                steps=[{'action': 'read_document', 'path': 'source.txt', 'scope': 'full'}],
+            ),
+            'chat',
+            cid,
+        ),
+    )
+    assert task['status'] == 'complete', task['error']
+    assert task['steps'][-1]['result']['abstract']
+    assert not task['context'].get('artifact')
+    assert not list(work.output_root.rglob('*.md'))
+
+
+def test_chat_task_keeps_its_trigger_message_and_uploaded_sources_in_storage(setup):
+    from backend.app import feature_config
+    from backend.app.tool_registry import ToolRegistry
+
+    work, _, _, _, cid, _ = setup
+    uploaded = work.upload('source.txt', b'Known source')
+    source = attachment(work, uploaded['task']['id'])
+    message = work.store.add_message(cid, 'user', 'Read this document', metadata={'attachments': [source]})
+    registry = ToolRegistry(feature_config.load(), work.store, {**message, 'conversation_id': cid}, [], work)
+    result = asyncio.run(
+        registry.execute(
+            'workspace_files',
+            {'workspace_id': source['workspace_id'], 'steps': [{'action': 'read_document', 'path': source['path']}]},
+        )
+    )
+    completed = wait(work, result['task'])
+    assert completed['context']['source_message_id'] == message['id']
+    assert completed['context']['sources'] == [{'kind': 'attachment', 'id': source['id'], 'name': 'source.txt'}]
+    stored = next(item for item in Store(work.store.path).list_file_tasks() if item['id'] == completed['id'])
+    assert stored['context']['source_message_id'] == message['id']
 
 
 def test_file_task_keeps_its_conversation_model_when_queued_and_global_defaults_change(setup, monkeypatch):

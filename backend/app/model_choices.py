@@ -42,6 +42,7 @@ class ModelChoiceOut(ModelChoice):
 class ModelItem(BaseModel):
     id: str
     efforts: list[str]
+    initial_effort: str = 'default'
 
 
 class ConnectionOptions(BaseModel):
@@ -171,6 +172,23 @@ def cached_models():
         return {}
 
 
+def selectable_efforts(value):
+    supported = effort_options(value)
+    levels = [level for level in supported if level not in ('default', 'on', 'off')]
+    return levels or [level for level in supported if level != 'default']
+
+
+def initial_effort(value):
+    supported = selectable_efforts(value)
+    if 'medium' in supported:
+        return 'medium'
+    if 'on' in supported:
+        return 'on'
+    if 'high' in supported:
+        return 'high'
+    return supported[0] if supported else 'default'
+
+
 def remember_models(profile_id, models):
     with config.CONFIG_LOCK:
         catalog = cached_models()
@@ -194,7 +212,11 @@ def model_options():
             label=f'{item.get("llm_provider", "custom")} · {urlparse(item["llm_base_url"]).netloc}',
             configured=config.public_config(value)['configured'],
             models=[
-                ModelItem(id=mid, efforts=effort_options(value.model_copy(update={'llm_model': mid})))
+                ModelItem(
+                    id=mid,
+                    efforts=selectable_efforts(value.model_copy(update={'llm_model': mid})),
+                    initial_effort=initial_effort(value.model_copy(update={'llm_model': mid})),
+                )
                 for mid in dict.fromkeys([value.llm_model] + catalog.get(item['id'], []))
                 if valid_model_id(mid)
             ],
@@ -232,9 +254,17 @@ def choice_config(choice):
         raise HTTPException(422, '该模型尚未声明此思考选项。')
     if not config.public_config(value)['configured']:
         raise HTTPException(503, '该连接尚未配置有效密钥与模型。')
-    return value.model_copy(update={'llm_effort': choice['effort']})
+    return value.model_copy(
+        update={'llm_effort': initial_effort(value) if choice['effort'] == 'default' else choice['effort']}
+    )
 
 
 def public_choice(choice):
     value = choice_config(choice)
-    return {**choice, 'configured': config.public_config(value)['configured'], 'efforts': effort_options(value)}
+    effort = initial_effort(value) if choice['effort'] == 'default' else choice['effort']
+    return {
+        **choice,
+        'effort': effort,
+        'configured': config.public_config(value)['configured'],
+        'efforts': selectable_efforts(value),
+    }

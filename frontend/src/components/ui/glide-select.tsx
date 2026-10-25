@@ -1,6 +1,6 @@
 import { useId, useState, type Ref } from 'react';
 import { Select } from 'radix-ui';
-import { motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Check, ChevronDown, ChevronUp } from 'lucide-react';
 
 export type SelectOption = { value: string; label: string; group?: string; disabled?: boolean };
@@ -30,7 +30,8 @@ export function GlideSelect({
   required?: boolean;
 }) {
   const layoutId = useId();
-  const reduced = useReducedMotion();
+  const systemReduced = useReducedMotion();
+  const reduced = systemReduced || document.documentElement.dataset.reduceMotion === 'true';
   const [highlight, setHighlight] = useState(value);
   const groups = [...new Set(options.map((option) => option.group || ''))];
   return (
@@ -47,7 +48,20 @@ export function GlideSelect({
       }}
     >
       <Select.Trigger ref={ref} id={id} className={`glide-trigger ${className}`} aria-label={label}>
-        <Select.Value placeholder={placeholder} />
+        <Select.Value placeholder={placeholder}>
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.span
+              key={value}
+              className="glide-value"
+              initial={{ opacity: reduced ? 1 : 0, y: reduced ? 0 : 3 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: reduced ? 1 : 0, y: reduced ? 0 : -2 }}
+              transition={{ duration: reduced ? 0 : 0.12 }}
+            >
+              {options.find((option) => option.value === value)?.label || placeholder}
+            </motion.span>
+          </AnimatePresence>
+        </Select.Value>
         <Select.Icon>
           <ChevronDown size={14} />
         </Select.Icon>

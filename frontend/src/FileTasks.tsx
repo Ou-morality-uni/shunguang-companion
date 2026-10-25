@@ -1,10 +1,23 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  lazy,
+  Suspense,
+  createContext,
+  useContext,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { request, type Attachment, type FileTask, type Workspace } from './api';
 import { DocumentResult, VisionApproval } from './DocumentControls';
 import { useResourcePreview } from './PreviewContext';
 import { DocumentMarkdown } from './DocumentMarkdown';
+
+const StandaloneResourcePreview = lazy(() =>
+  import('./ResourcePreview').then((module) => ({ default: module.ResourcePreview })),
+);
 
 export const taskStatuses: Record<FileTask['status'], string> = {
   queued: '排队中',
@@ -51,30 +64,7 @@ export function OutputFolder() {
 
 export function AttachmentCard({ attachment }: { attachment: Attachment }) {
   const openResource = useResourcePreview();
-  const previewButton = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false),
-    [preview, setPreview] = useState<Record<string, unknown> | null>(null);
-  const [notice, setNotice] = useState(''),
-    [busy, setBusy] = useState(false),
-    [page, setPage] = useState(1);
-  const pdf = /\.pdf$/i.test(attachment.name),
-    image = /\.(png|jpe?g|webp|bmp|tiff?|gif)$/i.test(attachment.name);
-  async function load(start = 1) {
-    if (openResource) {
-      openResource({ kind: 'attachment', id: attachment.id, title: attachment.name }, previewButton.current);
-      return;
-    }
-    setBusy(true);
-    setOpen(true);
-    setNotice('');
-    try {
-      setPreview(await request(`/work/files/${attachment.id}/preview?start=${start}`));
-    } catch (error) {
-      setNotice((error as Error).message);
-    } finally {
-      setBusy(false);
-    }
-  }
+  const [open, setOpen] = useState(false);
   return (
     <article className="file-card" tabIndex={-1} aria-label={`附件：${attachment.name}`}>
       <div className="file-card-heading">
@@ -83,64 +73,27 @@ export function AttachmentCard({ attachment }: { attachment: Attachment }) {
       </div>
       <div className="work-actions">
         <Button
-          ref={previewButton}
           variant="outline"
-          disabled={busy}
-          onClick={() => {
-            if (open) setOpen(false);
-            else if (preview) setOpen(true);
-            else void load();
+          aria-label={`预览 ${attachment.name}`}
+          onClick={(event) => {
+            if (openResource)
+              openResource(
+                { kind: 'attachment', id: attachment.id, title: attachment.name },
+                event.currentTarget,
+              );
+            else setOpen(!open);
           }}
         >
-          {open ? '收起预览' : `预览 ${attachment.name}`}
+          {open ? '收起预览' : '预览'}
         </Button>
-        <a className="text-link" href={`/api/work/files/${attachment.id}`} download>
-          下载原文件副本
-        </a>
       </div>
-      {notice && <p role="status">{notice}</p>}
       {open && (
         <div className="standalone-preview">
-          <div className="file-preview">
-            {busy && <p role="status">正在读取预览…</p>}
-            {notice && <p role="status">{notice}</p>}
-            {(image || pdf) && (
-              <img
-                loading="lazy"
-                src={`/api/work/files/${attachment.id}/image?page=${page}`}
-                alt={pdf ? `${attachment.name} 第 ${page} 页` : attachment.name}
-              />
-            )}
-            {pdf && (
-              <label className="field">
-                预览页码
-                <Input
-                  type="number"
-                  min={1}
-                  max={Number(preview?.total_units ?? 1)}
-                  value={page}
-                  onChange={(event) =>
-                    setPage(
-                      Math.max(
-                        1,
-                        Math.min(Number(preview?.total_units ?? 1), Number(event.target.value) || 1),
-                      ),
-                    )
-                  }
-                />
-              </label>
-            )}
-            {preview && <DocumentResult result={preview} />}
-            {typeof preview?.next_start === 'number' && (
-              <Button
-                variant="outline"
-                disabled={busy}
-                onClick={() => void load(preview.next_start as number)}
-              >
-                继续预览后续内容
-              </Button>
-            )}
-          </div>
+          <Suspense fallback={<p role="status">正在准备预览…</p>}>
+            <StandaloneResourcePreview
+              resource={{ kind: 'attachment', id: attachment.id, title: attachment.name }}
+            />
+          </Suspense>
         </div>
       )}
     </article>
@@ -470,18 +423,23 @@ export function TaskDetails({
   );
 }
 
-export function ChatFileTasks({
+const TasksContext = createContext<{ tasks: FileTask[]; initial: Set<string>; onWork: () => void }>({
+  tasks: [],
+  initial: new Set(),
+  onWork: () => {},
+});
+
+export function FileTasksProvider({
   conversationId,
   onWork,
   onTaskStatus,
+  children,
 }: {
   conversationId: string | null;
-  onSettings: () => void;
   onWork: () => void;
-  attachments?: Attachment[];
   onTaskStatus?: (status: string | null) => void;
+  children: ReactNode;
 }) {
-  const openResource = useResourcePreview();
   const [tasks, setTasks] = useState<FileTask[]>([]),
     [notice, setNotice] = useState('');
   const initialTasks = useRef<Set<string> | null>(null);
@@ -507,14 +465,17 @@ export function ChatFileTasks({
         { signal },
       );
       if (!signal?.aborted) {
-        if (initialTasks.current === null) initialTasks.current = new Set(result.map((task) => task.id));
-        setTasks(result);
+        if (initialTasks.current === null)
+          initialTasks.current = new Set((Array.isArray(result) ? result : []).map((task) => task.id));
+        setTasks(Array.isArray(result) ? result : []);
         setNotice('');
       }
     },
     [conversationId],
   );
   useEffect(() => {
+    setTasks([]);
+    initialTasks.current = null;
     const abort = new AbortController();
     let polling = false,
       denied = false;
@@ -539,11 +500,55 @@ export function ChatFileTasks({
       clearInterval(timer);
     };
   }, [refresh]);
-  if (!tasks.length && !notice) return null;
+  return (
+    <TasksContext.Provider value={{ tasks, initial: initialTasks.current ?? new Set(), onWork }}>
+      {children}
+      {notice && (
+        <p className="space-note" role="status">
+          {notice}
+        </p>
+      )}
+    </TasksContext.Provider>
+  );
+}
+
+export function ChatFileTasks(props: {
+  conversationId: string | null;
+  onWork: () => void;
+  onSettings: () => void;
+  onTaskStatus?: (status: string | null) => void;
+}) {
+  return (
+    <FileTasksProvider {...props}>
+      <MessageFileTasks all />
+    </FileTasksProvider>
+  );
+}
+
+export function MessageFileTasks({
+  requestId,
+  taskIds = [],
+  attachments = [],
+  all = false,
+}: {
+  requestId?: string;
+  taskIds?: string[];
+  attachments?: Attachment[];
+  all?: boolean;
+}) {
+  const { tasks: records, initial, onWork } = useContext(TasksContext);
+  const openResource = useResourcePreview();
+  const tasks = records.filter(
+    (task) =>
+      all ||
+      (task.context?.source_message_id
+        ? task.context.source_message_id === requestId
+        : taskIds.includes(task.id)),
+  );
+  if (!tasks.length) return null;
   return (
     <section className="chat-file-tasks compact-file-tasks" aria-label="聊天文件任务">
-      {notice && <p role="status">{notice}</p>}
-      {tasks.slice(0, 8).map((task) => {
+      {tasks.map((task) => {
         const result = task.steps.find((step) => ['summarize', 'office'].includes(step.action))?.result;
         const abstract =
           typeof result?.abstract === 'string'
@@ -554,34 +559,62 @@ export function ChatFileTasks({
         return (
           <article
             key={task.id}
-            className={`file-task-short ${!initialTasks.current?.has(task.id) ? 'content-arrive' : ''}`}
+            className={`file-task-short ${!initial.has(task.id) ? 'content-arrive' : ''}`}
           >
             <div className="file-card-heading">
               <strong>{task.title}</strong>
               <span role="status">{taskStatuses[task.status]}</span>
             </div>
-            {abstract && <p>{abstract}</p>}
+            {abstract && (
+              <div className="message-text task-conclusion">
+                <DocumentMarkdown text={abstract} />
+              </div>
+            )}
             {task.error && <p role="status">{task.error.slice(0, 200)}</p>}
             <Button
               variant="outline"
-              aria-label={`查看任务：${task.title}`}
+              aria-label={`预览资料：${task.title}`}
+              onClick={(event) => {
+                let source = (
+                  task.context?.sources as
+                    { kind: 'attachment' | 'artifact'; id: string; name: string }[] | undefined
+                )?.[0];
+                if (!source) {
+                  const file = attachments.find(
+                    (item) =>
+                      item.workspace_id === task.workspace_id &&
+                      task.steps.some((step) => step.path === item.path),
+                  );
+                  if (file) source = { kind: 'attachment', id: file.id, name: file.name };
+                }
+                if (openResource)
+                  openResource(
+                    source
+                      ? { kind: source.kind, id: source.id, title: source.name }
+                      : { kind: 'task', id: task.id, title: task.title },
+                    event.currentTarget,
+                  );
+                else onWork();
+              }}
+            >
+              预览资料
+            </Button>
+            <button
+              type="button"
+              className="text-button"
+              aria-label={`任务详情：${task.title}`}
               onClick={(event) =>
                 openResource
                   ? openResource({ kind: 'task', id: task.id, title: task.title }, event.currentTarget)
                   : onWork()
               }
             >
-              {task.status.startsWith('waiting_') ? '查看并确认' : '查看任务与资料'}
-            </Button>
+              状态与操作
+            </button>
             <ArtifactCard task={task} />
           </article>
         );
       })}
-      {tasks.length > 8 && (
-        <Button variant="ghost" onClick={onWork}>
-          查看更早的文件任务
-        </Button>
-      )}
     </section>
   );
 }

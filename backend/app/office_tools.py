@@ -94,7 +94,13 @@ def register(registry, store, message, work):
                 if not await asyncio.to_thread(belongs, source.kind, source.id):
                     return {'ok': False, 'message': '插图只能来自本聊天附件或成果。'}
             task = await asyncio.to_thread(
-                office_tasks.submit, work, payload, 'chat', message.get('model_choice'), message.get('annotations')
+                office_tasks.submit,
+                work,
+                payload,
+                'chat',
+                message.get('model_choice'),
+                message.get('annotations'),
+                message.get('id'),
             )
             return {
                 'ok': True,
