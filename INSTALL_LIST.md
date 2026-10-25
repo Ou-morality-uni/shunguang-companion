@@ -7,7 +7,7 @@
 ## 基础条件：脚本不会下载
 
 - Windows 64位。
-- Python 3.11 64位，含标准库SQLite。
+- 标准版 CPython 3.11／3.12／3.13／3.14，Windows x64 稳定版，含标准库 SQLite；暂不支持 3.15、预发布版和自由线程版。已有项目环境优先复用，首次安装自动选择已有的受支持版本；可用 `Install.bat -PythonPath "D:\Python314\python.exe" -CheckPython` 只检查解释器。
 - Node.js 24，含npm。
 - 可用的NVIDIA驱动用于GPU模式；脚本不会安装显卡驱动。
 
@@ -58,7 +58,7 @@
 
 ## English
 
-Double-click `Install.bat`. Python3.11 and Node.js24 are prerequisites, not downloads. If missing, it downloads the signed Microsoft Visual C++ runtime from Microsoft. The installer installs the pinned backend/frontend dependencies, FFmpeg bundled with its Python wheel, PyTorch, Transformers, Qdrant's local Python runtime, and the full verified BGE-M3 release. It creates an empty SQLite database, builds the bundled knowledge index, and builds the frontend. No MySQL, Docker, CUDA Toolkit, or separate Qdrant service is needed.
+Double-click `Install.bat`. Standard 64-bit CPython 3.11-3.14 and Node.js24 are prerequisites, not downloads. Existing project environments are reused; a new installation selects an available supported interpreter. If missing, it downloads the signed Microsoft Visual C++ runtime from Microsoft. The installer installs the pinned backend/frontend dependencies, FFmpeg bundled with its Python wheel, PyTorch, Transformers, Qdrant's local Python runtime, and the full verified BGE-M3 release. It creates an empty SQLite database, builds the bundled knowledge index, and builds the frontend. No MySQL, Docker, CUDA Toolkit, or separate Qdrant service is needed.
 
 LibreOffice is a separate, manually installed dependency for 0.6.1 Office previews, PDF export, and formula recalculation. Neither installation nor startup downloads it. See the [installation guide (Chinese)](versions/0.6.1/LibreOffice-install.md); 0.6.1 detects the recommended project-local `tools/LibreOffice/program` directory automatically. Other custom locations can use PATH. It is not required for chat or Markdown summaries.
 

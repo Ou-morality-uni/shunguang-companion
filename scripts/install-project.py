@@ -7,17 +7,32 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import platform
 import re
 import shutil
 import struct
 import subprocess
 import sys
+import sysconfig
 import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
 STATE = ROOT / 'data/install'
 ENV = {**os.environ, 'PYTHONUTF8': '1', 'PYTHONIOENCODING': 'utf-8',
        'HF_HUB_DISABLE_TELEMETRY': '1', 'DO_NOT_TRACK': '1'}
+
+
+def python_info():
+    version = list(sys.version_info[:3])
+    implementation = sys.implementation.name
+    bits = struct.calcsize('P') * 8
+    machine = platform.machine().lower()
+    free_threaded = bool(sysconfig.get_config_var('Py_GIL_DISABLED'))
+    supported = (os.name == 'nt' and implementation == 'cpython' and bits == 64
+                 and machine in {'amd64', 'x86_64'} and (3, 11) <= tuple(version[:2]) <= (3, 14)
+                 and sys.version_info.releaselevel == 'final' and not free_threaded)
+    return {'version': version, 'implementation': implementation, 'bits': bits, 'machine': machine,
+            'free_threaded': free_threaded, 'supported': supported}
 
 
 def run(arguments, *, capture=False, check=True, timeout=None):
@@ -29,8 +44,12 @@ def run(arguments, *, capture=False, check=True, timeout=None):
 
 
 def preflight(rag_only=False):
-    if os.name != 'nt' or sys.version_info[:2] != (3, 11) or struct.calcsize('P') != 8:
-        raise RuntimeError('Use 64-bit Windows and Python 3.11. This installer does not install Python or Node.js.')
+    if not python_info()['supported']:
+        raise RuntimeError('Use Windows x64 and standard CPython 3.11-3.14 (stable, with GIL). '
+                           'This installer does not install Python or Node.js.')
+    for name in ('.venv', '.venv-rag'):
+        if (ROOT / name).exists():
+            verify_environment(name)
     if not rag_only:
         if not shutil.which('node') or not shutil.which('npm.cmd'):
             raise RuntimeError('Node.js 24 and npm are required; reopen the terminal after installing them.')
@@ -51,10 +70,24 @@ def preflight(rag_only=False):
 def create_environment(name):
     python = ROOT / name / 'Scripts/python.exe'
     if not python.is_file():
+        if (ROOT / name).exists():
+            raise RuntimeError(f'{name} is incomplete; preserve data and move the environment aside before retrying.')
         run([sys.executable, '-m', 'venv', ROOT / name])
-    version = run([python, '-c', 'import sys;print("%s.%s"%sys.version_info[:2])'], capture=True).stdout.strip()
-    if version != '3.11':
-        raise RuntimeError(f'{name} uses another Python version; preserve your data and create a Python 3.11 environment.')
+    return verify_environment(name)
+
+
+def verify_environment(name):
+    python = ROOT / name / 'Scripts/python.exe'
+    if not python.is_file():
+        raise RuntimeError(f'{name} is incomplete; preserve data and move the environment aside before retrying.')
+    probe = run([python, '-I', Path(__file__).resolve(), '--python-info'], capture=True, check=False)
+    try:
+        info = json.loads(probe.stdout)
+    except (TypeError, ValueError):
+        raise RuntimeError(f'{name} could not report its Python version; the environment was not replaced.') from None
+    if probe.returncode or not info.get('supported') or tuple(info['version'][:2]) != sys.version_info[:2]:
+        raise RuntimeError(f'{name} uses an unsupported or different Python version; preserve data and move the old '
+                           'environment aside before selecting CPython 3.11-3.14.')
     return python
 
 
@@ -120,13 +153,14 @@ def install_rag(args, receipt):
     print('[RAG] Installing ' + ('CUDA 12.8' if gpu else 'CPU') + ' PyTorch.', flush=True)
     version = run([python, '-c', 'import torch;print(torch.__version__)'], capture=True, check=False).stdout.strip()
     torch_args = [python, '-m', 'pip', 'install', 'torch==2.11.0', '--index-url', index,
-                  '--report', STATE / 'torch-pip.json', '--disable-pip-version-check']
+                  '--only-binary=:all:', '--report', STATE / 'torch-pip.json', '--disable-pip-version-check']
     if version and version != '2.11.0' + ('+cu128' if gpu else '+cpu'):
         torch_args += ['--force-reinstall']
     run(torch_args)
     receipt['pip_reports'].append('torch-pip.json')
     run([python, '-m', 'pip', 'install', '-r', 'backend/requirements-rag.lock.txt',
-         '--index-url', 'https://pypi.org/simple', '--report', STATE / 'rag-pip.json', '--disable-pip-version-check'])
+         '--index-url', 'https://pypi.org/simple', '--only-binary=:all:',
+         '--report', STATE / 'rag-pip.json', '--disable-pip-version-check'])
     receipt['pip_reports'].append('rag-pip.json')
     run([python, '-m', 'pip', 'check'])
     imported = run([python, '-c', 'import torch; print(torch.__version__)'], capture=True, check=False)
@@ -158,12 +192,15 @@ def install_rag(args, receipt):
 
 def write_receipt(receipt):
     STATE.mkdir(parents=True, exist_ok=True)
+    receipt['python'] = python_info()
     receipt['finished_at_utc'] = datetime.now(timezone.utc).isoformat()
     (STATE / 'result.json').write_text(json.dumps(receipt, ensure_ascii=False, indent=2), encoding='utf-8')
     lines = ['# Install list / 本次安装清单', '',
              f'- Status / 状态：**{receipt["status"]}**', f'- Last stage / 最后阶段：`{receipt["stage"]}`',
              f'- Scope / 范围：`{receipt.get("scope", "complete_project")}`',
              f'- UTC：{receipt["finished_at_utc"]}',
+             '- Python：' + receipt['python']['implementation'] + ' ' + '.'.join(map(str, receipt['python']['version']))
+             + ' / ' + str(receipt['python']['bits']) + '-bit / ' + receipt['python']['machine'],
              '- Python / Node.js：使用已安装的基础运行时，脚本没有下载它们。',
              '- 本次 pip 处理的包可能来自网络或缓存；“已存在”不代表本次下载。',
              '- 本文件不记录 API 密钥、聊天、用户事实或电脑名称。', '']
@@ -226,7 +263,12 @@ def main():
     parser.add_argument('--skip-frontend', action='store_true')
     parser.add_argument('--skip-model', action='store_true')
     parser.add_argument('--model-source', choices=('release', 'official'), default='release')
+    parser.add_argument('--python-info', action='store_true', help='Probe runtime support without installing anything.')
     args = parser.parse_args()
+    if args.python_info:
+        info = python_info()
+        print(json.dumps(info))
+        return 0 if info['supported'] else 1
     receipt = {'status': 'failed', 'stage': 'preflight', 'started_at_utc': datetime.now(timezone.utc).isoformat(),
                'model_source': args.model_source, 'frontend': False, 'pip_reports': [],
                'scope': 'retrieval_only' if args.rag_only else 'complete_project'}
@@ -240,7 +282,8 @@ def main():
             print('[1/5] Installing backend dependencies.', flush=True)
             python = create_environment('.venv')
             run([python, '-m', 'pip', 'install', '-r', 'backend/requirements.lock.txt',
-                 '--index-url', 'https://pypi.org/simple', '--report', STATE / 'backend-pip.json', '--disable-pip-version-check'])
+                 '--index-url', 'https://pypi.org/simple', '--only-binary=:all:',
+                 '--report', STATE / 'backend-pip.json', '--disable-pip-version-check'])
             receipt['pip_reports'].append('backend-pip.json')
             run([python, '-m', 'pip', 'check'])
             if not args.skip_frontend:

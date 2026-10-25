@@ -1,9 +1,10 @@
-# Shunguang Companion v0.6.2
+# Shunguang Companion v0.6.3
 
-[v0.6.2 release notes (Chinese)](versions/0.6.2/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
+[v0.6.3 release notes (Chinese)](versions/0.6.3/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.6.3](versions/0.6.3/README.md): Support standard CPython 3.11-3.14, discover installed interpreters, preserve project environments and data, and verify installation and retrieval across versions.
 - [v0.6.2](versions/0.6.2/README.md): Add continuous original-layout previews, positioned comments and on-demand local OCR; simplify chat tasks, model choices and the workbench, and filter low-value recall.
 - [v0.6.1](versions/0.6.1/README.md): Add built-in Office skills, editable documents and targeted revisions, PDF export, basic image operations, and annotation drafts.
 - [v0.6.0](versions/0.6.0/README.md): Integrate chat file workspaces, automatic cross-chat memory, weather reminders, online voice input, per-chat model choices, and global animated backgrounds.
@@ -18,7 +19,9 @@ An unofficial browser companion inspired by Ye Shunguang from Zenless Zone Zero.
 
 ## Install and start
 
-Use **64-bit Windows 10/11, 64-bit Python 3.11, and Node.js 24**. Install Python and Node.js first and make sure `py -3.11` (or `python`), `node`, and `npm` work in a new terminal. The project installer checks these prerequisites; it does not download them. 16GB RAM is recommended. The installer requires at least 12 GiB of free disk space and an internet connection for several GB of dependencies and model files.
+Use **Windows 10/11 x64, standard 64-bit CPython 3.11, 3.12, 3.13 or 3.14, and Node.js 24**. Prefer a recent stable patch release; Python 3.15, prereleases and free-threaded builds are not supported in this release. Install Python and Node.js first and make sure `py -0p` (to list existing interpreters, or use `python` directly), `node`, and `npm` work in a new terminal. The project installer checks these prerequisites; it does not download them. 16GB RAM is recommended. The installer requires at least 12 GiB of free disk space and an internet connection for several GB of dependencies and model files.
+
+The installer reuses a valid project environment. For a new installation it selects a newer supported interpreter already on the computer, instead of requiring 3.11. Use `Install.bat -PythonPath "D:\Python314\python.exe"` to select an interpreter, or add `-CheckPython` to inspect the choice without installing. Conflicting existing environments cause a clear error; they and your data are not deleted automatically. See this release's notes for interpreter migration and verification details.
 
 1. Get the project. If Git is installed, run these commands in PowerShell:
 
@@ -97,7 +100,7 @@ Each user has their own `data/` directory for encrypted keys, settings, chat his
 
 Development progress documents, delivery checklists, acceptance reports, private logs, and original development Git history are excluded. Installation does not enter API keys, purchase services, train voices, or upload reference audio.
 
-## Using 0.6.2
+## Using 0.6.3
 
 - **Models**: save working API connections in settings, then select a provider, model, and supported reasoning level in the composer. Each conversation remembers its selection; new conversations use the default.
 - **Files**: upload or drop files into chat and send your request. Tasks run in the background and keep their conclusions at the initiating chat turn. Ordinary reading does not create Markdown automatically; explicitly request a saved file when needed. Open previews in right-side tabs to read the original layout and add comments. Folder grants and Office detection are under Companion Settings → Tools. New results are saved under `data/outputs/任务-<task ID>/`. Convert legacy `.doc/.xls/.ppt` files to `.docx/.xlsx/.pptx` first. See the [0.6.1 release notes](versions/0.6.1/README.md) for Office authoring, targeted edits, and PDF export.

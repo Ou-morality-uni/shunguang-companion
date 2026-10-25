@@ -1,9 +1,10 @@
-# 瞬光伴行 v0.6.2
+# 瞬光伴行 v0.6.3
 
-[v0.6.2 更新说明](versions/0.6.2/README.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md)
+[v0.6.3 更新说明](versions/0.6.3/README.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md)
 
 [English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.6.3](versions/0.6.3/README.md)：兼容标准版 Python 3.11～3.14，自动选择已有解释器，保留环境与数据，并增加多版本安装和检索验证。
 - [v0.6.2](versions/0.6.2/README.md)：升级连续原版面预览、原页批注与按需本机 OCR，精简聊天文件任务、模型选择和工作台，并过滤低价值回忆。
 - [v0.6.1](versions/0.6.1/README.md)：加入内置办公技能、Word／Excel／PPT 成品与局部修订、PDF 导出、基础图片处理和定位批注。
 - [v0.6.0](versions/0.6.0/README.md)：整合聊天文件工作区、自动跨会话记忆、天气关怀、在线语音输入、会话模型选择与全局动态光效。
@@ -18,7 +19,9 @@
 
 ## 首次安装
 
-支持 **Windows 10/11 64 位、Python 3.11 64 位和 Node.js 24**。先安装 Python 与 Node.js，确认终端能运行 `py -3.11`（或 `python`）、`node` 和 `npm`。它们是基础运行时，项目安装脚本不会替你安装。建议16GB内存；脚本要求至少12GiB磁盘余量，首次安装需要联网下载数GB依赖和模型。
+支持 **Windows 10/11 x64、标准版 CPython 3.11／3.12／3.13／3.14 和 Node.js 24**。Python 使用 64 位稳定版，建议安装对应分支的较新补丁版本；暂不支持 3.15、预发布版或自由线程版。先安装 Python 与 Node.js，确认终端能运行 `py -0p`（列出已有 Python，或能直接运行 `python`）、`node` 和 `npm`。它们是基础运行时，项目安装脚本不会替你安装。建议16GB内存；脚本要求至少12GiB磁盘余量，首次安装需要联网下载数GB依赖和模型。
+
+安装器优先沿用可用的项目环境；首次安装会从已有解释器中选择较新的受支持版本，不再固定要求 3.11。需要指定解释器时可运行 `Install.bat -PythonPath "D:\Python314\python.exe"`；仅检查选择结果可追加 `-CheckPython`。已有环境版本冲突时会停止并提示，不会自动删除环境或用户数据。切换解释器和验证范围见本版本更新说明。
 
 1. 获取项目。已安装 Git 时，可在 PowerShell 执行：
 
@@ -97,7 +100,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -M
 
 工程进度、交付清单、验收报告、私人日志和原开发Git历史不在公开仓库；README与安装清单是面向使用者的操作文档。安装不会替你填写API、购买服务、训练声音或上传参考音频。
 
-## 开始使用 0.6.2
+## 开始使用 0.6.3
 
 - **模型选择**：在设置中保存可用的 API 连接后，可从输入区按服务切换模型及支持的思考强度；每个聊天独立记住选择，新聊天使用默认配置。
 - **文件任务**：在聊天中拖入或上传文件，再发送自然语言要求。任务在后台执行，结论留在对应聊天轮次。普通阅读不自动生成 Markdown，明确要求保存或制作文件时才交付成品；点击“预览”打开右侧多标签工作区，连续阅读原版面并添加批注，成果仍支持下载。文件夹授权和 Office 能力检测位于“陪伴设置 → 工具服务”。新成果保存在 `data/outputs/任务-<任务ID>/`。旧 `.doc/.xls/.ppt` 请先另存为 `.docx/.xlsx/.pptx`；Office 创作、局部编辑和 PDF 导出见 [0.6.1 更新说明](versions/0.6.1/README.md)。
@@ -162,6 +165,6 @@ Required Notice: 瞬光伴行 — https://github.com/Ou-morality-uni/shunguang-c
 
 ## 开发与长期维护
 
-模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](versions/0.6.2/README.md)。
+模块边界、数据迁移与后续技术债见 [维护指南](docs/maintenance.md)，本版本变化与验证范围见 [更新说明](versions/0.6.3/README.md)。
 
 开发环境安装 `backend/requirements-dev.txt` 后，可用 `python scripts/dev.py verify` 统一运行检查；接口变化后用 `python scripts/dev.py contracts` 更新契约。生产安装继续使用运行时锁文件。数据库升级会先自动备份旧库；升级后不要用旧程序直接打开新库。

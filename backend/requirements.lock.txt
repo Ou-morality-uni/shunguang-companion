@@ -26,7 +26,7 @@ httpcore2==2.13.1
 httpx==0.28.1
 httpx2==2.13.1
 idna==3.20
-jiter==0.11.0
+jiter==0.11.1
 jsonpatch==1.35
 jsonpointer==3.2.1
 langchain-core==1.6.9

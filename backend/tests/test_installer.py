@@ -4,6 +4,8 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
+import shutil
 import subprocess
 import sys
 import zipfile
@@ -185,3 +187,150 @@ def test_failed_cuda_execution_installs_cpu_and_leaves_skip_model_unverified(tmp
     assert receipt['cuda_fallback'] is True
     assert any('https://download.pytorch.org/whl/cpu' in call for call in calls)
     assert json.loads((tmp_path / '.venv-rag/rag-runtime.json').read_text())['verified'] is False
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows runtime probe')
+def test_installer_can_probe_python_without_installing(tmp_path):
+    result = subprocess.run(
+        [sys.executable, str(ROOT / 'scripts/install-project.py'), '--python-info'],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        timeout=15,
+    )
+    assert result.returncode == 0, result.stderr
+    info = json.loads(result.stdout)
+    assert info['version'][:2] == list(sys.version_info[:2])
+    assert info['supported'] is True
+    assert not (tmp_path / 'data').exists()
+
+
+@pytest.mark.parametrize('minor', [11, 12, 13, 14])
+def test_install_preflight_accepts_supported_python(minor, tmp_path, monkeypatch):
+    version_type = type('Version', (tuple,), {'releaselevel': 'final'})
+    with monkeypatch.context() as patch:
+        patch.setattr(installer, 'ROOT', tmp_path)
+        patch.setattr(installer, 'os', SimpleNamespace(name='nt'))
+        patch.setattr(installer.sys, 'version_info', version_type((3, minor, 9)))
+        patch.setattr(installer.platform, 'machine', lambda: 'AMD64')
+        patch.setattr(installer.shutil, 'disk_usage', lambda _: SimpleNamespace(free=20 * 1024**3))
+        installer.preflight(rag_only=True)
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows installation entry points')
+@pytest.mark.parametrize('entry', ['install.ps1', 'install-rag.ps1'])
+def test_install_entry_accepts_explicit_python_without_installing(entry, installer_entry_scripts):
+    result = subprocess.run(
+        [
+            'powershell.exe',
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            str(installer_entry_scripts / entry),
+            '-PythonPath',
+            sys.executable,
+            '-CheckPython',
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)['version'][:2] == list(sys.version_info[:2])
+
+
+@pytest.fixture
+def installer_entry_scripts(tmp_path):
+    scripts = tmp_path / 'scripts'
+    scripts.mkdir()
+    for name in ['install.ps1', 'install-rag.ps1', 'select-python.ps1']:
+        source = ROOT / 'scripts' / name
+        if source.exists():
+            shutil.copyfile(source, scripts / name)
+    # A stub installer makes even an old entry point unable to touch the real project.
+    (scripts / 'install-project.py').write_text(
+        'import json,sys\n'
+        'assert sys.argv[1:] == ["--python-info"], "Unexpected installation attempt"\n'
+        'print(json.dumps({"supported":True,"version":list(sys.version_info[:3])}))\n',
+        encoding='utf-8',
+    )
+    return scripts
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows installation entry points')
+def test_install_entry_finds_python_on_path_without_launcher(installer_entry_scripts):
+    environment = {**os.environ, 'PATH': str(Path(sys.executable).parent)}
+    result = subprocess.run(
+        [
+            shutil.which('powershell.exe'),
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            str(installer_entry_scripts / 'install.ps1'),
+            '-CheckPython',
+        ],
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert json.loads(result.stdout)['version'][:2] == list(sys.version_info[:2])
+
+
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows installation entry points')
+def test_unknown_install_option_is_rejected_before_launch(installer_entry_scripts):
+    result = subprocess.run(
+        [
+            'powershell.exe',
+            '-NoProfile',
+            '-ExecutionPolicy',
+            'Bypass',
+            '-File',
+            str(installer_entry_scripts / 'install.ps1'),
+            '-NotAnInstallOption',
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+    assert result.returncode != 0
+    assert 'Unexpected installation attempt' not in result.stdout + result.stderr
+
+
+def test_existing_environment_is_reused_on_supported_python(tmp_path, monkeypatch):
+    python = tmp_path / '.venv/Scripts/python.exe'
+    python.parent.mkdir(parents=True)
+    python.touch()
+    info = {'version': [3, 12, 9], 'supported': True}
+    monkeypatch.setattr(installer, 'ROOT', tmp_path)
+    monkeypatch.setattr(
+        installer.subprocess, 'run', lambda *a, **k: subprocess.CompletedProcess(a, 0, stdout=json.dumps(info))
+    )
+    with monkeypatch.context() as patch:
+        patch.setattr(installer.sys, 'version_info', (3, 12, 9))
+        assert installer.create_environment('.venv') == python
+
+
+def test_receipt_identifies_the_actual_python_without_machine_paths(tmp_path, monkeypatch):
+    monkeypatch.setattr(installer, 'ROOT', tmp_path)
+    monkeypatch.setattr(installer, 'STATE', tmp_path / 'data/install')
+    installer.write_receipt({'status': 'failed', 'stage': 'preflight', 'frontend': False})
+    receipt = json.loads((tmp_path / 'data/install/result.json').read_text(encoding='utf-8'))
+    assert receipt['python']['version'][:2] == list(sys.version_info[:2])
+    assert 'executable' not in receipt['python']
+
+
+def test_incomplete_existing_environment_fails_preflight_without_replacement(tmp_path, monkeypatch):
+    environment = tmp_path / '.venv'
+    environment.mkdir()
+    marker = environment / 'preserve.txt'
+    marker.write_text('keep this environment', encoding='utf-8')
+    monkeypatch.setattr(installer, 'ROOT', tmp_path)
+    monkeypatch.setattr(installer, 'os', SimpleNamespace(name='nt'))
+    monkeypatch.setattr(installer.shutil, 'disk_usage', lambda _: SimpleNamespace(free=20 * 1024**3))
+    with pytest.raises(RuntimeError, match='incomplete'):
+        installer.preflight(rag_only=True)
+    assert marker.read_text(encoding='utf-8') == 'keep this environment'
