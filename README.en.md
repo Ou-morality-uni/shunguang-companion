@@ -128,7 +128,42 @@ Set an access password of at least 10 characters. Open the computer's IPv4 addre
 
 ## Updates and troubleshooting
 
-- Stop the backend before updating. Git users run `git pull`, then `Install.bat`. ZIP users download fresh code and preserve their private `data/` directory. Verified model files are reused; knowledge changes are indexed incrementally.
+After the author pushes changes to GitHub, existing clones do not update automatically. Fetch updates in your existing project folder; cloning again is unnecessary.
+
+Open **Companion Settings → About and Updates** (关于与更新) and click **Check for Updates** (检查更新) to see your current version, available releases, and their summary and notes. Only clicking the button checks online; startup and opening settings do not. Repeated checks within one minute may use a recent cached result. Failures show an error and allow retry. The button provides manual update instructions; it does not download, install, or restart the app. When accessing from a phone, it checks the backend computer, where updates must also be performed.
+
+Checks use the version in the public repository's `update.json`; changes within the same version do not trigger a new-version notice. This addition remains part of **0.6.3**. Existing 0.6.3 users must update manually once using the steps below to obtain the button. Until the maintainer uploads the metadata, the app may report that update information has not yet been published.
+
+### Update with the Git command line
+
+1. Press `Ctrl+C` in the backend window and wait for the server to stop. Closing the browser alone does not stop it.
+2. Open PowerShell in the existing project root and run:
+
+   ```powershell
+   git pull --ff-only
+   ```
+
+3. Double-click **`Install.bat`** to update dependencies, build the frontend, and process knowledge indexes. Wait for `Installation success`.
+4. Double-click **`Start_up.bat`**, then refresh the browser after startup.
+
+### Update with GitHub Desktop
+
+1. Stop the backend, open GitHub Desktop, and select the project and the branch you normally use.
+2. Click **Fetch origin**, then **Pull origin** if updates are available.
+3. Run **`Install.bat`**, wait for `Installation success`, then run **`Start_up.bat`** and refresh the browser.
+
+### Update a ZIP download
+
+ZIP downloads cannot use `git pull`. Stop the backend and back up your private `data/` directory. Download the latest ZIP, extract it into a new ordinary folder, copy your original `data/` into the new project root, then run **`Install.bat` → `Start_up.bat`**. To reuse the existing model, also copy `source/resources/models/bge-m3/` to the same location in the new project; otherwise, the installer downloads the model again.
+
+### Personal data and update conflicts
+
+- Your settings, keys, chats, and long-term memories are stored locally in `data/`, which Git ignores. Normal pulls do not overwrite this data; back it up before updating and do not share it. Enter your keys again after changing computers or Windows accounts.
+- Verified model files are reused; knowledge changes are indexed incrementally.
+- If pulling fails because local changes would be overwritten, conflicts occur, or branches have diverged, preserve and resolve your source changes before retrying. Do not force an overwrite or delete `data/`.
+
+### Troubleshooting
+
 - On installation failure, read the last failed stage and `data/install-list.md`, fix the reported network, disk, or prerequisite issue, then retry.
 - If port 8000 is occupied, stop the original server or conflicting program. The launcher does not kill unknown processes.
 - Press `Ctrl+C` or close the backend CMD window to stop it. Closing the browser alone does not stop the backend.

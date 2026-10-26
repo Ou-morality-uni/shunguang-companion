@@ -37,14 +37,16 @@ jobs:
           python-version: ${{ matrix.python }}
           cache: pip
           cache-dependency-path: backend/requirements-rag.lock.txt
+      - name: Create isolated retrieval environment
+        run: python -m venv .venv-rag
       - run: >-
-          python -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu --only-binary=:all:
+          .\.venv-rag\Scripts\python.exe -m pip install torch==2.11.0 --index-url https://download.pytorch.org/whl/cpu --only-binary=:all:
       - run: >-
-          python -m pip install -r backend/requirements-rag.lock.txt --only-binary=:all:
-      - run: python -m pip check
+          .\.venv-rag\Scripts\python.exe -m pip install -r backend/requirements-rag.lock.txt --only-binary=:all:
+      - run: .\.venv-rag\Scripts\python.exe -m pip check
       - name: Verify retrieval libraries and CPU computation
         run: >-
-          python -c "import torch, transformers, qdrant_client, numpy, sentencepiece;
+          .\.venv-rag\Scripts\python.exe -c "import torch, transformers, qdrant_client, numpy, sentencepiece;
           assert torch.isfinite(torch.ones((8, 8)) @ torch.ones((8, 8))).all();
           assert torch.from_numpy(numpy.ones((2, 2))).sum().item() == 4;
           from transformers import AutoModel, AutoTokenizer;

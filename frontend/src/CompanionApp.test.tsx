@@ -48,6 +48,29 @@ beforeEach(() => {
   );
 });
 
+it('opens update settings without checking GitHub and uses the backend version', async () => {
+  const fallback = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (input, init) =>
+    String(input).endsWith('/health')
+      ? new Response(JSON.stringify({ status: 'ok', version: '0.6.99' }))
+      : String(input).endsWith('/settings')
+        ? new Response(
+            JSON.stringify({ configured: true, model: 'test-model', base_url: 'https://example.com' }),
+          )
+        : fallback(input, init),
+  );
+  render(<App />);
+  await screen.findByText('模型已配置');
+  fireEvent.click(screen.getAllByRole('button', { name: '陪伴设置' })[0]);
+  fireEvent.click(await screen.findByRole('tab', { name: '关于与更新' }));
+  expect(await screen.findByText('当前版本：v0.6.99')).toBeTruthy();
+  expect(screen.getByText('v0.6.99')).toBeTruthy();
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/updates/check'))).toBe(false);
+  fireEvent.click(screen.getByRole('tab', { name: '模型连接' }));
+  fireEvent.click(screen.getByRole('tab', { name: '关于与更新' }));
+  expect(vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/updates/check'))).toBe(false);
+});
+
 it('shows the observation time and source for a weather care reminder', async () => {
   const fallback = vi.mocked(fetch).getMockImplementation()!;
   vi.mocked(fetch).mockImplementation(async (input, init) =>

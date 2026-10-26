@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   WandSparkles,
   Wrench,
+  Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,6 +37,7 @@ import { effortLabels } from './ModelPicker';
 import { ASRSettings } from './ASRSettings';
 import { OfficeCapabilities } from './OfficeCapabilities';
 import { FilePermissions } from './WorkSpace';
+import { UpdateSettings } from './UpdateSettings';
 
 const categories = [
   { id: 'model', label: '模型连接', icon: Cpu },
@@ -44,6 +46,7 @@ const categories = [
   { id: 'tools', label: '工具服务', icon: Wrench },
   { id: 'memory', label: '长期记忆', icon: Heart },
   { id: 'reminders', label: '关怀提醒', icon: Bell },
+  { id: 'updates', label: '关于与更新', icon: Info },
 ] as const;
 const cloneModel = 'mimo-v2.5-tts-voiceclone';
 const defaultReferencePath = 'source/resources/voice/ye-shunguang/reference-original.mp3';
@@ -84,6 +87,8 @@ function voiceSignature(value: Features['tts'] | undefined) {
   );
 }
 type Props = {
+  currentVersion: string | null;
+  onRefreshVersion: () => Promise<void>;
   panel: Panel;
   setPanel: (value: Panel) => void;
   settings: ModelSettings | null;
@@ -124,6 +129,8 @@ function Toggle({
 }
 
 export function CompanionSettings({
+  currentVersion,
+  onRefreshVersion,
   panel,
   setPanel,
   settings,
@@ -1572,9 +1579,14 @@ export function CompanionSettings({
                 </Button>
               </form>
             )}
-            {!featureDraft && panel !== 'model' && panel !== 'effects' && panel !== 'memory' && (
-              <p>服务配置暂未读取，请关闭后重试。</p>
+            {panel === 'updates' && (
+              <UpdateSettings currentVersion={currentVersion} onRefreshVersion={onRefreshVersion} />
             )}
+            {!featureDraft &&
+              panel !== 'model' &&
+              panel !== 'effects' &&
+              panel !== 'memory' &&
+              panel !== 'updates' && <p>服务配置暂未读取，请关闭后重试。</p>}
             {busy && (
               <div className="settings-progress" role="status">
                 <LoaderCircle className="spin" size={16} />

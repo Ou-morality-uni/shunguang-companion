@@ -2836,6 +2836,27 @@ select option {
   margin: 22px 0;
   background: #8e534115;
 }
+.update-settings p {
+  margin: 12px 0;
+  overflow-wrap: anywhere;
+}
+.update-settings details {
+  margin-top: 18px;
+}
+.update-settings summary {
+  cursor: pointer;
+}
+.update-settings ol {
+  list-style: decimal;
+  padding-left: 1.5em;
+}
+.update-settings li {
+  margin: 8px 0;
+}
+.update-settings a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .reference-audio {
   width: 100%;
   display: block;

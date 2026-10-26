@@ -29,8 +29,15 @@ from ..model_choices import (
 from ..providers import PRESETS, discover
 from ..runtime import require_config
 from ..schemas import SettingsOut
+from ..updates import UpdateCheckOut
+from ..updates import check as check_update
 
 router = APIRouter()
+
+
+@router.post('/api/updates/check', response_model=UpdateCheckOut)
+async def updates_check():
+    return await check_update()
 
 
 @router.get('/api/model-default', response_model=ModelChoiceOut | None)

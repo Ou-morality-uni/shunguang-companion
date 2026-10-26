@@ -792,6 +792,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/updates/check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Updates Check */
+        post: operations["updates_check_api_updates_check_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/voice/preview": {
         parameters: {
             query?: never;
@@ -2151,6 +2168,37 @@ export interface components {
         TranscriptionOut: {
             /** Text */
             text: string;
+        };
+        /** UpdateCheckOut */
+        UpdateCheckOut: {
+            /**
+             * Cached
+             * @default false
+             */
+            cached: boolean;
+            /**
+             * Checked At
+             * Format: date-time
+             */
+            checked_at: string;
+            /** Current Version */
+            current_version: string;
+            /** Latest Version */
+            latest_version: string;
+            /**
+             * Published At
+             * Format: date
+             */
+            published_at: string;
+            /** Release Notes Url */
+            release_notes_url: string;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "available" | "current" | "ahead";
+            /** Summary */
+            summary: string;
         };
         /** UserProfile */
         UserProfile: {
@@ -3692,6 +3740,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    updates_check_api_updates_check_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UpdateCheckOut"];
                 };
             };
         };

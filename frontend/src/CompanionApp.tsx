@@ -62,6 +62,7 @@ function preference(key: string, defaultValue: boolean) {
   }
 }
 export default function App() {
+  const [currentVersion, setCurrentVersion] = useState<string | null>(null);
   const [settings, setSettings] = useState<ModelSettings | null>(null),
     [features, setFeatures] = useState<Features | null>(null),
     [memoryCount, setMemoryCount] = useState(0);
@@ -146,12 +147,25 @@ export default function App() {
       /* Main connection errors are shown independently. */
     }
   }
+  async function refreshVersion() {
+    try {
+      const value = await request<{ version: string }>('/health');
+      if (typeof value.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(value.version)) {
+        throw new Error('本机版本信息暂不可用，请重试。');
+      }
+      setCurrentVersion(value.version);
+    } catch (failure) {
+      setCurrentVersion(null);
+      throw failure;
+    }
+  }
   async function refresh() {
     const [config] = await Promise.all([request<ModelSettings>('/settings'), chat.refreshConversations()]);
     setSettings(config);
     const optional = await Promise.allSettled([
       request<Features>('/features').then(setFeatures),
       refreshMemory(),
+      refreshVersion(),
     ]);
     if (optional[0].status === 'rejected') setError('部分功能配置无法读取，请检查本机服务。');
   }
@@ -477,7 +491,7 @@ export default function App() {
               </div>
               <div className="version">
                 <span className="version-dot" />
-                瞬光伴行 WEB<span>v0.6.3</span>
+                瞬光伴行 WEB<span>{currentVersion ? `v${currentVersion}` : '版本未知'}</span>
               </div>
             </div>
           </aside>
@@ -658,6 +672,8 @@ export default function App() {
             </div>
           </main>
           <CompanionSettings
+            currentVersion={currentVersion}
+            onRefreshVersion={refreshVersion}
             panel={panel}
             setPanel={setPanel}
             settings={settings}

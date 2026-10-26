@@ -30,7 +30,7 @@ import { UserProfileForm } from './UserProfileForm';
 import { useCompanionAudio } from './useAudioQueue';
 
 export type Page = 'chat' | 'memory' | 'world' | 'reminders' | 'work';
-export type Panel = 'model' | 'voice' | 'effects' | 'tools' | 'memory' | 'reminders' | null;
+export type Panel = 'model' | 'voice' | 'effects' | 'tools' | 'memory' | 'reminders' | 'updates' | null;
 function PageHeading({
   eyebrow,
   title,

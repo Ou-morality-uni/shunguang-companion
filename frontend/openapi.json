@@ -2060,6 +2060,61 @@
         "title": "TranscriptionOut",
         "type": "object"
       },
+      "UpdateCheckOut": {
+        "properties": {
+          "cached": {
+            "default": false,
+            "title": "Cached",
+            "type": "boolean"
+          },
+          "checked_at": {
+            "format": "date-time",
+            "title": "Checked At",
+            "type": "string"
+          },
+          "current_version": {
+            "title": "Current Version",
+            "type": "string"
+          },
+          "latest_version": {
+            "title": "Latest Version",
+            "type": "string"
+          },
+          "published_at": {
+            "format": "date",
+            "title": "Published At",
+            "type": "string"
+          },
+          "release_notes_url": {
+            "title": "Release Notes Url",
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "available",
+              "current",
+              "ahead"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          }
+        },
+        "required": [
+          "current_version",
+          "latest_version",
+          "status",
+          "published_at",
+          "summary",
+          "release_notes_url",
+          "checked_at"
+        ],
+        "title": "UpdateCheckOut",
+        "type": "object"
+      },
       "UserProfile": {
         "additionalProperties": false,
         "properties": {
@@ -3907,6 +3962,24 @@
           }
         },
         "summary": "Select Voice"
+      }
+    },
+    "/api/updates/check": {
+      "post": {
+        "operationId": "updates_check_api_updates_check_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateCheckOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Updates Check"
       }
     },
     "/api/voice/preview": {

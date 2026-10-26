@@ -3,6 +3,7 @@ import { SseDecoder } from './sse';
 import { httpError } from './httpError';
 import type { AnnotationSubmission } from './Annotations';
 type Schemas = components['schemas'];
+export type UpdateCheck = Schemas['UpdateCheckOut'];
 type OptionalFields<T> = { [K in keyof T]?: Exclude<T[K], null> };
 export type ModelSettings = Schemas['SettingsOut'];
 export type UserProfile = Schemas['UserProfile'];

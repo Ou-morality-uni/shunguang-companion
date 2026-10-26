@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import access, runtime
+from . import access, runtime, updates
 from .config import ROOT
 from .constants import MAX_MESSAGE_LENGTH, VERSION
 from .filework import FileWork
@@ -24,6 +24,7 @@ from .weather_care import WeatherCare
 async def lifespan(app):
     setup_logging()
     runtime.mutation_lock = asyncio.Lock()
+    updates.checker = updates.UpdateChecker()
     await asyncio.to_thread(runtime.store.initialize)
     runtime.work = await asyncio.to_thread(FileWork, runtime.store)
     runtime.weather_care = WeatherCare(runtime.store)
