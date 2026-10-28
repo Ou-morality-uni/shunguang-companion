@@ -51,6 +51,16 @@ class ApprovalRequest(BaseModel):
     approved: bool
 
 
+class RetrySummaryRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    extend_timeout: bool = False
+
+
+class ArtifactVersionRequest(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+    version: str = Field(pattern=r'^[0-9a-f]{64}$')
+
+
 class VisionApprovalRequest(ApprovalRequest):
     profile_id: str = Field(default='', max_length=80)
     signature: str = Field(default='', max_length=100)
@@ -185,6 +195,11 @@ def continue_task(task_id: str, payload: ApprovalRequest, work=Depends(service))
     return invoke(work.continue_task, task_id, payload.approved)
 
 
+@router.post('/tasks/{task_id}/retry-summary', response_model=FileTaskOut)
+def retry_summary(task_id: str, payload: RetrySummaryRequest, work=Depends(service)):
+    return invoke(work.retry_summary, task_id, payload.extend_timeout)
+
+
 def download_response(item, data):
     return Response(
         data,
@@ -209,6 +224,24 @@ def download_artifact(task_id: str, work=Depends(service)):
     from ..work_artifacts import artifact_bytes
 
     return download_response(*invoke(artifact_bytes, work, task_id))
+
+
+@router.post('/artifacts/{task_id}/reveal')
+def reveal_artifact(task_id: str, payload: ArtifactVersionRequest, work=Depends(service)):
+    from ..work_artifacts import reveal
+
+    return invoke(reveal, work, task_id, payload.version)
+
+
+@router.get('/artifacts/{task_id}/thumbnail')
+def artifact_thumbnail(task_id: str, version: str = Query(pattern=r'^[0-9a-f]{64}$'), work=Depends(service)):
+    from ..office_resources import thumbnail
+
+    return Response(
+        invoke(thumbnail, work, task_id, version),
+        media_type='image/jpeg',
+        headers={'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff'},
+    )
 
 
 @router.get('/artifacts/{task_id}/preview')

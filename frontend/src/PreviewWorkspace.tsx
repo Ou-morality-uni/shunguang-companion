@@ -41,7 +41,7 @@ function savedTabs(): ResourceTabs {
           if (!value || typeof value !== 'object') return false;
           return (
             'kind' in value &&
-            ['attachment', 'artifact', 'task', 'history'].includes(String(value.kind)) &&
+            ['attachment', 'artifact', 'history'].includes(String(value.kind)) &&
             'id' in value &&
             typeof value.id === 'string' &&
             value.id.length > 0 &&
@@ -53,8 +53,11 @@ function savedTabs(): ResourceTabs {
         })
         .slice(-32)
         .map(({ id, kind, title }) => ({ id, kind, title }));
-      const active = 'active' in entry && typeof entry.active === 'string' ? entry.active : '';
-      if (!tabs.some((item) => `${item.kind}:${item.id}` === active)) continue;
+      if (!tabs.length) continue;
+      const saved = 'active' in entry && typeof entry.active === 'string' ? entry.active : '';
+      const active = tabs.some((item) => `${item.kind}:${item.id}` === saved)
+        ? saved
+        : `${tabs[0].kind}:${tabs[0].id}`;
       result[scope] = { tabs, active, visible: 'visible' in entry && entry.visible === true };
     }
     return result;
@@ -111,18 +114,25 @@ export function PreviewWorkspace({
     return () => media.removeEventListener('change', change);
   }, []);
   const workspace = useRef<HTMLDivElement>(null);
+  const divider = useRef<HTMLDivElement>(null);
+  const balancedWidth = useRef(46);
+  const beforeExpand = useRef(46);
+  const scrollPositions = useRef<{ element: HTMLElement; top: number; left: number }[]>([]);
+  const restoreScroll = useRef(false);
   const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     activeRef.current?.close();
     activeRef.current = null;
     setLegacyActive(null);
     setExpanded(false);
+    scrollPositions.current = [];
   }, [resetKey]);
   const open = useCallback((value: Preview) => {
     if (activeRef.current?.id !== value.id) activeRef.current?.close();
     activeRef.current = value;
     setLegacyActive(value);
     setExpanded(false);
+    setWidth((previous) => (previous === 0 ? 46 : previous));
     return () => {
       if (activeRef.current?.id === value.id) {
         activeRef.current = null;
@@ -149,6 +159,7 @@ export function PreviewWorkspace({
         };
       });
       setExpanded(false);
+      setWidth((previous) => (previous === 0 ? 46 : previous));
     },
     [scope],
   );
@@ -196,46 +207,83 @@ export function PreviewWorkspace({
       target?.focus();
     }
   }
-  const resize = (value: number) => setWidth(Math.max(30, Math.min(68, value)));
+  const resize = (value: number) => {
+    const next = Math.max(0, Math.min(100, value));
+    setWidth(next);
+  };
+  function rememberLayout() {
+    if (width === 0 || width === 100) return;
+    balancedWidth.current = width;
+    scrollPositions.current = Array.from(
+      workspace.current?.querySelectorAll<HTMLElement>(
+        '.conversation-scroll, .preview-body, .office-sheet-scroll, .document-scroll',
+      ) ?? [],
+      (element) => ({ element, top: element.scrollTop, left: element.scrollLeft }),
+    );
+  }
+  useLayoutEffect(() => {
+    if (!active) return;
+    if (restoreScroll.current) {
+      for (const { element, top, left } of scrollPositions.current) {
+        if (element.isConnected) {
+          element.scrollTop = top;
+          element.scrollLeft = left;
+        }
+      }
+      restoreScroll.current = false;
+    }
+    const focused = document.activeElement;
+    if (
+      (width === 0 && panel.current?.contains(focused)) ||
+      (width === 100 && workspace.current?.querySelector('.preview-main')?.contains(focused))
+    )
+      divider.current?.focus();
+  }, [width, active]);
   return (
     <Context.Provider value={{ active: active?.id ?? null, host, open, openResource }}>
       <div
         ref={workspace}
-        className={`preview-workspace ${active ? 'has-preview' : ''} ${expanded ? 'preview-expanded' : ''}`}
-        style={{ '--preview-width': `${width}%` } as CSSProperties}
+        className={`preview-workspace ${active ? 'has-preview' : ''} ${expanded ? 'preview-expanded' : ''} ${active && width === 0 ? 'preview-file-collapsed' : ''} ${active && width === 100 ? 'preview-chat-collapsed' : ''}`}
+        style={{ '--preview-width': `${width}%`, '--preview-ratio': width / 100 } as CSSProperties}
       >
-        <div className="preview-main" inert={(!!active && (expanded || narrow)) || undefined}>
+        <div className="preview-main" inert={(!!active && (width === 100 || narrow)) || undefined}>
           {children}
         </div>
         {active && (
           <div
+            ref={divider}
             role="separator"
             aria-label="调整预览宽度"
             aria-orientation="vertical"
-            aria-valuemin={30}
-            aria-valuemax={68}
+            aria-valuemin={0}
+            aria-valuemax={100}
             aria-valuenow={width}
             tabIndex={0}
             className="preview-divider"
             onKeyDown={(event) => {
               if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
                 event.preventDefault();
+                if (['Home', 'End'].includes(event.key)) rememberLayout();
                 resize(
                   event.key === 'Home'
-                    ? 30
+                    ? 0
                     : event.key === 'End'
-                      ? 68
+                      ? 100
                       : width + (event.key === 'ArrowLeft' ? 5 : -5),
                 );
               }
             }}
             onPointerDown={(event) => {
+              rememberLayout();
               event.currentTarget.setPointerCapture(event.pointerId);
             }}
             onPointerMove={(event) => {
               if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
               const bounds = workspace.current?.getBoundingClientRect();
-              if (bounds?.width) resize(Math.round(((bounds.right - event.clientX) / bounds.width) * 100));
+              if (bounds?.width) {
+                const value = Math.round(((bounds.right - event.clientX) / bounds.width) * 100);
+                resize(value <= 2 ? 0 : value >= 98 ? 100 : value);
+              }
             }}
             onPointerUp={(event) => {
               if (event.currentTarget.hasPointerCapture(event.pointerId))
@@ -243,9 +291,23 @@ export function PreviewWorkspace({
             }}
           />
         )}
+        {active && (width === 0 || width === 100) && (
+          <button
+            type="button"
+            className={`preview-restore ${width === 0 ? 'restore-file' : 'restore-chat'}`}
+            onClick={() => {
+              restoreScroll.current = true;
+              resize(balancedWidth.current);
+              divider.current?.focus();
+            }}
+          >
+            {width === 0 ? '展开预览' : '展开聊天'}
+          </button>
+        )}
         <aside
           ref={panel}
           hidden={!active}
+          inert={width === 0 || undefined}
           tabIndex={-1}
           role="region"
           aria-label="文件预览"
@@ -255,7 +317,7 @@ export function PreviewWorkspace({
               event.stopPropagation();
               close();
             }
-            if (event.key === 'Tab' && (expanded || narrow)) {
+            if (event.key === 'Tab' && narrow) {
               const controls = Array.from(
                 event.currentTarget.querySelectorAll<HTMLElement>(
                   'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex="0"]',
@@ -288,7 +350,17 @@ export function PreviewWorkspace({
               <button
                 className="icon-button"
                 aria-label={expanded ? '还原并排' : '放大预览'}
-                onClick={() => setExpanded(!expanded)}
+                onClick={() => {
+                  if (expanded) {
+                    restoreScroll.current = true;
+                    resize(beforeExpand.current);
+                  } else {
+                    rememberLayout();
+                    beforeExpand.current = width > 0 && width < 100 ? width : 46;
+                    resize(60);
+                  }
+                  setExpanded(!expanded);
+                }}
               >
                 {expanded ? <Minimize2 size={18} /> : <Maximize2 size={18} />}
               </button>

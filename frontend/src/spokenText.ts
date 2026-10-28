@@ -61,8 +61,8 @@ export class SpokenTextFilter {
         this.opening = true;
         continue;
       }
-      if (/^ {0,3}<(pre|code)(?:\s[^>]*)?>$/i.test(line)) {
-        this.html = line.match(/<(pre|code)/i)![1];
+      if (/^ {0,3}<(pre|code|tool_call)(?:\s[^>]*)?>$/i.test(line)) {
+        this.html = line.match(/<(pre|code|tool_call)/i)![1];
         this.prefix = '';
         continue;
       }

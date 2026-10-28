@@ -323,14 +323,17 @@ async def chat(payload: ChatRequest, request: Request = None):
                     },
                 )
             capabilities = (
-                '用户事实与实际记忆操作结果在参考数据中；不承诺没有成功写入的记忆。日常不要复述技术说明。工具可用列表：'
+                '用户事实与实际记忆操作结果在参考数据中；长期记忆由后台自动整理，不主动调用即时事实保存工具，不承诺没有成功写入的记忆。'
+                '日常不要复述技术说明、工具名称或调用过程。工具可用列表：'
                 + ','.join(t.get('name', t.get('function', {}).get('name', '')) for t in schemas)
                 + '。工具关闭时不得假称查过天气或网页；需要实时信息请使用可用工具。一次回复最多4次工具调用。TTS和休息提醒由网页设置及播放控件管理，不能通过聊天声称改变设置或创建后台通知。'
                 + stickers.instruction(sticker_catalog)
                 + (
-                    '本机文件任务在后台执行；提交成功仅表示排队，不能声称已经读完或拿到结果。任务卡显示真实进度和结果，聊天仍可继续。'
+                    '文件处理在后台进行；提交成功时只需自然说一句先看看，不能声称已经读完或拿到结果，不复述任务标题或操作步骤。完成后的实际结果会直接回到聊天，聊天仍可继续。'
                     '根据用户意图设置 read_document 的 scope：总结整份或全部附件使用 full；回答具体问题用 focused 并提供简短检索关键词 query；仅指定范围时用 range。'
-                    '使用 instruction 完成阅读总结，系统会分批处理并自动另存 Markdown 成果。工作量或视觉服务授权由任务卡询问，不能自行批准或无限创建任务绕过上限。'
+                    '普通阅读使用 instruction 回答用户问题，只在聊天中给简要回答，不生成文件；只有用户明确要求保存或制作文件才设置 save_result=true。'
+                    '修改已有文件须明确指定 source，默认保留原格式，不自动附送 PDF。PDF 无法可靠保留排版时说明并停止，不暗中改成 Word 重排。'
+                    '工作量或视觉服务授权会就地询问，不能自行批准或无限创建任务绕过上限。'
                     if local_request(request)
                     else ''
                 )
@@ -365,6 +368,9 @@ async def chat(payload: ChatRequest, request: Request = None):
             sticker_hint = ''
             async with asyncio.timeout(CHAT_TIMEOUT):
                 for round_index in range(MAX_TOOL_ROUNDS):
+                    from ..reply_text import ReplyText
+
+                    reply_text = ReplyText()
                     decoration = stickers.ReplyDecoration()
                     round_text = ''
                     current = (
@@ -378,7 +384,7 @@ async def chat(payload: ChatRequest, request: Request = None):
                     accumulated = None
                     async for chunk in cancellable_chunks(current, history, stop):
                         accumulated = chunk if accumulated is None else accumulated + chunk
-                        delta = decoration.push(extract_text(chunk.content))
+                        delta = decoration.push(reply_text.push(extract_text(chunk.content)))
                         if delta:
                             round_text += delta
                             text += delta
@@ -386,7 +392,9 @@ async def chat(payload: ChatRequest, request: Request = None):
                             if time.monotonic() - last_save >= 0.4:
                                 await io(runtime.store.update_message, assistant['id'], text, 'streaming', metadata)
                                 last_save = time.monotonic()
-                    tail = decoration.finish()
+                    tail = decoration.push(reply_text.finish()) + decoration.finish()
+                    if reply_text.leaked:
+                        metadata['tool_protocol_error'] = True
                     if tail:
                         round_text += tail
                         text += tail
@@ -456,7 +464,13 @@ async def chat(payload: ChatRequest, request: Request = None):
                 raise EmptyResponseError()
             metadata['sources'] = retrieval_router.cited_sources(text, metadata['context_sources'])
             metadata['sticker'] = stickers.choose(sticker_catalog, sticker_hint, stored_history, assistant['id'])
-            result = await io(runtime.store.update_message, assistant['id'], text, 'complete', metadata)
+            result = await io(
+                runtime.store.update_message,
+                assistant['id'],
+                text,
+                'error' if metadata.get('tool_protocol_error') else 'complete',
+                metadata,
+            )
             persisted = True
             yield event('done', result)
         except StopRequested:

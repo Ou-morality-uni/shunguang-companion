@@ -77,6 +77,116 @@ def submit(setup, filename, scope='full', **kwargs):
     )
 
 
+def test_office_tool_reports_missing_fields_without_submitting_a_task(setup):
+    from backend.app import feature_config
+    from backend.app.tool_registry import ToolRegistry
+
+    work, _, _, _, cid, _ = setup
+    registry = ToolRegistry(feature_config.load(), work.store, {'conversation_id': cid}, [], work)
+    result = asyncio.run(registry.execute('office_files', {'operation': 'edit', 'spec': {'edits': []}}))
+    assert result['ok'] is False
+    assert {item['field'] for item in result['validation_errors']} >= {'format', 'name'}
+    assert work.store.list_file_tasks(conversation_id=cid) == []
+
+
+def test_failed_summary_reuses_reading_and_extends_only_this_task_timeout(setup, monkeypatch):
+    work, _, source, _, _, _ = setup
+    (source / 'source.txt').write_text('Preserved source material', encoding='utf-8')
+    received = []
+
+    async def model(value, messages, check=lambda: None, tick=lambda: None):
+        received.append(value.llm_timeout)
+        if len(received) == 1:
+            raise TimeoutError()
+        return 'Recovered summary'
+
+    monkeypatch.setattr(document_models, 'invoke', model)
+    failed = wait(work, submit(setup, 'source.txt'))
+    assert failed['status'] == 'failed'
+    batches = failed['context']['budget']['batches']
+    recovered = wait(work, work.retry_summary(failed['id'], True))
+    assert recovered['id'] == failed['id'] and recovered['status'] == 'complete'
+    assert recovered['context']['budget']['batches'] == batches
+    assert recovered['steps'][0]['result'] == failed['steps'][0]['result']
+    assert received == [45, 120]
+    assert config.load_config().llm_timeout == 45
+    with pytest.raises(WorkError):
+        work.retry_summary(failed['id'])
+
+
+@pytest.mark.parametrize('change', ['source', 'authorization'])
+def test_summary_retry_rejects_changed_source_or_revoked_authorization(setup, monkeypatch, change):
+    work, workspace_id, source, _, _, _ = setup
+    (source / 'source.txt').write_text('Original material', encoding='utf-8')
+
+    async def timeout(*args):
+        raise TimeoutError()
+
+    monkeypatch.setattr(document_models, 'invoke', timeout)
+    failed = wait(work, submit(setup, 'source.txt'))
+    assert failed['can_retry_summary'] is True
+    if change == 'source':
+        (source / 'source.txt').write_text('Different material', encoding='utf-8')
+    else:
+        work.revoke(workspace_id)
+    with pytest.raises(WorkError):
+        work.retry_summary(failed['id'], True)
+
+
+def test_retry_summary_endpoint_requires_an_explicit_local_request(setup, monkeypatch):
+    work, _, source, _, _, _ = setup
+    (source / 'source.txt').write_text('Material', encoding='utf-8')
+    attempts = []
+
+    async def model(value, *args):
+        attempts.append(value.llm_timeout)
+        if len(attempts) == 1:
+            raise TimeoutError()
+        return 'Recovered'
+
+    monkeypatch.setattr(document_models, 'invoke', model)
+    failed = wait(work, submit(setup, 'source.txt'))
+    monkeypatch.setattr(runtime, 'store', work.store)
+    with TestClient(main.app) as client:
+        response = client.post('/api/work/tasks/' + failed['id'] + '/retry-summary', json={'extend_timeout': True})
+        assert response.status_code == 200
+        recovered = asyncio.run(runtime.work.wait(failed['id']))
+        assert recovered['status'] == 'complete'
+        assert client.post('/api/work/tasks/' + failed['id'] + '/retry-summary', json={}).status_code == 409
+        assert client.get('/api/settings').json()['timeout'] == 45
+
+
+def test_summary_retry_checks_the_source_again_after_waiting_in_the_queue(setup, monkeypatch):
+    work, _, source, _, _, _ = setup
+    (source / 'first.txt').write_text('Original first document', encoding='utf-8')
+    (source / 'other.txt').write_text('Other document', encoding='utf-8')
+    entered, release = Event(), Event()
+    attempts = []
+
+    async def model(value, *args):
+        attempts.append(value.llm_timeout)
+        if len(attempts) == 1:
+            raise TimeoutError()
+        if len(attempts) == 2:
+            entered.set()
+            await asyncio.to_thread(release.wait, 5)
+        return 'Summary'
+
+    monkeypatch.setattr(document_models, 'invoke', model)
+    failed = wait(work, submit(setup, 'first.txt'))
+    other = submit(setup, 'other.txt')
+    try:
+        assert entered.wait(3)
+        retry = work.retry_summary(failed['id'])
+        (source / 'first.txt').write_text('Replaced while queued', encoding='utf-8')
+    finally:
+        release.set()
+    result = wait(work, retry)
+    assert wait(work, other)['status'] == 'complete'
+    assert result['status'] == 'failed'
+    assert len(attempts) == 2
+
+
 def test_new_summary_uses_project_outputs_without_changing_existing_files(setup):
     work, _, source, old_output, _, _ = setup
     (old_output / 'existing.md').write_text('keep this result', encoding='utf-8')
@@ -487,3 +597,96 @@ def test_full_file_vision_consent_covers_later_image_batches_without_duplicate_c
     assert len(requests) == len(set(requests)) == 10
     assert len([block for block in task['steps'][0]['result']['blocks'] if block['kind'] == 'vision']) == 10
     assert not task['steps'][0]['result']['partial']
+
+
+def test_chat_reading_delivers_one_durable_reply_without_creating_a_file(setup, monkeypatch):
+    work, workspace_id, source, output, cid, _ = setup
+    (source / 'note.txt').write_text('Document evidence', encoding='utf-8')
+    task = work.submit(
+        FileTaskRequest(
+            workspace_id=workspace_id,
+            instruction='说说里面有什么',
+            steps=[{'action': 'read_document', 'path': 'note.txt', 'scope': 'full'}],
+        ),
+        'chat',
+        cid,
+    )
+    complete = wait(work, task)
+    assert complete['status'] == 'complete', complete['error']
+    assert not complete['context'].get('artifact')
+    assert list(output.iterdir()) == []
+    monkeypatch.setattr(runtime, 'store', work.store)
+    with TestClient(main.app) as client:
+        replies = client.get(f'/api/conversations/{cid}/messages').json()
+        assert [message['content'] for message in replies] == ['完整整理结果。 [source｜来源位置]']
+        work.store.save_file_task(complete)
+        restored = Store(work.store.path)
+        restored.save_file_task(restored.get_file_task(task['id']))
+        again = client.get(f'/api/conversations/{cid}/messages').json()
+        assert [message['id'] for message in again] == [replies[0]['id']]
+
+
+def test_chat_document_read_without_instruction_still_answers_in_chat(setup):
+    work, workspace_id, source, output, cid, _ = setup
+    (source / 'note.txt').write_text('Known document', encoding='utf-8')
+    task = work.submit(
+        FileTaskRequest(workspace_id=workspace_id, steps=[{'action': 'read_document', 'path': 'note.txt'}]), 'chat', cid
+    )
+    complete = wait(work, task)
+    assert complete['status'] == 'complete', complete['error']
+    assert len(work.store.messages(cid)) == 1
+    assert not complete['context'].get('artifact')
+
+
+def test_historical_reading_results_are_not_backfilled_on_restart(setup):
+    work, workspace_id, _, _, cid, _ = setup
+    old = work.store.create_file_task(
+        workspace_id,
+        '旧任务',
+        [{'action': 'summarize', 'state': 'complete', 'result': {'summary': '历史内容'}}],
+        'complete',
+        'chat',
+        cid,
+    )
+    work.store.save_file_task(old)
+    restarted = Store(work.store.path)
+    restarted.initialize()
+    service = FileWork(restarted)
+    try:
+        assert restarted.messages(cid) == []
+        assert restarted.get_file_task(old['id'])['steps'][0]['result']['summary'] == '历史内容'
+    finally:
+        service.close()
+
+
+def test_legacy_failed_reading_only_delivers_after_explicit_successful_retry(setup, monkeypatch):
+    work, workspace_id, source, _, cid, _ = setup
+    (source / 'legacy.txt').write_text('Evidence', encoding='utf-8')
+    attempts = []
+
+    async def model(*args, **kwargs):
+        attempts.append(True)
+        if len(attempts) == 1:
+            raise TimeoutError()
+        return '重试后的真实总结。'
+
+    monkeypatch.setattr(document_models, 'invoke', model)
+    task = work.submit(
+        FileTaskRequest(
+            workspace_id=workspace_id,
+            instruction='概括资料',
+            steps=[{'action': 'read_document', 'path': 'legacy.txt', 'scope': 'full'}],
+        ),
+        'chat',
+        cid,
+    )
+    failed = wait(work, task)
+    assert failed['status'] == 'failed' and work.store.messages(cid) == []
+    record = work.task(failed['id'])
+    record['context'].pop('chat_reply')
+    record['context']['save_result'] = True
+    work.store.save_file_task(record)
+    recovered = wait(work, work.retry_summary(failed['id'], True))
+    assert recovered['status'] == 'complete'
+    assert [message['content'] for message in work.store.messages(cid)] == ['重试后的真实总结。']
+    assert not recovered['context'].get('artifact')

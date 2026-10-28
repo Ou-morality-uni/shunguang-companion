@@ -24,6 +24,51 @@ afterEach(() => {
   HTMLElement.prototype.scrollTo = originalScrollTo;
 });
 
+it('shows a failure for legacy assistant tool markup without editing its stored content', async () => {
+  HTMLElement.prototype.scrollTo = vi.fn();
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const content = '<tool_call><function=office_files>PRIVATE_ARGUMENTS</function></tool_call>';
+  const message = {
+    id: 'old-call',
+    role: 'assistant' as const,
+    content,
+    status: 'complete' as const,
+    created_at: '2026-10-26T12:00:00Z',
+    tools: [
+      { id: 'memory-call', name: 'remember_user_fact', status: 'error' as const, result: { ok: false } },
+    ],
+  };
+  render(
+    <ChatThread
+      messages={[message]}
+      partial={null}
+      busy={false}
+      loading={false}
+      configured
+      conversationId="legacy"
+      onSend={vi.fn()}
+      onStop={vi.fn()}
+      onSettings={vi.fn()}
+      onVoice={vi.fn()}
+      onTools={vi.fn()}
+      onWork={vi.fn()}
+    />,
+  );
+  expect(await screen.findByText(/这次文件操作没有执行/)).toBeTruthy();
+  expect(screen.queryByText(/PRIVATE_ARGUMENTS/)).toBeNull();
+  expect(message.content).toBe(content);
+  expect(screen.queryByText('记住这件事')).toBeNull();
+  expect(screen.queryByText('调用失败')).toBeNull();
+});
+
 it('chooses a saved service model for a new conversation without sending or losing the draft', async () => {
   HTMLElement.prototype.scrollTo = vi.fn();
   HTMLElement.prototype.scrollIntoView = vi.fn();

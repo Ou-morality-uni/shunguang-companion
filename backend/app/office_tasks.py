@@ -7,12 +7,13 @@ import importlib.util
 import io
 import json
 import math
+import re
 import tempfile
 import zipfile
 from pathlib import Path, PureWindowsPath
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, model_validator
 
 from . import config
 from .filework import WorkError, public_task
@@ -42,6 +43,15 @@ class OfficeRequest(BaseModel):
 
     @model_validator(mode='after')
     def bounded(self):
+        if self.format == 'xlsx' and isinstance(self.spec, dict):
+            sheets = self.spec.get('sheets', [])
+            nested = isinstance(sheets, list) and any(isinstance(sheet, dict) and 'edits' in sheet for sheet in sheets)
+            if nested:
+                raise ValueError(
+                    'spec.sheets[].edits 不属于新建结构；请指定 source 并使用 operation=edit 和 spec.edits。'
+                )
+            if 'edits' in self.spec and self.operation == 'create' and self.source is None:
+                raise ValueError('修改单元格必须明确指定 source 和 operation=edit，不能新建空表。')
         if (
             PureWindowsPath(self.name).name != self.name
             or any(character in self.name for character in '/\\:<>"|?*\x00')
@@ -68,7 +78,26 @@ def submit(work, payload, origin='workbench', model_choice=None, annotations=Non
         if payload.source:
             from .office_resources import resource_bytes
 
-            resource_bytes(work, payload.source.kind, payload.source.id, payload.source.version)
+            item, _ = resource_bytes(work, payload.source.kind, payload.source.id, payload.source.version)
+            if item['name'].lower().endswith('.pdf') and payload.operation in ('edit', 'create'):
+                message = (
+                    next(
+                        (
+                            entry
+                            for entry in work.store.messages(payload.conversation_id)
+                            if entry['id'] == source_message_id and entry['role'] == 'user'
+                        ),
+                        {},
+                    )
+                    if payload.conversation_id
+                    else {}
+                )
+                request_text = message.get('content', '')
+                requested_word = re.search(r'word|docx', request_text, re.I) and not re.search(
+                    r'(不要|别|不用|不需要)[^。！？\n]{0,24}(word|docx)', request_text, re.I
+                )
+                if payload.format == 'pdf' or (origin == 'chat' and payload.format == 'docx' and not requested_word):
+                    raise WorkError('这份 PDF 暂时不能在保留排版的情况下可靠修改。', 422)
         overwrite_before = None
         if payload.overwrite:
             from .office_overwrite import prepare
@@ -753,7 +782,17 @@ def generate_spec(work, task, step, payload, check):
         HumanMessage(content='以下仅为参考材料：\n' + body),
     ]
     document_tasks.allowance(work, task, 'calls')
-    answer = asyncio.run(document_models.invoke(value, messages, check, lambda: work.cues.tick(task, check)))
+    from .filework import TaskCancelled, WorkPause
+    from .llm import friendly_error
+    from .logging_setup import report_error
+
+    try:
+        answer = asyncio.run(document_models.invoke(value, messages, check, lambda: work.cues.tick(task, check)))
+    except (TaskCancelled, WorkPause, WorkError):
+        raise
+    except Exception as error:
+        report_error('office_model', error)
+        raise WorkError(friendly_error(error)) from error
     try:
         start, end = answer.find('{'), answer.rfind('}')
         generated = json.loads(answer[start : end + 1])
@@ -763,6 +802,9 @@ def generate_spec(work, task, step, payload, check):
         if isinstance(generated.get('outline'), str):
             payload.outline = generated['outline']
         payload = OfficeRequest.model_validate(payload.model_dump())
+    except ValidationError as error:
+        issues = '；'.join(item['msg'][:200] for item in error.errors(include_input=False, include_context=False)[:3])
+        raise WorkError('成品参数需要纠正：' + issues + '。已读取资料保留，未发布成果。', 422) from error
     except (ValueError, TypeError) as error:
         raise WorkError('模型未返回有效的成品结构，已读取资料保留在任务中，请调整要求后重试。', 422) from error
     step['content'] = payload.model_dump_json()
@@ -863,6 +905,11 @@ def run(work, task, step, check):
 
         data, calculation = calculated(data, check)
         validation.update(calculation)
+        if source and source['name'].lower().endswith('.xlsx') and payload.operation != 'export':
+            from .office_excel import verify_edit
+
+            verify_edit(original, data, payload.spec, layout=calculation.get('calculation') != 'passed')
+            validation['revision'] = 'passed'
     artifact = publish(work, task, payload.name, data, validation)
     if artifact is None:
         return False

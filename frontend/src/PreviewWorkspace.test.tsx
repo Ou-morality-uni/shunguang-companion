@@ -76,6 +76,7 @@ it('only reads the full artifact after the user explicitly requests playback', a
             conversation_id: 'c',
             error: '',
             can_restore: false,
+            can_retry_summary: false,
             created_at: '',
             updated_at: '',
             context: { artifact: { name: '资料总结.md', path: 'task/资料总结.md', workspace_id: 'out' } },
@@ -194,6 +195,7 @@ it('returns to the original artifact button even if focus moves while its file l
           conversation_id: 'c1',
           error: '',
           can_restore: false,
+          can_retry_summary: false,
           created_at: '',
           updated_at: '',
           context: { artifact: { name: '资料总结.md', path: 'task/资料总结.md', workspace_id: 'out' } },
@@ -227,7 +229,9 @@ it('opens an attachment beside chat, supports keyboard resizing and restores foc
   );
   render(
     <PreviewWorkspace>
-      <div>继续聊天</div>
+      <div role="region" aria-label="聊天内容" className="conversation-scroll">
+        继续聊天
+      </div>
       <AttachmentCard
         attachment={{
           id: 'u1',
@@ -250,6 +254,31 @@ it('opens an attachment beside chat, supports keyboard resizing and restores foc
   expect(divider.getAttribute('aria-valuenow')).toBe('51');
   fireEvent.click(within(panel).getByRole('button', { name: '放大预览' }));
   expect(within(panel).getByRole('button', { name: '还原并排' })).toBeTruthy();
+  expect(screen.getByText('继续聊天').closest('.preview-main')?.hasAttribute('inert')).toBe(false);
+  vi.stubGlobal('PointerEvent', MouseEvent);
+  vi.spyOn(divider.parentElement!, 'getBoundingClientRect').mockReturnValue({
+    right: 1000,
+    width: 1000,
+  } as DOMRect);
+  divider.setPointerCapture = vi.fn();
+  divider.hasPointerCapture = () => true;
+  const chatScroll = screen.getByRole('region', { name: '聊天内容' });
+  chatScroll.scrollTop = 120;
+  fireEvent.pointerDown(divider);
+  fireEvent.pointerMove(divider, { clientX: 100 });
+  fireEvent.pointerMove(divider, { clientX: 0 });
+  chatScroll.scrollTop = 0;
+  fireEvent.click(screen.getByRole('button', { name: '展开聊天' }));
+  expect(divider.getAttribute('aria-valuenow')).toBe('60');
+  expect(chatScroll.scrollTop).toBe(120);
+  fireEvent.keyDown(divider, { key: 'End' });
+  expect(divider.getAttribute('aria-valuenow')).toBe('100');
+  fireEvent.click(screen.getByRole('button', { name: '展开聊天' }));
+  expect(screen.getByText('继续聊天').closest('.preview-main')?.hasAttribute('inert')).toBe(false);
+  fireEvent.keyDown(divider, { key: 'Home' });
+  expect(divider.getAttribute('aria-valuenow')).toBe('0');
+  fireEvent.click(screen.getByRole('button', { name: '展开预览' }));
+  expect(divider.getAttribute('aria-valuenow')).not.toBe('0');
   fireEvent.click(within(panel).getByRole('button', { name: '关闭预览' }));
   expect(screen.queryByRole('region', { name: '文件预览' })).toBeNull();
   expect(document.activeElement).toBe(trigger);
@@ -284,4 +313,28 @@ it('keeps keyboard focus inside a narrow-window preview and returns to chat on E
   fireEvent.keyDown(panel, { key: 'Escape' });
   expect(screen.queryByRole('region', { name: '文件预览' })).toBeNull();
   expect(document.activeElement).toBe(trigger);
+});
+
+it('drops obsolete saved task panels while retaining file preview tabs', async () => {
+  sessionStorage.setItem(
+    'shunguang.resource-tabs.v1',
+    JSON.stringify({
+      chat: {
+        tabs: [
+          { kind: 'artifact', id: 'result', title: 'result.xlsx' },
+          { kind: 'task', id: 'old', title: '内部任务面板' },
+        ],
+        active: 'task:old',
+        visible: true,
+      },
+    }),
+  );
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response(JSON.stringify({ blocks: [] }))));
+  render(
+    <PreviewWorkspace resetKey="chat">
+      <p>聊天正文</p>
+    </PreviewWorkspace>,
+  );
+  expect(screen.queryByText('内部任务面板')).toBeNull();
+  expect(await screen.findByRole('heading', { name: 'result.xlsx' })).toBeTruthy();
 });

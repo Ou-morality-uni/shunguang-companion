@@ -111,6 +111,7 @@ class FileStepOut(BaseModel):
 
 
 class FileTaskOut(BaseModel):
+    can_retry_summary: bool = False
     id: str
     workspace_id: str
     title: str

@@ -13,22 +13,16 @@ import {
   Menu,
   PanelLeftClose,
   PanelLeftOpen,
-  Square,
-  Volume2,
-  VolumeX,
-  Sparkles,
   MessageSquare,
   Plus,
   Settings2,
   ShieldCheck,
-  Wrench,
   X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
   request,
-  safeSourceUrl,
   type Features,
   type Memory,
   type ModelSettings,
@@ -71,7 +65,6 @@ export default function App() {
     [loading, setLoading] = useState(true),
     [mobileNav, setMobileNav] = useState(false);
   const [collapsed, setCollapsed] = useState(() => preference('shunguang-sidebar-collapsed', false));
-  const [fileStatus, setFileStatus] = useState<string | null>(null);
   useEffect(() => {
     try {
       localStorage.setItem('shunguang-sidebar-collapsed', collapsed ? 'on' : 'off');
@@ -137,7 +130,6 @@ export default function App() {
     abortRef,
     stopReply,
   } = chat;
-  useEffect(() => setFileStatus(null), [page, chat.active]);
   useWorkEvents(!loading && !authRequired, audio);
   async function refreshMemory() {
     try {
@@ -343,23 +335,6 @@ export default function App() {
     }
     return chat.send(text, attachments, modelChoice, annotations);
   }
-  const title =
-    page === 'chat'
-      ? (conversations.find((item) => item.id === active)?.title ?? '新的相遇')
-      : pages.find((item) => item.key === page)?.label;
-  const agentState = busy
-    ? currentTools.at(-1)?.status === 'running'
-      ? '正在调用工具'
-      : partial
-        ? '正在回应'
-        : '正在思考'
-    : error
-      ? '需要关注'
-      : fileStatus
-        ? fileStatus
-        : settings?.configured
-          ? '等待你的消息'
-          : '等待模型连接';
   const animate = effects && !reduceMotion && !systemReduce && !background;
   return (
     <AudioContextValue.Provider value={audio}>
@@ -496,68 +471,15 @@ export default function App() {
             </div>
           </aside>
           <main className="workspace">
-            <header className="topbar">
-              <div className="topbar-left">
-                <button
-                  className="icon-button mobile-menu"
-                  onClick={() => setMobileNav(true)}
-                  aria-label="展开导航"
-                  aria-expanded={mobileNav}
-                  aria-controls="primary-navigation"
-                >
-                  <Menu size={20} />
-                </button>
-                <span className="breadcrumb">暖霞拾光</span>
-                <ChevronRight size={13} />
-                <strong>{title}</strong>
-              </div>
-              <div className="topbar-right">
-                <button
-                  className="icon-button"
-                  aria-label="沉浸光效设置"
-                  title="沉浸光效"
-                  onClick={() => openPanel('effects')}
-                >
-                  <Sparkles size={18} />
-                </button>
-                <button
-                  className={`connection ${settings?.configured ? 'configured' : ''}`}
-                  onClick={() => openPanel('model')}
-                >
-                  <span />
-                  {loading ? '连接本机服务中' : settings?.configured ? '模型已配置' : '连接模型'}
-                  <ChevronRight size={12} />
-                </button>
-              </div>
-            </header>
-            <div className="session-bar" role="region" aria-label="当前状态">
-              <div className={`session-state ${busy ? 'is-active' : ''}`} role="status">
-                {busy ? <LoaderCircle className="spin" size={15} /> : <span className="subtle-dot" />}
-                <span>{agentState}</span>
-              </div>
-              <div className="session-controls">
-                <button className="text-link" aria-label="工具设置" onClick={() => openPanel('tools')}>
-                  <Wrench size={14} />
-                  <span>工具</span>
-                </button>
-                <button className="text-link" aria-label="声音与播放设置" onClick={() => openPanel('voice')}>
-                  <AudioLines size={15} />
-                  <span>{audio.busy ? (audio.playing ? '正在播放' : '正在合成') : '声音与播放'}</span>
-                </button>
-                {audio.busy && (
-                  <button className="icon-button" aria-label="停止顶部语音" onClick={audio.stop}>
-                    <Square size={14} />
-                  </button>
-                )}
-                <button
-                  className="icon-button"
-                  aria-label={audio.muted ? '取消静音' : '静音'}
-                  onClick={audio.toggleMute}
-                >
-                  {audio.muted ? <VolumeX size={16} /> : <Volume2 size={16} />}
-                </button>
-              </div>
-            </div>
+            <button
+              className="icon-button mobile-menu workspace-menu"
+              onClick={() => setMobileNav(true)}
+              aria-label="展开导航"
+              aria-expanded={mobileNav}
+              aria-controls="primary-navigation"
+            >
+              <Menu size={20} />
+            </button>
             <div className="content-columns">
               <AnnotationProvider conversationId={active}>
                 <PreviewWorkspace resetKey={`${page}:${active ?? ''}`} onSettings={() => openPanel('model')}>
@@ -576,18 +498,6 @@ export default function App() {
                         <Bell size={17} />
                         <div className="reminder-copy">
                           <span>{reminder.text}</span>
-                          {reminder.weather && (
-                            <small>
-                              天气数据：{reminder.weather.observed_at}{' '}
-                              <a
-                                href={safeSourceUrl(reminder.weather.sources[0]?.url)}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                              >
-                                天气来源
-                              </a>
-                            </small>
-                          )}
                         </div>
                         <button
                           className="icon-button"
@@ -625,6 +535,7 @@ export default function App() {
                         >
                           {page === 'chat' ? (
                             <ChatThread
+                              onTaskReply={chat.refreshMessages}
                               key={active ?? 'new'}
                               messages={messages}
                               partial={partial}
@@ -642,7 +553,6 @@ export default function App() {
                               onTools={() => openPanel('tools')}
                               onWork={() => navigate('work')}
                               conversationId={active}
-                              onTaskStatus={setFileStatus}
                             />
                           ) : page === 'memory' ? (
                             <MemorySpace

@@ -10,6 +10,8 @@ import {
   type ReactNode,
 } from 'react';
 import { Button } from '@/components/ui/button';
+import { ContextMenu, DropdownMenu } from 'radix-ui';
+import { ArrowDown, FileText, MoreVertical } from 'lucide-react';
 import { request, type Attachment, type FileTask, type Workspace } from './api';
 import { DocumentResult, VisionApproval } from './DocumentControls';
 import { useResourcePreview } from './PreviewContext';
@@ -104,6 +106,7 @@ type SavedArtifact = {
   name: string;
   path: string;
   workspace_id: string;
+  sha256?: string;
   validation?: Record<string, unknown>;
 };
 
@@ -139,8 +142,8 @@ function SavedArtifactCard({
   const [officePreview, setOfficePreview] = useState<Record<string, unknown> | null>(null);
   const [preview, setPreview] = useState<string | null>(null),
     [notice, setNotice] = useState('');
-  const [location, setLocation] = useState(''),
-    [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [thumbnailFailed, setThumbnailFailed] = useState(false);
   async function load() {
     if (openResource) {
       openResource({ kind: 'artifact', id: identity, title: artifact.name }, previewButton.current);
@@ -168,58 +171,99 @@ function SavedArtifactCard({
   }
   async function showLocation() {
     try {
-      const folders = await request<Workspace[]>('/work/workspaces');
-      const folder = folders.find((item) => item.id === artifact?.workspace_id);
-      setLocation(
-        folder
-          ? `${folder.path.replace(/[\\/]$/, '')}/${artifact?.path}`
-          : '原成果文件夹已不可用，请到工作台检查授权。',
-      );
+      const version =
+        artifact.sha256 ??
+        (await request<{ version: string }>(`/work/resources/artifact/${identity}/targets`)).version;
+      await request(`/work/artifacts/${identity}/reveal`, {
+        method: 'POST',
+        body: JSON.stringify({ version }),
+      });
+      setNotice('已在文件管理器中定位。');
     } catch (error) {
       setNotice((error as Error).message);
     }
   }
   return (
-    <article
-      className={`file-card ${enter ? 'content-arrive' : ''}`}
-      tabIndex={-1}
-      aria-label={markdown ? '总结成品' : `成果：${artifact.name}`}
-    >
-      <strong>{artifact.name}</strong>
-      <p>
-        {markdown
-          ? '根据本任务已读取的资料整理，包含来源和阅读范围；单独保存为新文件。'
-          : '本任务已保存的新副本，原文件保留。'}
-      </p>
-      {artifact.validation?.calculation === 'passed' && <p className="space-note">公式已完成实际重算。</p>}
-      <div className="work-actions">
-        <Button ref={previewButton} variant="outline" disabled={busy} onClick={() => void load()}>
-          {preview !== null || officePreview !== null
-            ? '收起成果预览'
-            : markdown
-              ? '预览总结文件'
-              : `预览成果 ${artifact.name}`}
-        </Button>
-        <a className="text-link" href={`/api/work/artifacts/${identity}`} download>
-          {markdown ? '下载总结' : '下载成果'}
-        </a>
-        <Button variant="ghost" onClick={() => void showLocation()}>
-          查看保存位置
-        </Button>
-      </div>
-      {location && <p className="file-location">{location}</p>}
-      {notice && <p role="status">{notice}</p>}
-      {preview !== null && (
-        <div className="standalone-preview">
-          <DocumentMarkdown text={preview} />
-        </div>
-      )}
-      {officePreview !== null && (
-        <div className="standalone-preview">
-          <DocumentResult result={officePreview} />
-        </div>
-      )}
-    </article>
+    <ContextMenu.Root>
+      <ContextMenu.Trigger asChild>
+        <article
+          className={`file-card artifact-tile ${enter ? 'content-arrive' : ''}`}
+          tabIndex={-1}
+          aria-label={markdown ? '总结成品' : `成果：${artifact.name}`}
+        >
+          <div className="artifact-thumbnail" aria-label="成果缩图">
+            {artifact.sha256 && !markdown && !thumbnailFailed ? (
+              <img
+                loading="lazy"
+                alt={`${artifact.name} 首屏缩图`}
+                src={`/api/work/artifacts/${encodeURIComponent(identity)}/thumbnail?version=${artifact.sha256}`}
+                onError={() => setThumbnailFailed(true)}
+              />
+            ) : (
+              <FileText size={30} aria-label="文件类型图标" />
+            )}
+          </div>
+          <div className="artifact-copy">
+            <strong title={artifact.name}>{artifact.name}</strong>
+            {artifact.validation?.calculation === 'passed' && <small>公式已完成实际重算</small>}
+            <div className="work-actions">
+              <Button
+                ref={previewButton}
+                variant="outline"
+                disabled={busy}
+                onClick={() => void load()}
+                aria-label={
+                  preview !== null || officePreview !== null
+                    ? '收起成果预览'
+                    : markdown
+                      ? '预览总结文件'
+                      : `预览成果 ${artifact.name}`
+                }
+              >
+                {preview !== null || officePreview !== null ? '收起预览' : '预览'}
+              </Button>
+              <a
+                className="text-link artifact-download"
+                href={`/api/work/artifacts/${identity}`}
+                download
+                aria-label={markdown ? '下载总结' : '下载成果'}
+                title="下载"
+              >
+                <ArrowDown size={17} />
+              </a>
+              <DropdownMenu.Root>
+                <DropdownMenu.Trigger asChild>
+                  <button type="button" className="icon-button" aria-label={`成果操作 ${artifact.name}`}>
+                    <MoreVertical size={16} />
+                  </button>
+                </DropdownMenu.Trigger>
+                <DropdownMenu.Portal>
+                  <DropdownMenu.Content className="annotation-menu" sideOffset={4}>
+                    <DropdownMenu.Item onSelect={() => void showLocation()}>查看位置</DropdownMenu.Item>
+                  </DropdownMenu.Content>
+                </DropdownMenu.Portal>
+              </DropdownMenu.Root>
+            </div>
+          </div>
+          {notice && <p role="status">{notice}</p>}
+          {preview !== null && (
+            <div className="standalone-preview">
+              <DocumentMarkdown text={preview} />
+            </div>
+          )}
+          {officePreview !== null && (
+            <div className="standalone-preview">
+              <DocumentResult result={officePreview} />
+            </div>
+          )}
+        </article>
+      </ContextMenu.Trigger>
+      <ContextMenu.Portal>
+        <ContextMenu.Content className="annotation-menu">
+          <ContextMenu.Item onSelect={() => void showLocation()}>查看位置</ContextMenu.Item>
+        </ContextMenu.Content>
+      </ContextMenu.Portal>
+    </ContextMenu.Root>
   );
 }
 
@@ -245,11 +289,14 @@ export function ContinueTask({ task, onChanged }: { task: FileTask; onChanged: (
   }
   return (
     <div className="work-approval" role="group" aria-label="任务继续确认">
-      <p>{pause?.reason}</p>
+      <p>
+        {pause?.kind === 'overwrite' || pause?.kind === 'outline'
+          ? pause.reason
+          : task.status === 'waiting_output'
+            ? '内容已经整理好了，暂时没能保存文件。'
+            : '这份资料还没读完，要继续吗？'}
+      </p>
       {pause?.outline && <DocumentMarkdown text={pause.outline} />}
-      {task.status === 'waiting_output' && (
-        <p>检查项目 data/outputs 目录是否可写后，点击保存；无需重新总结。</p>
-      )}
       <div className="work-actions">
         <Button disabled={busy} onClick={() => void decide(true)}>
           {pause?.kind === 'overwrite'
@@ -274,7 +321,7 @@ export function TaskDetails({
   enter,
   onChanged,
   onSettings,
-  attachments,
+  attachments: _attachments,
 }: {
   task: FileTask;
   enter: boolean;
@@ -285,20 +332,13 @@ export function TaskDetails({
   const [busy, setBusy] = useState(false),
     [notice, setNotice] = useState('');
   const initiallyComplete = useRef(task.status === 'complete');
-  const openResource = useResourcePreview();
-  const sources = (task.context?.sources ?? []) as {
-    kind: 'attachment' | 'artifact';
-    id: string;
-    name: string;
-  }[];
-  const summary = task.steps.find((step) => ['summarize', 'office'].includes(step.action))?.result;
-  async function action(operation: string, approved?: boolean) {
+  async function action(operation: string, body?: { approved?: boolean; extend_timeout?: boolean }) {
     setBusy(true);
     setNotice('');
     try {
       await request(`/work/tasks/${task.id}/${operation}`, {
         method: 'POST',
-        ...(approved === undefined ? {} : { body: JSON.stringify({ approved }) }),
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
       });
       await onChanged();
     } catch (error) {
@@ -309,83 +349,44 @@ export function TaskDetails({
   }
   return (
     <article
-      className={`chat-task-card ${enter ? 'content-arrive' : ''}`}
+      className={`chat-task-card natural-file-feedback ${enter ? 'content-arrive' : ''}`}
       data-status={task.status}
-      aria-label={`文件任务：${task.title}`}
+      aria-label="文件处理"
     >
-      <div className="file-card-heading">
-        <strong>{task.title}</strong>
-        <span role="status">{taskStatuses[task.status]}</span>
-      </div>
-      {task.error && <p role="status">{task.error}</p>}
-      {openResource && sources.length > 0 && (
-        <div className="work-actions">
-          {sources.map((source, index) => (
-            <Button
-              key={`${source.id}:${index}`}
-              variant="outline"
-              onClick={(event) =>
-                openResource({ kind: source.kind, id: source.id, title: source.name }, event.currentTarget)
-              }
-            >
-              预览来源 {source.name}
-            </Button>
+      {['queued', 'running'].includes(task.status) && <p role="status">我正在处理，稍等一下。</p>}
+      {task.status === 'failed' && (
+        <p role="status">
+          {task.error.includes('PDF') && task.error.includes('排版')
+            ? '这份 PDF 暂时不能在保留排版的情况下可靠修改。'
+            : task.can_retry_summary
+              ? '这次没读完，可以再试一次。'
+              : '这次没能处理好，我先停下了。'}
+        </p>
+      )}
+      {task.status === 'interrupted' && <p role="status">刚才的文件处理被打断了。</p>}
+      {task.status === 'cancelled' && <p role="status">已经停下了。</p>}
+      {task.can_retry_summary && (
+        <Button
+          variant="outline"
+          disabled={busy}
+          onClick={() => void action('retry-summary', { extend_timeout: true })}
+        >
+          再试一次
+        </Button>
+      )}
+      {task.status === 'waiting_vision' &&
+        task.steps
+          .filter((step) => step.vision_request)
+          .map((step, index) => (
+            <VisionApproval
+              key={index}
+              taskId={task.id}
+              info={step.vision_request!}
+              onChanged={onChanged}
+              onModelSettings={onSettings}
+            />
           ))}
-        </div>
-      )}
-      {task.steps
-        .filter((step) => step.action === 'read_document')
-        .map((step, index) => (
-          <div key={index}>
-            <p className="space-note">
-              {attachments.find((item) => item.path === step.path && item.workspace_id === task.workspace_id)
-                ?.name ?? step.path}
-              ：
-              {typeof step.result?.coverage === 'string'
-                ? step.result.coverage
-                : step.state === 'complete'
-                  ? '指定范围已处理'
-                  : '等待或正在读取'}
-            </p>
-            {step.vision_request && task.status === 'waiting_vision' && (
-              <VisionApproval
-                taskId={task.id}
-                info={step.vision_request}
-                onChanged={onChanged}
-                onModelSettings={onSettings}
-              />
-            )}
-            {step.result && (
-              <details>
-                <summary>查看已读资料与来源</summary>
-                <DocumentResult result={step.result} />
-              </details>
-            )}
-          </div>
-        ))}
-      {typeof summary?.summary === 'string' && (
-        <>
-          <DocumentMarkdown text={summary.summary} />
-          {Array.isArray(summary.warnings) && (
-            <ul>
-              {summary.warnings.map((warning, index) => (
-                <li key={index}>{String(warning)}</li>
-              ))}
-            </ul>
-          )}
-        </>
-      )}
       <ArtifactCard task={task} enter={!initiallyComplete.current} />
-      {Array.isArray(summary?.annotation_results) && (
-        <ul className="space-note">
-          {summary.annotation_results.map((entry: { id: string; location: string; status: string }) => (
-            <li key={entry.id}>
-              {entry.location}：
-              {entry.status === 'applied' ? '已修订该目标，请核对结果' : '已生成修订稿，请核对此项意见'}
-            </li>
-          ))}
-        </ul>
-      )}
       <ContinueTask task={task} onChanged={onChanged} />
       {task.status === 'waiting_approval' && (
         <div className="work-approval" role="group" aria-label="删除授权">
@@ -399,10 +400,14 @@ export function TaskDetails({
             ))}
           </ul>
           <div className="work-actions">
-            <Button disabled={busy} onClick={() => void action('approval', true)}>
+            <Button disabled={busy} onClick={() => void action('approval', { approved: true })}>
               同意执行此任务（含删除）
             </Button>
-            <Button variant="outline" disabled={busy} onClick={() => void action('approval', false)}>
+            <Button
+              variant="outline"
+              disabled={busy}
+              onClick={() => void action('approval', { approved: false })}
+            >
               拒绝执行
             </Button>
           </div>
@@ -410,7 +415,7 @@ export function TaskDetails({
       )}
       {['queued', 'running', 'waiting_vision'].includes(task.status) && (
         <Button variant="outline" disabled={busy} onClick={() => void action('cancel')}>
-          取消文件任务
+          先停下
         </Button>
       )}
       {task.can_restore && (
@@ -423,26 +428,37 @@ export function TaskDetails({
   );
 }
 
-const TasksContext = createContext<{ tasks: FileTask[]; initial: Set<string>; onWork: () => void }>({
+const TasksContext = createContext<{
+  tasks: FileTask[];
+  initial: Set<string>;
+  refresh: () => Promise<void>;
+  onSettings: () => void;
+}>({
   tasks: [],
   initial: new Set(),
-  onWork: () => {},
+  onSettings: () => {},
+  refresh: async () => {},
 });
 
 export function FileTasksProvider({
   conversationId,
   onWork,
   onTaskStatus,
+  onReply,
+  onSettings,
   children,
 }: {
   conversationId: string | null;
   onWork: () => void;
   onTaskStatus?: (status: string | null) => void;
+  onReply?: () => Promise<boolean>;
+  onSettings?: () => void;
   children: ReactNode;
 }) {
   const [tasks, setTasks] = useState<FileTask[]>([]),
     [notice, setNotice] = useState('');
   const initialTasks = useRef<Set<string> | null>(null);
+  const delivered = useRef(new Set<string>());
   useEffect(() => {
     const current =
       tasks.find((task) =>
@@ -469,13 +485,22 @@ export function FileTasksProvider({
           initialTasks.current = new Set((Array.isArray(result) ? result : []).map((task) => task.id));
         setTasks(Array.isArray(result) ? result : []);
         setNotice('');
+        const replies = (Array.isArray(result) ? result : []).flatMap((task) =>
+          typeof task.context?.reply_message_id === 'string' &&
+          !delivered.current.has(task.context.reply_message_id)
+            ? [task.context.reply_message_id]
+            : [],
+        );
+        if (replies.length && onReply && (await onReply()) && !signal?.aborted)
+          replies.forEach((id) => delivered.current.add(id));
       }
     },
-    [conversationId],
+    [conversationId, onReply],
   );
   useEffect(() => {
     setTasks([]);
     initialTasks.current = null;
+    delivered.current = new Set();
     const abort = new AbortController();
     let polling = false,
       denied = false;
@@ -486,7 +511,7 @@ export function FileTasksProvider({
         await refresh(abort.signal);
       } catch (error) {
         if (!abort.signal.aborted) {
-          setNotice((error as Error).message);
+          setNotice('暂时没能更新文件进度。');
           if (String((error as Error).message).includes('仅供')) denied = true;
         }
       } finally {
@@ -501,7 +526,9 @@ export function FileTasksProvider({
     };
   }, [refresh]);
   return (
-    <TasksContext.Provider value={{ tasks, initial: initialTasks.current ?? new Set(), onWork }}>
+    <TasksContext.Provider
+      value={{ tasks, initial: initialTasks.current ?? new Set(), refresh, onSettings: onSettings ?? onWork }}
+    >
       {children}
       {notice && (
         <p className="space-note" role="status">
@@ -536,85 +563,30 @@ export function MessageFileTasks({
   attachments?: Attachment[];
   all?: boolean;
 }) {
-  const { tasks: records, initial, onWork } = useContext(TasksContext);
-  const openResource = useResourcePreview();
+  const { tasks: records, initial, refresh, onSettings } = useContext(TasksContext);
   const tasks = records.filter(
     (task) =>
-      all ||
-      (task.context?.source_message_id
-        ? task.context.source_message_id === requestId
-        : taskIds.includes(task.id)),
+      (all ||
+        (task.context?.source_message_id
+          ? task.context.source_message_id === requestId
+          : taskIds.includes(task.id))) &&
+      (task.status !== 'complete' ||
+        task.context?.artifact ||
+        (task.context?.artifacts as unknown[])?.length),
   );
   if (!tasks.length) return null;
   return (
-    <section className="chat-file-tasks compact-file-tasks" aria-label="聊天文件任务">
-      {tasks.map((task) => {
-        const result = task.steps.find((step) => ['summarize', 'office'].includes(step.action))?.result;
-        const abstract =
-          typeof result?.abstract === 'string'
-            ? result.abstract
-            : typeof result?.summary === 'string'
-              ? result.summary.replace(/```[\s\S]*?```/g, '').slice(0, 240)
-              : '';
-        return (
-          <article
-            key={task.id}
-            className={`file-task-short ${!initial.has(task.id) ? 'content-arrive' : ''}`}
-          >
-            <div className="file-card-heading">
-              <strong>{task.title}</strong>
-              <span role="status">{taskStatuses[task.status]}</span>
-            </div>
-            {abstract && (
-              <div className="message-text task-conclusion">
-                <DocumentMarkdown text={abstract} />
-              </div>
-            )}
-            {task.error && <p role="status">{task.error.slice(0, 200)}</p>}
-            <Button
-              variant="outline"
-              aria-label={`预览资料：${task.title}`}
-              onClick={(event) => {
-                let source = (
-                  task.context?.sources as
-                    { kind: 'attachment' | 'artifact'; id: string; name: string }[] | undefined
-                )?.[0];
-                if (!source) {
-                  const file = attachments.find(
-                    (item) =>
-                      item.workspace_id === task.workspace_id &&
-                      task.steps.some((step) => step.path === item.path),
-                  );
-                  if (file) source = { kind: 'attachment', id: file.id, name: file.name };
-                }
-                if (openResource)
-                  openResource(
-                    source
-                      ? { kind: source.kind, id: source.id, title: source.name }
-                      : { kind: 'task', id: task.id, title: task.title },
-                    event.currentTarget,
-                  );
-                else onWork();
-              }}
-            >
-              预览资料
-            </Button>
-            <button
-              type="button"
-              className="text-button"
-              aria-label={`任务详情：${task.title}`}
-              onClick={(event) =>
-                openResource
-                  ? openResource({ kind: 'task', id: task.id, title: task.title }, event.currentTarget)
-                  : onWork()
-              }
-            >
-              状态与操作
-            </button>
-            <ArtifactCard task={task} />
-          </article>
-        );
-      })}
+    <section className="chat-file-tasks compact-file-tasks" aria-label="文件处理反馈">
+      {tasks.map((task) => (
+        <TaskDetails
+          key={task.id}
+          task={task}
+          enter={!initial.has(task.id)}
+          onChanged={refresh}
+          onSettings={onSettings}
+          attachments={attachments}
+        />
+      ))}
     </section>
   );
 }

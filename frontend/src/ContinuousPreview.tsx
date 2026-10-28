@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { ContextMenu } from 'radix-ui';
 import { createPortal } from 'react-dom';
 import { Button } from '@/components/ui/button';
-import { useAnnotations, type AnnotationAnchor } from './Annotations';
+import { AnnotationPins, useAnnotations, type AnnotationAnchor } from './Annotations';
 import type { Viewer } from './pdfViewerEngine';
 import type { OcrLine } from './localOcr';
 import 'pdfjs-dist/web/pdf_viewer.css';
@@ -43,6 +43,9 @@ export function ContinuousPreview({
   const target = useRef<AnnotationAnchor | null>(null);
   const [ocr, setOcr] = useState<Record<number, OcrLine[]>>({});
   const [ocrTarget, setOcrTarget] = useState<HTMLElement | null>(null);
+  const [pinPages, setPinPages] = useState<
+    { page: number; left: number; top: number; width: number; height: number; mount: HTMLElement }[]
+  >([]);
   const [recognizing, setRecognizing] = useState(false),
     [progress, setProgress] = useState('');
   const recognition = useRef<AbortController | null>(null);
@@ -75,17 +78,64 @@ export function ContinuousPreview({
     };
   }, [url, image]);
   useEffect(() => {
-    const update = () =>
+    const update = () => {
+      const nodes = [...(host.current?.querySelectorAll<HTMLElement>('.page,.image-page') ?? [])];
+      const root = image ? host.current : container.current;
+      const bounds = root?.getBoundingClientRect();
+      const positions =
+        root && bounds
+          ? nodes.map((node) => {
+              const box = node.getBoundingClientRect();
+              return {
+                page: Number(node.dataset.pageNumber || 1),
+                left: box.left - bounds.left + root.scrollLeft,
+                top: box.top - bounds.top + root.scrollTop,
+                width: box.width,
+                height: box.height,
+                mount: root,
+              };
+            })
+          : [];
+      setPinPages((previous) =>
+        previous.length === positions.length &&
+        previous.every((value, i) => {
+          const next = positions[i];
+          return (
+            value.page === next.page &&
+            value.left === next.left &&
+            value.top === next.top &&
+            value.width === next.width &&
+            value.height === next.height &&
+            value.mount === next.mount
+          );
+        })
+          ? previous
+          : positions,
+      );
       setOcrTarget(
         host.current?.querySelector<HTMLElement>(
           image ? '.image-page' : `.page[data-page-number="${page}"]`,
         ) ?? null,
       );
+    };
     update();
     const observer = new MutationObserver(update);
-    if (host.current) observer.observe(host.current, { childList: true, subtree: true });
-    return () => observer.disconnect();
-  }, [page, image]);
+    if (host.current)
+      observer.observe(host.current, {
+        childList: true,
+        subtree: true,
+        attributes: true,
+        attributeFilter: ['style', 'class'],
+      });
+    const resize = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(update);
+    if (host.current) resize?.observe(host.current);
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      resize?.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [page, image, annotations?.drafts, anchor.source.id, anchor.source.kind, anchor.source.version]);
   function pageOf(element: Element | null) {
     return element?.closest<HTMLElement>('.page,.image-page') ?? null;
   }
@@ -101,6 +151,18 @@ export function ContinuousPreview({
         return [Math.max(0, 1 - y - h), x, h, w];
       default:
         return rect;
+    }
+  }
+  function displayRect([x, y, w, h]: Region['rect']): Region['rect'] {
+    switch (viewer.current?.pagesRotation ?? 0) {
+      case 90:
+        return [Math.max(0, 1 - y - h), x, h, w];
+      case 180:
+        return [Math.max(0, 1 - x - w), Math.max(0, 1 - y - h), w, h];
+      case 270:
+        return [y, Math.max(0, 1 - x - w), h, w];
+      default:
+        return [x, y, w, h];
     }
   }
   function makeTarget(element: HTMLElement, quote = ''): AnnotationAnchor | null {
@@ -183,7 +245,22 @@ export function ContinuousPreview({
   function comment() {
     const value = target.current;
     if (value && annotations) {
-      void annotations.begin(async () => value);
+      void annotations.begin(async () => value, '', {
+        getBoundingClientRect: () => {
+          const region = value.regions?.[0];
+          const node = host.current?.querySelector<HTMLElement>(
+            image ? '.image-page' : `.page[data-page-number="${region?.page ?? page}"]`,
+          );
+          const box = (node ?? host.current)!.getBoundingClientRect();
+          const [x, y, w, h] = displayRect(region?.rect ?? [0, 0, 1, 0]);
+          return new DOMRect(
+            box.left + x * box.width,
+            box.top + y * box.height,
+            w * box.width,
+            h * box.height,
+          );
+        },
+      });
       setCommentMode(false);
       setHighlight(null);
     }
@@ -326,6 +403,37 @@ export function ContinuousPreview({
               </div>
             )}
             {highlight && <div className="comment-highlight" style={highlight} />}
+            {pinPages.flatMap((node) =>
+              (annotations?.drafts ?? [])
+                .filter(
+                  (draft) =>
+                    draft.source.id === anchor.source.id &&
+                    draft.source.kind === anchor.source.kind &&
+                    draft.source.version === anchor.source.version &&
+                    draft.target_id === (image ? 'image' : `page:${node.page}`),
+                )
+                .map((draft, offset) => {
+                  const rect = displayRect(draft.regions?.[0]?.rect ?? draft.rect ?? [0, 0, 0, 0]);
+                  return createPortal(
+                    <span
+                      key={draft.id}
+                      data-page-pin={draft.id}
+                      style={{
+                        position: 'absolute',
+                        zIndex: 6,
+                        left: node.left + Math.min(Math.max(0, node.width - 28), rect[0] * node.width),
+                        top:
+                          node.top +
+                          Math.min(Math.max(0, node.height - 28), rect[1] * node.height + offset * 26),
+                      }}
+                    >
+                      <AnnotationPins anchor={draft} draftId={draft.id} />
+                    </span>,
+                    node.mount,
+                    draft.id,
+                  );
+                }),
+            )}
             {ocrTarget &&
               ocr[page] &&
               createPortal(
@@ -351,7 +459,11 @@ export function ContinuousPreview({
           </div>
         </ContextMenu.Trigger>
         <ContextMenu.Portal>
-          <ContextMenu.Content className="annotation-menu" aria-label="文档批注操作">
+          <ContextMenu.Content
+            className="annotation-menu"
+            aria-label="文档批注操作"
+            onCloseAutoFocus={(event) => event.preventDefault()}
+          >
             <ContextMenu.Item disabled={!captured || annotations?.sending} onSelect={comment}>
               添加批注
             </ContextMenu.Item>

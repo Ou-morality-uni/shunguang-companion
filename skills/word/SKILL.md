@@ -21,6 +21,6 @@ description: 用真实资料生成和局部修改可编辑 Word 成品。
 
 补充协议：有模板时传 source，使用 edits 填充真实目标（即使 operation=create 也按模板局部编辑）。空段落允许 old=""；页眉/页脚目标为 h:节索引:段落索引、f:节索引:段落索引，只用 inspect 返回的非链接目标。新建可传 header、footer 文字。插图块为 {"type":"image","image":{"kind":"attachment","id":"本聊天图片ID","version":"真实版本"},"width_cm":12}，不接受模型提供的本机路径。
 
-多个来源传 sources 和 instruction，省略 spec，让后台分批读取。重要歧义可传 outline，用户确认后再生成；也可在后台 JSON 返回 {"outline":"简短提纲","spec":{...}}。export_pdf=true 同时交付可编辑 Word 和 PDF。仅有 PDF 的修订返回 blocks，说明版式可能变化。
+多个来源传 sources 和 instruction，省略 spec，让后台分批读取。重要歧义可传 outline，用户确认后再生成；也可在后台 JSON 返回 {"outline":"简短提纲","spec":{...}}。只有用户明确要求额外 PDF 时才设置 export_pdf=true；默认只交付 Word。仅在用户明确要求 PDF 转 Word 时返回 blocks 并说明版式可能变化，不用 Word 替代保版 PDF 修订。
 
 授权目录中的模板先用 office_import。默认新副本；用户明确要求覆盖时才传返回的 original 到 overwrite，系统仍会等待一次覆盖确认并保留恢复备份。版本、重复原文或多条意见有冲突时先澄清，不猜测目标。

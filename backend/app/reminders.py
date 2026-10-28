@@ -15,16 +15,26 @@ from .feature_config import load
 LOCK = RLock()
 MAX_POLL_GAP = 90
 REMINDER_TEXT = '陪你待了一会儿，先让眼睛歇一歇吧。喝口水，起身活动一下，再回来慢慢聊。'
-REMINDER_PHRASES = (
-    REMINDER_TEXT,
-    '手边的事先放一放呀，看看远处，让眼睛也透口气。我在这里等你。',
-    '坐了这么久，起来伸个懒腰吧。事情可以慢慢做，咱们也要照顾好自己。',
-    '杯子还在手边吗？喝两口水再继续吧，我陪你把剩下的慢慢理清。',
-    '专心的时候容易忘了歇一歇。松松肩膀，活动一下手腕，好不好？',
-    '这一小段先告个段落吧，起身走两步，回来再接着聊。',
-    '别总盯着屏幕啦，眨眨眼，看看窗外。留一点精神，后面的路还长着呢。',
-    '忙归忙，也给自己留口喘气的工夫呀。休息一会儿，我替你守着这些思路。',
-)
+REMINDER_PHRASES = {
+    'rest': (REMINDER_TEXT, '忙归忙，也给自己留口喘气的工夫呀。休息一会儿，我替你守着这些思路。'),
+    'eyes': (
+        '手边的事先放一放呀，看看远处，让眼睛也透口气。我在这里等你。',
+        '别总盯着屏幕啦，眨眨眼，看看窗外。留一点精神，后面的路还长着呢。',
+    ),
+    'water': (
+        '杯子还在手边吗？喝两口水再继续吧，我陪你把剩下的慢慢理清。',
+        '来，先润润嗓子。手边的卷宗不会跑，喝口水再看呀。',
+    ),
+    'activity': (
+        '坐了这么久，起来伸个懒腰吧。事情可以慢慢做，咱们也要照顾好自己。',
+        '专心的时候容易忘了歇一歇。松松肩膀，活动一下手腕，好不好？',
+        '这一小段先告个段落吧，起身走两步，回来再接着聊。',
+    ),
+    'mood': (
+        '思绪打结的时候，先缓一口气呀。咱们一件一件来，我陪着你。',
+        '不必一口气走完整段路。把心放稳，眼前这一步，咱们慢慢走。',
+    ),
+}
 
 
 def read_state():
@@ -79,7 +89,8 @@ def weather_message(value):
         advice = '外面风有些大，出门留意一下，咱们稳稳当当地走。'
     else:
         advice = '忙完也给自己留点休息的工夫，喝口水，再慢慢来。'
-    return f'{city}这次查到的是{condition}，气温约{temperature:g}℃。{advice}'
+    opening = secrets.choice(('静观天象，', '替你留意了一眼天色，', '说起窗外的天色，'))
+    return f'{opening}{city}此时{condition}，气温约{temperature:g}℃。{advice}'
 
 
 def poll(*, immediate=False, weather_care=None, refresh_weather=False):
@@ -109,8 +120,10 @@ def poll(*, immediate=False, weather_care=None, refresh_weather=False):
         event = None
         if immediate or (settings.enabled and not paused and not in_quiet and not reconnected and now >= due):
             recent = state.get('recent_phrases', [])
-            text = secrets.choice([item for item in REMINDER_PHRASES if item not in recent] or REMINDER_PHRASES)
-            state['recent_phrases'] = (recent + [text])[-4:]
+            topics = state.get('recent_topics', [])
+            topic = secrets.choice([item for item in REMINDER_PHRASES if item not in topics] or list(REMINDER_PHRASES))
+            phrases = REMINDER_PHRASES[topic]
+            text = secrets.choice([item for item in phrases if item not in recent] or phrases)
             event = {
                 'id': uuid.uuid4().hex,
                 'text': text,
@@ -118,7 +131,7 @@ def poll(*, immediate=False, weather_care=None, refresh_weather=False):
                 'created_at': timestamp(now),
                 'test': immediate,
             }
-            if weather:
+            if weather and state.get('last_theme') != 'weather' and secrets.randbelow(5) == 0:
                 signature = weather['profile_city'] + '|' + weather['current']['time']
                 if signature != state.get('last_weather'):
                     event['text'] = weather_message(weather)
@@ -128,6 +141,10 @@ def poll(*, immediate=False, weather_care=None, refresh_weather=False):
                         'sources': weather.get('sources', []),
                     }
                     state['last_weather'] = signature
+            state['last_theme'] = 'weather' if 'weather' in event else topic
+            if 'weather' not in event:
+                state['recent_phrases'] = (recent + [text])[-4:]
+                state['recent_topics'] = (topics + [topic])[-2:]
             # Consume durably before returning. A dropped response is not replayed.
             state['last_event_id'] = event['id']
             state['last_delivery'] = now

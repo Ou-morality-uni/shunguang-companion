@@ -156,6 +156,23 @@ class Store:
     def save_file_task(self, record):
         record['updated_at'] = now()
         with self.connect() as db:
+            context = record.setdefault('context', {})
+            if record['status'] == 'complete' and record.get('origin') == 'chat' and context.get('chat_reply'):
+                summary = next(
+                    (step.get('result', {}) for step in record['steps'] if step['action'] == 'summarize'), {}
+                )
+                content = summary.get('summary', '')
+                cid = record.get('conversation_id')
+                if content.strip() and cid and db.execute('SELECT id FROM conversations WHERE id=?', (cid,)).fetchone():
+                    identity = 'file-result-' + record['id']
+                    if summary.get('partial'):
+                        content += '\n\n这次还有部分内容未能读取。'
+                    db.execute(
+                        "INSERT OR IGNORE INTO messages(id,conversation_id,role,content,status,created_at,metadata) VALUES (?,?,'assistant',?,'complete',?,?)",
+                        (identity, cid, content, record['updated_at'], json.dumps({'file_task_id': record['id']})),
+                    )
+                    context['reply_message_id'] = identity
+                    db.execute('UPDATE conversations SET updated_at=? WHERE id=?', (record['updated_at'], cid))
             db.execute(
                 'UPDATE file_tasks SET status=?,steps=?,error=?,updated_at=?,context=? WHERE id=?',
                 (

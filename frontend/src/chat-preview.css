@@ -268,3 +268,98 @@ html[data-reduce-motion='true'] .file-card .work-actions button {
   position: relative;
   z-index: 1;
 }
+.artifact-tile {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  width: min(310px, 100%);
+  padding: 10px;
+  margin: 6px 0;
+}
+.artifact-thumbnail {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 62px;
+  flex-shrink: 0;
+  color: #e8c49b;
+  background: #472e3a;
+  border-radius: 6px;
+  overflow: hidden;
+}
+.artifact-thumbnail img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.artifact-copy {
+  flex: 1;
+  min-width: 0;
+}
+.artifact-copy > strong {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 13px;
+}
+.artifact-copy small {
+  font-size: 10px;
+  color: #c3a9af;
+}
+.artifact-tile .work-actions {
+  gap: 6px;
+  margin: 4px 0 0;
+}
+.artifact-tile .work-actions button {
+  height: 28px;
+  min-height: 28px;
+  padding: 3px 7px;
+  font-size: 11px;
+}
+.artifact-tile .work-actions > button:first-child {
+  max-width: 175px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.artifact-download {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+}
+.artifact-download:hover {
+  background: #81536466;
+}
+.artifact-tile > p,
+.artifact-tile > .standalone-preview {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+.artifact-details {
+  font-size: 11px;
+}
+.chat-task-card.natural-file-feedback {
+  padding: 0;
+  margin: 6px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.natural-file-feedback > p[role='status'] {
+  margin: 4px 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.natural-file-feedback > [data-slot='button'] {
+  margin: 4px 6px 4px 0;
+  min-height: 28px;
+  height: auto;
+  padding: 5px 10px;
+  font-size: 12px;
+}

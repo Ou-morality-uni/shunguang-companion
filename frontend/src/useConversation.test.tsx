@@ -114,3 +114,48 @@ it('selecting the current conversation preserves its transcript', async () => {
   act(() => result.current.selectConversation('c'));
   expect(result.current.messages).toHaveLength(2);
 });
+
+it('refreshes a delivered file reply without replaying speech or duplicating messages', async () => {
+  vi.mocked(request).mockResolvedValue([user, assistant]);
+  const complete = vi.fn();
+  const { result } = renderHook(() => useConversation(complete));
+  act(() => result.current.selectConversation('c'));
+  await waitFor(() => expect(result.current.messages).toHaveLength(2));
+  const reply = { ...assistant, id: 'file-result-t', content: '文件总结' };
+  vi.mocked(request).mockResolvedValue([user, assistant, reply]);
+  await act(async () => {
+    await result.current.refreshMessages();
+    await result.current.refreshMessages();
+  });
+  expect(result.current.messages.map((message) => message.id)).toEqual(['u', 'a', 'file-result-t']);
+  expect(complete).not.toHaveBeenCalled();
+});
+
+it('keeps a newer transcript when an older refresh arrives late', async () => {
+  vi.mocked(request).mockResolvedValue([user, assistant]);
+  const { result } = renderHook(() => useConversation(vi.fn()));
+  act(() => result.current.selectConversation('c'));
+  await waitFor(() => expect(result.current.messages).toHaveLength(2));
+  let finishOld: (records: Message[]) => void = () => {};
+  const reply = { ...assistant, id: 'file-result-new', content: '新文件结果' };
+  vi.mocked(request)
+    .mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishOld = resolve;
+        }),
+    )
+    .mockResolvedValue([user, assistant, reply]);
+  let old: Promise<unknown>;
+  act(() => {
+    old = result.current.refreshMessages();
+  });
+  await act(async () => {
+    await result.current.refreshMessages();
+  });
+  await act(async () => {
+    finishOld([user, assistant]);
+    await old;
+  });
+  expect(result.current.messages.map((item) => item.id)).toEqual(['u', 'a', 'file-result-new']);
+});

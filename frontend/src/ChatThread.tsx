@@ -40,11 +40,12 @@ import {
 import { ModelPicker } from './ModelPicker';
 import { VoiceInput } from './VoiceInput';
 import { AttachmentCard, FileTasksProvider, MessageFileTasks } from './FileTasks';
-import { Sources, ToolFeedback } from './Evidence';
+import { Sources } from './Evidence';
 import { useCompanionAudio } from './useAudioQueue';
 import { ResourceImage } from './ResourceImage';
 import { MessageSticker } from './MessageSticker';
 import { MAX_MESSAGE_LENGTH } from './generated/limits';
+import { visibleAssistantText } from './replyText';
 import {
   AnnotationTarget,
   AnnotationTray,
@@ -122,6 +123,7 @@ function ChatMessage() {
             {!user && record?.status === 'complete' ? (
               <AnnotationTarget
                 label="这条回复"
+                messageId={message.id}
                 prepare={async () => {
                   const value = await request<{ version: string }>(
                     `/work/resources/message/${encodeURIComponent(message.id)}/targets`,
@@ -148,7 +150,6 @@ function ChatMessage() {
           {!user && record?.status === 'complete' && record.sticker && (
             <MessageSticker key={record.sticker.id} sticker={record.sticker} />
           )}
-          <ToolFeedback tools={record?.tools} />
           <ReplyAnnotations items={record?.annotations} />
           {record?.attachments?.map((attachment) => (
             <AttachmentCard key={attachment.id} attachment={attachment} />
@@ -170,7 +171,7 @@ function ChatMessage() {
             {!user && record?.content && message.status?.type !== 'running' && (
               <button
                 className="copy-button"
-                onClick={() => audio.enqueue(record.content)}
+                onClick={() => audio.enqueue(visibleAssistantText(record.content))}
                 aria-label="播放这条回复"
               >
                 <Play size={13} />
@@ -206,6 +207,7 @@ type Props = {
   onTools: () => void;
   conversationId: string | null;
   onTaskStatus?: (status: string | null) => void;
+  onTaskReply?: () => Promise<boolean>;
   onWork: () => void;
 };
 
@@ -226,6 +228,7 @@ export function ChatThread({
   onTools,
   conversationId,
   onTaskStatus,
+  onTaskReply,
   onWork,
 }: Props) {
   const audio = useCompanionAudio();
@@ -319,7 +322,12 @@ export function ChatThread({
     convertMessage: (message): ThreadMessageLike => ({
       id: message.id,
       role: message.role,
-      content: [{ type: 'text', text: message.content }],
+      content: [
+        {
+          type: 'text',
+          text: message.role === 'assistant' ? visibleAssistantText(message.content) : message.content,
+        },
+      ],
       createdAt: new Date(message.created_at),
       ...(message.role === 'assistant'
         ? {
@@ -341,7 +349,14 @@ export function ChatThread({
         runtime.thread.composer.setText(text);
         return;
       }
-      const submission = annotations?.submission();
+      let submission: AnnotationSubmission | undefined;
+      try {
+        submission = await annotations?.submission();
+      } catch (error) {
+        setUploadNotice((error as Error).message);
+        runtime.thread.composer.setText(text);
+        return;
+      }
       annotations?.setSending(true);
       try {
         const accepted = submission
@@ -380,7 +395,13 @@ export function ChatThread({
     <MessagesContext.Provider value={threadMessages}>
       <HistoryContext.Provider value={history.current}>
         <AssistantRuntimeProvider runtime={runtime}>
-          <FileTasksProvider conversationId={conversationId} onWork={onWork} onTaskStatus={onTaskStatus}>
+          <FileTasksProvider
+            conversationId={conversationId}
+            onWork={onWork}
+            onTaskStatus={onTaskStatus}
+            onReply={onTaskReply}
+            onSettings={onSettings}
+          >
             <ThreadPrimitive.Root
               className="thread-root"
               onDragOver={(event) => {

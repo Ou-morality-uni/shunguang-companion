@@ -964,6 +964,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/work/artifacts/{task_id}/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reveal Artifact */
+        post: operations["reveal_artifact_api_work_artifacts__task_id__reveal_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/artifacts/{task_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Artifact Thumbnail */
+        get: operations["artifact_thumbnail_api_work_artifacts__task_id__thumbnail_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/work/capabilities": {
         parameters: {
             query?: never;
@@ -1272,6 +1306,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/work/tasks/{task_id}/retry-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Summary */
+        post: operations["retry_summary_api_work_tasks__task_id__retry_summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/work/tasks/{task_id}/vision": {
         parameters: {
             query?: never;
@@ -1459,6 +1510,11 @@ export interface components {
         ApprovalRequest: {
             /** Approved */
             approved: boolean;
+        };
+        /** ArtifactVersionRequest */
+        ArtifactVersionRequest: {
+            /** Version */
+            version: string;
         };
         /** CandidateConfirm */
         CandidateConfirm: {
@@ -1669,6 +1725,11 @@ export interface components {
         FileTaskOut: {
             /** Can Restore */
             can_restore: boolean;
+            /**
+             * Can Retry Summary
+             * @default false
+             */
+            can_retry_summary: boolean;
             /** Context */
             context?: {
                 [key: string]: unknown;
@@ -2008,6 +2069,14 @@ export interface components {
             kind: "attachment" | "artifact";
             /** Version */
             version: string;
+        };
+        /** RetrySummaryRequest */
+        RetrySummaryRequest: {
+            /**
+             * Extend Timeout
+             * @default false
+             */
+            extend_timeout: boolean;
         };
         /** SettingsOut */
         SettingsOut: {
@@ -4109,6 +4178,74 @@ export interface operations {
             };
         };
     };
+    reveal_artifact_api_work_artifacts__task_id__reveal_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ArtifactVersionRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    artifact_thumbnail_api_work_artifacts__task_id__thumbnail_get: {
+        parameters: {
+            query: {
+                version: string;
+            };
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     file_capabilities_api_work_capabilities_get: {
         parameters: {
             query?: never;
@@ -4717,6 +4854,41 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_summary_api_work_tasks__task_id__retry_summary_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RetrySummaryRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

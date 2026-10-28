@@ -102,4 +102,51 @@ def edit(data, spec):
     workbook.calculation.fullCalcOnLoad = True
     output = io.BytesIO()
     workbook.save(output)
-    return output.getvalue()
+    result = output.getvalue()
+    verify_edit(data, result, spec)
+    return result
+
+
+def verify_edit(original, revised, spec, layout=True):
+    """Do not publish a readable workbook that silently lost unrelated content."""
+    from copy import copy
+
+    from openpyxl import load_workbook
+
+    before = load_workbook(io.BytesIO(original), keep_links=True)
+    after = load_workbook(io.BytesIO(revised), keep_links=True)
+    expected = {}
+    for change in spec['edits']:
+        _, index, coordinate = change['target'].split(':')
+        value = change.get('formula', change.get('value'))
+        expected[(int(index), coordinate)] = None if value == '' else value
+    failure = 'Excel 修订结果与指定修改不一致，或改变了非目标内容/版式；未发布此副本。'
+    if before.sheetnames != after.sheetnames:
+        raise WorkError(failure, 422)
+    for index, (left, right) in enumerate(zip(before, after)):
+        rows, columns = max(left.max_row, right.max_row), max(left.max_column, right.max_column)
+        if rows * columns > 100000:
+            raise WorkError('Excel 修订验证范围超过十万个单元格，请缩小文件。', 422)
+        for row in left.iter_rows(max_row=rows, max_col=columns):
+            for cell in row:
+                changed = (index, cell.coordinate) in expected
+                value = expected.get((index, cell.coordinate), cell.value)
+                actual = right[cell.coordinate]
+                if actual.value != value or (not changed and actual.data_type != cell.data_type):
+                    raise WorkError(failure, 422)
+                if layout and any(
+                    copy(getattr(cell, field)) != copy(getattr(actual, field))
+                    for field in ('font', 'fill', 'border', 'alignment', 'number_format', 'protection')
+                ):
+                    raise WorkError(failure, 422)
+        if str(left.merged_cells) != str(right.merged_cells):
+            raise WorkError(failure, 422)
+        if layout:
+            for name, dimension in left.column_dimensions.items():
+                target = right.column_dimensions[name]
+                if (dimension.width, dimension.hidden) != (target.width, target.hidden):
+                    raise WorkError(failure, 422)
+            for name, dimension in left.row_dimensions.items():
+                target = right.row_dimensions[name]
+                if (dimension.height, dimension.hidden) != (target.height, target.hidden):
+                    raise WorkError(failure, 422)

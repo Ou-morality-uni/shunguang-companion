@@ -41,7 +41,7 @@ function WorkbookTargets({
   const rows = [...new Set(cells.map((cell) => cell.row))].sort((a, b) => a - b);
   const mapping = new Map(cells.map((cell) => [`${cell.column}${cell.row}`, cell.target]));
   return (
-    <>
+    <div className="workbook-preview">
       <label className="field">
         工作表
         <GlideSelect
@@ -76,7 +76,11 @@ function WorkbookTargets({
                   return (
                     <td key={column}>
                       {target ? (
-                        <AnnotationTarget prepare={async () => prepare(target)} label={target.location}>
+                        <AnnotationTarget
+                          anchor={prepare(target)}
+                          prepare={async () => prepare(target)}
+                          label={target.location}
+                        >
                           <div className="target-text">{target.text}</div>
                         </AnnotationTarget>
                       ) : (
@@ -90,10 +94,11 @@ function WorkbookTargets({
           </tbody>
         </table>
       </div>
-      <p className="space-note">
+      <details className="space-note workbook-notice">
+        <summary>读取范围说明</summary>
         按工作表坐标展示已返回内容；公式显示原式，未返回的单元格以 — 标记，不代表原文件为空。
-      </p>
-    </>
+      </details>
+    </div>
   );
 }
 
@@ -165,7 +170,11 @@ export function OfficePreview({ resource }: { resource: PreviewResource }) {
             </Button>
           )}
           {value.targets[0] && (
-            <AnnotationTarget prepare={async () => anchor(value.targets[0])} label="文档正文">
+            <AnnotationTarget
+              anchor={anchor(value.targets[0])}
+              prepare={async () => anchor(value.targets[0])}
+              label="文档正文"
+            >
               <DocumentMarkdown text={value.targets[0].text} />
             </AnnotationTarget>
           )}
@@ -175,7 +184,12 @@ export function OfficePreview({ resource }: { resource: PreviewResource }) {
         <>
           <WorkbookTargets targets={value.targets.slice(0, limit)} prepare={anchor} />
           {value.targets.length > limit && (
-            <Button type="button" variant="outline" onClick={() => setLimit(limit + 50)}>
+            <Button
+              type="button"
+              variant="outline"
+              className="workbook-more"
+              onClick={() => setLimit(limit + 50)}
+            >
               显示更多对象
             </Button>
           )}

@@ -10,6 +10,7 @@ const examples = [
   '开头。\n    hidden indented text\n结尾。',
   '开头。\n\thidden log\n结尾。',
   '开头。\n<pre>hidden\ntext</pre>\n结尾。',
+  '开头。\n<tool_call><function=office_files>hidden arguments</function></tool_call>\n结尾。',
 ];
 
 it.each(examples)('excludes boxed content at every possible streaming boundary: %s', (raw) => {

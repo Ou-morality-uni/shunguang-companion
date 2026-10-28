@@ -21,6 +21,7 @@ const pending: FileTask = {
   created_at: '2026-10-22T00:00:00Z',
   updated_at: '2026-10-22T00:00:00Z',
   can_restore: false,
+  can_retry_summary: false,
   steps: [{ action: 'delete', path: 'old.txt', state: 'pending' }],
 };
 

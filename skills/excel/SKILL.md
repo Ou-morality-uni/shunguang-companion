@@ -13,12 +13,12 @@ description: 制作有真实数值、公式和原生图表的 Excel 工作簿。
 
 数值保持数字类型，公式用单元格对象的 formula 字段，例如 {"formula":"=SUM(B2:B3)"}，不要将全部结果写成字符串。支持 bar、line、pie 原生图表，指定正确数据范围与类别。只使用当前任务需要的常规功能，不创建外部数据连接、宏或脚本。
 
-修改已有文件先用 office_inspect 取得实际版本和单元格目标，再提交 operation=edit 与 source。spec 示例：{"edits":[{"target":"s:0:B2","old":"12","value":15}]}。公式使用 formula 字段而非 value，不能猜测目标或跳过原文检查。
+修改已有文件先用 office_inspect 取得实际版本和单元格目标，再提交 operation=edit 与 source。完整参数形状：{"format":"xlsx","name":"修订.xlsx","operation":"edit","source":{"kind":"attachment","id":"检查返回的文件ID","version":"检查返回的64位版本哈希"},"spec":{"edits":[{"target":"s:0:B2","old":"12","value":15}]}}。source 的 kind、id、version 必须来自本聊天实际附件或成果，不把 kind/id 放在顶层，不用文件名代替 id。公式使用 formula 字段而非 value，不能猜测目标或跳过原文检查。
 
 写入公式不代表已完成计算。必须区分结构检查、真实重算、关键值核对和页面检查；引擎缺失或公式失败时给出原因，不能报告计算已验证。完成前以实际任务结果为准。
 
 执行工具基于 Hermes MIT 工具适配，来源与许可见 ../vendor/hermes/UPSTREAM.json 及 LICENSE。
 
-模板须传 source 并使用 edits；多个资料传 sources 和 instruction，省略 spec，由后台完整分批阅读。复杂任务传 outline 等待确认。export_pdf=true 可同时交付 PDF；包含公式时必须实际重算成功才发布，空缓存或公式错误会中止，不当作零。仅支持常规公式；宏、外部链接、数据连接及无法可靠保留的复杂对象会被拒绝。不要承诺所有 Excel 函数兼容。
+模板须传 source 并使用 edits；sources 只是参考资料，不能代替待修改原件的 source。修改不能使用 create 或把 edits 放进 sheets；原件必须明确，结构不符会中止，不发布空表。多个资料传 sources 和 instruction，省略 spec，由后台完整分批阅读。复杂任务传 outline 等待确认。只有用户明确要求额外 PDF 时才设置 export_pdf=true，默认只交付 Excel；包含公式时必须实际重算成功才发布，空缓存或公式错误会中止，不当作零。仅支持常规公式；宏、外部链接、数据连接及无法可靠保留的复杂对象会被拒绝。不要承诺所有 Excel 函数兼容。
 
 授权目录文件先 office_import；仅用户明确要求覆盖时将返回的 original 传给 overwrite，系统要求确认并保存恢复备份。每条修改引用实际 source/version/target，不能将选区或页码猜成单元格。

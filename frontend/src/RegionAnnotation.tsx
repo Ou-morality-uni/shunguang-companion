@@ -70,6 +70,7 @@ export function RegionAnnotation({
         {selecting && <span className="space-note">拖动框选；按 Escape 退出。</span>}
       </div>
       <AnnotationTarget
+        anchor={anchor}
         prepare={async () => ({ ...anchor, ...(rect && rect[2] > 0 && rect[3] > 0 ? { rect } : {}) })}
         label={anchor.location ?? alt}
       >

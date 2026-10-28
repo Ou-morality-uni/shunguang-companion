@@ -14,7 +14,26 @@ def test_rest_reminders_vary_without_repeating_the_previous_message():
     assert first and second and first != second
 
 
+def test_fresh_weather_is_optional_and_cannot_replace_consecutive_care_events(monkeypatch):
+    weather = {
+        'profile_city': '长春',
+        'condition': '晴',
+        'current': {'time': 'first', 'temperature_2m': 4.8},
+    }
+    care = SimpleNamespace(notice='', snapshot=lambda *args, **kwargs: weather)
+    monkeypatch.setattr(reminders.secrets, 'randbelow', lambda bound: 1)
+    daily = reminders.poll(immediate=True, weather_care=care)['event']
+    assert 'weather' not in daily
+    monkeypatch.setattr(reminders.secrets, 'randbelow', lambda bound: 0)
+    first = reminders.poll(immediate=True, weather_care=care)['event']
+    assert 'weather' in first and '查到' not in first['text']
+    weather['current']['time'] = 'second'
+    following = reminders.poll(immediate=True, weather_care=care)['event']
+    assert 'weather' not in following
+
+
 def test_weather_care_uses_saved_city_and_cached_weather_without_blocking_poll(tmp_path, monkeypatch):
+    monkeypatch.setattr(reminders.secrets, 'randbelow', lambda bound: 0)
     store = Store(tmp_path / 'care.sqlite3')
     store.initialize()
     store.update_user_profile({'city': '南宁'})
@@ -57,6 +76,7 @@ def test_weather_care_uses_saved_city_and_cached_weather_without_blocking_poll(t
 
 
 def test_cached_weather_stops_being_used_when_the_observation_is_too_old(tmp_path, monkeypatch):
+    monkeypatch.setattr(reminders.secrets, 'randbelow', lambda bound: 0)
     store = Store(tmp_path / 'stale-care.sqlite3')
     store.initialize()
     store.update_user_profile({'city': '南宁'})

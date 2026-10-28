@@ -16,3 +16,19 @@ it('shows compact uploaded files without manual tasks, output settings, or repea
   expect(screen.queryByText('成果保存位置')).toBeNull();
   expect(screen.queryByLabelText('选择上传文件')).toBeNull();
 });
+
+it('shows upload dates with local hours and minutes so same-day files can be distinguished', async () => {
+  vi.mocked(request).mockResolvedValue([
+    {
+      id: 'file',
+      name: '时间资料.pdf',
+      bytes: 1200,
+      created_at: new Date(2026, 9, 27, 14, 23).toISOString(),
+    },
+  ]);
+  render(<WorkSpace />);
+  const time = await screen.findByText(/14:23/);
+  expect(time.textContent).toContain('2026');
+  expect(time.textContent).toContain('10');
+  expect(time.textContent).toContain('27');
+});

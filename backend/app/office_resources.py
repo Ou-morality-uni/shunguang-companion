@@ -13,6 +13,20 @@ from .work_artifacts import artifact_bytes, attachment_bytes
 
 PREVIEWS = OrderedDict()
 PREVIEW_LOCK = Lock()
+THUMBNAILS = OrderedDict()
+THUMBNAIL_LOCK = Lock()
+
+
+def thumbnail(work, identity, version):
+    item, _ = resource_bytes(work, 'artifact', identity, version)
+    key = (item['version'], Path(item['name']).suffix.lower())
+    with THUMBNAIL_LOCK:
+        if key not in THUMBNAILS:
+            THUMBNAILS[key] = page_image(work, 'artifact', identity, 1, version, 240)
+        THUMBNAILS.move_to_end(key)
+        while len(THUMBNAILS) > 64 or sum(map(len, THUMBNAILS.values())) > 4 * 1024 * 1024:
+            THUMBNAILS.popitem(last=False)
+        return THUMBNAILS[key]
 
 
 def belongs_to_chat(work, conversation_id, kind, identity):
@@ -100,13 +114,22 @@ def page_info(work, kind, resource_id, version=None):
         return {'pages': len(document)}
 
 
-def page_image(work, kind, resource_id, page=1, version=None):
+def page_image(work, kind, resource_id, page=1, version=None, max_dimension=1600):
     import pypdfium2 as pdfium
 
     item, data = resource_bytes(work, kind, resource_id, version)
     if Path(item['name']).suffix.lower() not in ('.docx', '.xlsx', '.pptx', '.pdf'):
         try:
-            return document_readers.image_bytes(data)
+            raw = document_readers.image_bytes(data)
+            if max_dimension == 1600:
+                return raw
+            from PIL import Image
+
+            with Image.open(io.BytesIO(raw)) as image:
+                image.thumbnail((max_dimension, max_dimension))
+                output = io.BytesIO()
+                image.convert('RGB').save(output, format='JPEG')
+                return output.getvalue()
         except document_readers.DocumentError as error:
             raise WorkError(str(error), 422)
     data = preview_pdf(work, kind, resource_id, item['version'])
@@ -119,7 +142,7 @@ def page_image(work, kind, resource_id, page=1, version=None):
             width, height = source.get_size()
             if width <= 0 or height <= 0:
                 raise WorkError('页面尺寸无效。', 422)
-            bitmap = source.render(scale=min(1.8, 1600 / max(width, height)))
+            bitmap = source.render(scale=min(1.8, max_dimension / max(width, height)))
             output = io.BytesIO()
             bitmap.to_pil().convert('RGB').save(output, format='JPEG')
             return output.getvalue()

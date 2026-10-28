@@ -1,8 +1,25 @@
 """Local attachment references and task outputs share the existing path and hash gates."""
 
 import hashlib
+import os
+import subprocess
+from pathlib import Path
+from sys import platform as sys_platform
 
 from .filework import WorkError, no_link
+
+
+def reveal(work, identity, version):
+    from .office_resources import resource_bytes
+
+    with work.gate:
+        item, _ = resource_bytes(work, 'artifact', identity, version)
+        path = work.path(work.root(item['workspace_id']), item['path'])
+        if sys_platform != 'win32':
+            raise WorkError('此环境暂不支持打开本机文件管理器，请使用下载按钮。', 422)
+        explorer = str(Path(os.environ.get('WINDIR', 'C:/Windows')) / 'explorer.exe')
+        subprocess.Popen([explorer, '/select,', str(path)], shell=False)
+    return {'ok': True}
 
 
 def attachment(work, task_id):

@@ -19,13 +19,23 @@ ROUND_CALLS = 20
 def task_model(task):
     choice = task.get('context', {}).get('model_choice')
     if not choice:
-        return config.load_config()  # Legacy tasks created before model snapshots.
+        value = config.load_config()  # Legacy tasks created before model snapshots.
+        return (
+            value.model_copy(update={'llm_timeout': 120})
+            if task.get('context', {}).get('summary_timeout') == 120
+            else value
+        )
     from fastapi import HTTPException
 
     from .model_choices import choice_config
 
     try:
-        return choice_config(choice)
+        value = choice_config(choice)
+        return (
+            value.model_copy(update={'llm_timeout': 120})
+            if task.get('context', {}).get('summary_timeout') == 120
+            else value
+        )
     except HTTPException as error:
         raise WorkError(str(error.detail), error.status_code)
 

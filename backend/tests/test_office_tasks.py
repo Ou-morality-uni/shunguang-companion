@@ -1243,3 +1243,218 @@ def test_word_external_fields_are_blocked_before_the_office_process_starts(tmp_p
         assert task['status'] == 'failed'
         assert '外部字段' in task['error']
         assert not task['context'].get('artifacts')
+
+
+def test_excel_edit_in_create_shape_without_explicit_source_is_rejected(tmp_path, monkeypatch):
+    store = Store(tmp_path / 'office.sqlite3')
+    monkeypatch.setattr(runtime, 'store', store)
+    with TestClient(main.app) as client:
+        for spec in (
+            {'edits': [{'target': 's:0:A1', 'old': 'Name', 'value': ''}]},
+            {'sheets': [{'name': 'Sheet1', 'edits': [{'target': 's:0:A1', 'old': 'Name', 'value': ''}]}]},
+        ):
+            response = client.post(
+                '/api/work/office/tasks',
+                json={
+                    'format': 'xlsx',
+                    'name': 'revision.xlsx',
+                    'spec': spec,
+                },
+            )
+            assert response.status_code == 422, response.text
+
+
+def test_excel_revision_validation_rejects_lost_untargeted_cells_and_layout():
+    import pytest
+    from openpyxl import Workbook
+    from openpyxl.styles import Font
+
+    from backend.app.filework import WorkError
+    from backend.app.office_excel import edit, verify_edit
+
+    book = Workbook()
+    sheet = book.active
+    sheet.append(['Vote', 'Name', 'Keep'])
+    sheet.append(['Title', 'Candidate', '=1+1'])
+    sheet.merge_cells('A4:C4')
+    sheet['A4'] = 'Footer'
+    sheet['A4'].font = Font(bold=True)
+    sheet.column_dimensions['B'].width = 25
+    raw = io.BytesIO()
+    book.save(raw)
+    spec = {'edits': [{'target': 's:0:B2', 'old': 'Candidate', 'value': ''}]}
+    correct = edit(raw.getvalue(), spec)
+    verify_edit(raw.getvalue(), correct, spec)
+    blank = io.BytesIO()
+    Workbook().save(blank)
+    with pytest.raises(WorkError, match='修订'):
+        verify_edit(raw.getvalue(), blank.getvalue(), spec)
+
+
+def test_saved_artifact_reveal_resolves_id_and_version_before_launch(tmp_path, monkeypatch):
+    import subprocess
+
+    from backend.app import work_artifacts
+
+    store = Store(tmp_path / 'office.sqlite3')
+    monkeypatch.setattr(runtime, 'store', store)
+    launched = []
+    monkeypatch.setattr(work_artifacts, 'sys_platform', 'win32', raising=False)
+    monkeypatch.setattr(subprocess, 'Popen', lambda args, **kwargs: launched.append((args, kwargs)))
+    with TestClient(main.app) as client:
+        response = client.post(
+            '/api/work/office/tasks',
+            json={
+                'format': 'xlsx',
+                'name': 'safe.xlsx',
+                'spec': {'sheets': [{'name': 'Sheet1', 'rows': [['Keep']]}]},
+            },
+        )
+        task = asyncio.run(runtime.work.wait(response.json()['id']))
+        assert task['status'] == 'complete', task['error']
+        version = task['context']['artifact']['sha256']
+        base = '/api/work/artifacts/' + task['id'] + '/reveal'
+        assert client.post(base, json={'version': '0' * 64}).status_code == 409
+        assert launched == []
+        assert client.post(base, json={'version': version, 'path': 'C:/other'}).status_code == 422
+        assert client.post(base, json={'version': version}).status_code == 200
+        assert len(launched) == 1
+        args, options = launched[0]
+        assert args[1] == '/select,' and args[2].endswith('safe.xlsx')
+        assert not options.get('shell')
+
+
+def test_artifact_thumbnail_is_small_and_rejects_stale_versions(tmp_path, monkeypatch):
+    from PIL import Image
+
+    store = Store(tmp_path / 'office.sqlite3')
+    monkeypatch.setattr(runtime, 'store', store)
+    with TestClient(main.app) as client:
+        response = client.post(
+            '/api/work/office/tasks',
+            json={
+                'format': 'pdf',
+                'name': 'preview.pdf',
+                'spec': {'elements': [{'type': 'paragraph', 'text': 'Preview'}]},
+            },
+        )
+        task = asyncio.run(runtime.work.wait(response.json()['id']))
+        assert task['status'] == 'complete', task['error']
+        version = task['context']['artifact']['sha256']
+        base = '/api/work/artifacts/' + task['id'] + '/thumbnail'
+        result = client.get(base, params={'version': version})
+        assert result.status_code == 200, result.text
+        with Image.open(io.BytesIO(result.content)) as image:
+            assert max(image.size) <= 240
+        assert client.get(base, params={'version': '0' * 64}).status_code == 409
+
+
+def test_generated_excel_edit_without_source_explains_correction_and_publishes_nothing(tmp_path, monkeypatch):
+    import json
+
+    from backend.app import config, document_models
+
+    store = Store(tmp_path / 'office.sqlite3')
+    monkeypatch.setattr(runtime, 'store', store)
+    config.save_config(config.ModelConfig(llm_model='offline', llm_api_key='dummy'))
+
+    async def generate(*args, **kwargs):
+        return json.dumps({'edits': [{'target': 's:0:A1', 'old': 'Candidate', 'value': ''}]})
+
+    monkeypatch.setattr(document_models, 'invoke', generate)
+    with TestClient(main.app) as client:
+        response = client.post(
+            '/api/work/office/tasks', json={'format': 'xlsx', 'name': 'revised.xlsx', 'instruction': '只修改姓名'}
+        )
+        task = asyncio.run(runtime.work.wait(response.json()['id']))
+        assert task['status'] == 'failed'
+        assert 'source' in task['error']
+        assert not task['context'].get('artifact')
+
+
+def test_office_model_timeout_is_not_reported_as_a_disk_or_permission_error(tmp_path, monkeypatch):
+    from backend.app import config, document_models
+
+    store = Store(tmp_path / 'office.sqlite3')
+    monkeypatch.setattr(runtime, 'store', store)
+    config.save_config(config.ModelConfig(llm_model='offline', llm_api_key='dummy'))
+
+    async def timeout(*args, **kwargs):
+        raise TimeoutError('PRIVATE_DIAGNOSTIC_MUST_NOT_LEAK')
+
+    monkeypatch.setattr(document_models, 'invoke', timeout)
+    with TestClient(main.app) as client:
+        response = client.post(
+            '/api/work/office/tasks',
+            json={'format': 'xlsx', 'name': 'result.xlsx', 'instruction': '根据资料生成工作簿'},
+        )
+        task = asyncio.run(runtime.work.wait(response.json()['id']))
+        assert task['status'] == 'failed'
+        assert '超时' in task['error']
+        assert '磁盘' not in task['error'] and 'PRIVATE_DIAGNOSTIC' not in task['error']
+        assert not task['context'].get('artifact')
+
+
+def test_pdf_layout_preserving_revision_stops_before_queuing_or_publishing(tmp_path, monkeypatch):
+    from reportlab.pdfgen import canvas
+
+    store = Store(tmp_path / 'office.sqlite3')
+    monkeypatch.setattr(runtime, 'store', store)
+    raw = io.BytesIO()
+    pdf = canvas.Canvas(raw)
+    pdf.drawString(40, 700, 'Original PDF')
+    pdf.save()
+    with TestClient(main.app) as client:
+        identity = client.post('/api/work/upload?name=original.pdf', content=raw.getvalue()).json()['task']['id']
+        version = client.get(f'/api/work/resources/attachment/{identity}/targets').json()['version']
+        response = client.post(
+            '/api/work/office/tasks',
+            json={
+                'operation': 'edit',
+                'format': 'pdf',
+                'name': 'revised.pdf',
+                'source': {'kind': 'attachment', 'id': identity, 'version': version},
+                'spec': {'edits': [{'target': 'page:1', 'text': 'Changed'}]},
+            },
+        )
+        assert response.status_code == 422, response.text
+        assert '排版' in response.json()['detail']
+        assert len(client.get('/api/work/tasks').json()) == 1
+
+
+def test_chat_does_not_convert_a_pdf_to_word_when_the_user_says_not_to(tmp_path, monkeypatch):
+    from reportlab.pdfgen import canvas
+
+    from backend.app import feature_config
+    from backend.app.tool_registry import ToolRegistry
+    from backend.app.work_artifacts import attachment
+
+    store = Store(tmp_path / 'office.sqlite3')
+    monkeypatch.setattr(runtime, 'store', store)
+    raw = io.BytesIO()
+    pdf = canvas.Canvas(raw)
+    pdf.drawString(40, 700, 'Original')
+    pdf.save()
+    with TestClient(main.app) as client:
+        cid = store.create_conversation()['id']
+        identity = client.post('/api/work/upload?name=source.pdf', content=raw.getvalue()).json()['task']['id']
+        item = attachment(runtime.work, identity)
+        message = store.add_message(cid, 'user', '请改错字，保留PDF，不要转Word。', metadata={'attachments': [item]})
+        args = {
+            'operation': 'edit',
+            'format': 'docx',
+            'name': 'revised.docx',
+            'source': {'kind': 'attachment', 'id': identity, 'version': item['version']},
+            'spec': {'blocks': [{'type': 'paragraph', 'text': 'Changed'}]},
+        }
+        registry = ToolRegistry(feature_config.load(), store, message, [], runtime.work)
+        result = asyncio.run(registry.execute('office_files', args))
+        assert not result['ok'], result
+        assert '排版' in result['message']
+        message = store.add_message(cid, 'user', '请将PDF转换为Word。', metadata={'attachments': [item]})
+        registry = ToolRegistry(feature_config.load(), store, message, [], runtime.work)
+        result = asyncio.run(registry.execute('office_files', args))
+        assert result['ok'], result
+        task = asyncio.run(runtime.work.wait(result['task']['id']))
+        assert task['status'] == 'complete', task['error']
+        assert client.get('/api/work/artifacts/' + task['id']).content.startswith(b'PK')

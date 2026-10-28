@@ -32,6 +32,7 @@ export function useConversation(
   const busyRef = useRef(false);
   const stopRequestedRef = useRef(false);
   const activeRef = useRef<string | null>(null);
+  const historyRequest = useRef(0);
   const completeRef = useRef(onComplete);
   completeRef.current = onComplete;
   const speechRef = useRef(speech);
@@ -41,10 +42,21 @@ export function useConversation(
     setConversations(await request<Conversation[]>('/conversations'));
   }, []);
 
+  const refreshMessages = useCallback(async () => {
+    const id = activeRef.current;
+    if (!id || busyRef.current) return false;
+    const ticket = ++historyRequest.current;
+    const records = await request<Message[]>(`/conversations/${id}/messages`);
+    if (activeRef.current !== id || busyRef.current || ticket !== historyRequest.current) return false;
+    setMessages(records);
+    return true;
+  }, []);
+
   useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => {
     if (busyRef.current) return;
     let live = true;
+    const ticket = ++historyRequest.current;
     setHistoryLoading(true);
     if (!active) {
       setMessages([]);
@@ -53,7 +65,7 @@ export function useConversation(
     }
     request<Message[]>(`/conversations/${active}/messages`)
       .then((records) => {
-        if (live) setMessages(records);
+        if (live && ticket === historyRequest.current) setMessages(records);
       })
       .catch(() => {
         if (live) setError('无法读取这段对话，请重试。');
@@ -70,6 +82,7 @@ export function useConversation(
     if (busyRef.current || historyLoading) return;
     if (id === activeRef.current) return;
     speechRef.current?.cancel();
+    historyRequest.current++;
     activeRef.current = id;
     setActive(id);
     setMessages([]);
@@ -106,6 +119,7 @@ export function useConversation(
     text = text.trim();
     if (!text || busyRef.current || historyLoading) return false;
     busyRef.current = true;
+    historyRequest.current++;
     stopRequestedRef.current = false;
     speechRef.current?.start();
     setBusy(true);
@@ -205,6 +219,7 @@ export function useConversation(
     currentSources,
     abortRef,
     refreshConversations,
+    refreshMessages,
     selectConversation,
     deleteConversation,
     stopReply,

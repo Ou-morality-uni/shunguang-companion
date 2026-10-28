@@ -1,8 +1,8 @@
-import { render, screen, within, cleanup, fireEvent } from '@testing-library/react';
+import { render, screen, within, cleanup, fireEvent, waitFor } from '@testing-library/react';
 import '@testing-library/jest-dom/vitest';
 import { afterEach, it, expect, vi } from 'vitest';
 import { request } from './api';
-import { FileTasksProvider, MessageFileTasks } from './FileTasks';
+import { AttachmentCard, FileTasksProvider, MessageFileTasks } from './FileTasks';
 import { useResourcePreview } from './PreviewContext';
 vi.mock('./api', () => ({ request: vi.fn() }));
 vi.mock('./PreviewContext', () => ({ useResourcePreview: vi.fn() }));
@@ -10,18 +10,19 @@ afterEach(() => {
   cleanup();
   vi.resetAllMocks();
 });
-it('keeps a completed file conclusion at its initiating turn when later messages arrive', async () => {
+it('refreshes a durable chat reply instead of repeating the result in a task card', async () => {
   vi.mocked(request).mockResolvedValue([
     {
       id: 'task',
       title: '读取资料',
       status: 'complete',
-      context: { source_message_id: 'first' },
+      context: { source_message_id: 'first', reply_message_id: 'file-result-task' },
       steps: [{ action: 'summarize', result: { abstract: '资料明确提到三个关键点。' } }],
     },
   ]);
+  const onReply = vi.fn().mockResolvedValue(true);
   render(
-    <FileTasksProvider conversationId="chat" onWork={vi.fn()}>
+    <FileTasksProvider conversationId="chat" onWork={vi.fn()} onReply={onReply}>
       <section aria-label="第一轮回复">
         <MessageFileTasks requestId="first" />
       </section>
@@ -31,16 +32,14 @@ it('keeps a completed file conclusion at its initiating turn when later messages
       </section>
     </FileTasksProvider>,
   );
-  await screen.findByText('资料明确提到三个关键点。');
+  await waitFor(() => expect(onReply).toHaveBeenCalledOnce());
   expect(
-    within(screen.getByRole('region', { name: '第一轮回复' })).getByText('资料明确提到三个关键点。'),
-  ).toBeInTheDocument();
-  expect(
-    within(screen.getByRole('region', { name: '后续回复' })).queryByText('资料明确提到三个关键点。'),
+    within(screen.getByRole('region', { name: '第一轮回复' })).queryByText('资料明确提到三个关键点。'),
   ).toBeNull();
+  expect(screen.queryByText('读取资料')).toBeNull();
 });
 
-it('opens the exact attachment for a legacy task when its source message still contains the reference', async () => {
+it('keeps the original attachment preview while hiding legacy task controls', async () => {
   const open = vi.fn();
   vi.mocked(useResourcePreview).mockReturnValue(open);
   vi.mocked(request).mockResolvedValue([
@@ -55,6 +54,9 @@ it('opens the exact attachment for a legacy task when its source message still c
   ]);
   render(
     <FileTasksProvider conversationId="chat" onWork={vi.fn()}>
+      <AttachmentCard
+        attachment={{ id: 'upload', workspace_id: 'files', path: 'copy.pdf', name: '原资料.pdf', bytes: 10 }}
+      />
       <MessageFileTasks
         taskIds={['legacy']}
         attachments={[
@@ -63,7 +65,9 @@ it('opens the exact attachment for a legacy task when its source message still c
       />
     </FileTasksProvider>,
   );
-  fireEvent.click(await screen.findByText('预览资料'));
+  fireEvent.click(await screen.findByRole('button', { name: '预览 原资料.pdf' }));
+  expect(screen.queryByText('预览资料')).toBeNull();
+  expect(screen.queryByText('状态与操作')).toBeNull();
   expect(open).toHaveBeenCalledWith(
     { kind: 'attachment', id: 'upload', title: '原资料.pdf' },
     expect.anything(),

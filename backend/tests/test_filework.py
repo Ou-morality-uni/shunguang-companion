@@ -290,7 +290,6 @@ def test_registry_respects_enabled_tools_and_never_allows_model_approval(work):
     assert {
         'weather',
         'web_search',
-        'remember_user_fact',
         'recall_conversations',
         'workspace_files',
         'workspace_task',

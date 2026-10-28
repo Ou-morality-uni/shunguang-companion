@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app import updates
+from backend.app.constants import VERSION
 from backend.app.main import app
 
 
@@ -39,7 +40,7 @@ def test_manual_check_reports_a_newer_public_version(monkeypatch):
     response = TestClient(app).post('/api/updates/check')
     assert response.status_code == 200
     result = response.json()
-    assert result['current_version'] == '0.6.3'
+    assert result['current_version'] == VERSION
     assert result['latest_version'] == '0.6.10'
     assert result['status'] == 'available'
     assert result['summary'] == '新的正式版本。'
@@ -91,11 +92,11 @@ def test_repeated_checks_reuse_recent_success_and_keep_its_check_time(monkeypatc
         return httpx.Response(
             200,
             json={
-                'version': '0.6.3',
+                'version': VERSION,
                 'published_at': '2026-10-26',
                 'summary': '手动检查更新。',
                 'release_notes_url': (
-                    'https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.6.3/README.md'
+                    f'https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/{VERSION}/README.md'
                 ),
             },
         )
@@ -119,7 +120,7 @@ def install_github(monkeypatch, handler):
     )
 
 
-def release(version='0.6.3', **changes):
+def release(version=VERSION, **changes):
     return {
         'version': version,
         'published_at': '2026-10-26',
@@ -129,7 +130,7 @@ def release(version='0.6.3', **changes):
     }
 
 
-@pytest.mark.parametrize(('version', 'status'), [('0.6.3', 'current'), ('0.6.2', 'ahead'), ('0.6.10', 'available')])
+@pytest.mark.parametrize(('version', 'status'), [(VERSION, 'current'), ('0.6.2', 'ahead'), ('0.6.10', 'available')])
 def test_version_comparison_is_numeric(monkeypatch, version, status):
     install_github(monkeypatch, lambda _: httpx.Response(200, json=release(version)))
     result = TestClient(app).post('/api/updates/check').json()
@@ -150,7 +151,7 @@ def test_version_comparison_is_numeric(monkeypatch, version, status):
         {'summary': ' '},
         {'summary': 'x' * 2001},
         {'release_notes_url': 'javascript:alert(1)'},
-        {'release_notes_url': updates.REPOSITORY + '/blob/main/versions/0.6.3/README.md?redirect=evil'},
+        {'release_notes_url': updates.REPOSITORY + f'/blob/main/versions/{VERSION}/README.md?redirect=evil'},
     ],
 )
 def test_invalid_metadata_is_rejected(monkeypatch, changes):
@@ -163,7 +164,7 @@ def test_expired_success_does_not_hide_failure_and_retry_can_succeed(monkeypatch
     clock = [100]
     monkeypatch.setattr(updates, 'monotonic', lambda: clock[0])
     responses = iter(
-        [httpx.Response(200, json=release()), httpx.Response(503), httpx.Response(200, json=release('0.6.4'))]
+        [httpx.Response(200, json=release()), httpx.Response(503), httpx.Response(200, json=release('0.6.10'))]
     )
     install_github(monkeypatch, lambda _: next(responses))
     client = TestClient(app)
@@ -202,6 +203,6 @@ def test_opening_local_health_does_not_check_remote_and_lan_requires_login(monke
 
     install_github(monkeypatch, forbidden)
     client = TestClient(app)
-    assert client.get('/api/health').json() == {'status': 'ok', 'version': '0.6.3'}
+    assert client.get('/api/health').json() == {'status': 'ok', 'version': VERSION}
     monkeypatch.setenv('SHUNGUANG_LAN_MODE', '1')
     assert client.post('/api/updates/check').status_code == 401

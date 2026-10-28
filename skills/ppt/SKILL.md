@@ -19,4 +19,4 @@ office_files 的 format=pptx，name 为 .pptx 文件名。spec 示例：
 
 表格单元格目标为 slide:页索引:对象ID:cell:行:列，沿用 old/text。原生分类图表修改示例：{"edits":[{"target":"slide:0:3","chart":{"categories":["跑步","游泳"],"series":[{"name":"人数","values":[15,8]}]}}]}；先 inspect 原类别和数据，不擅自修改单位。复杂、组合或非分类图表需改用受支持副本，不宣称无损编辑。
 
-新稿可插入本聊天已附图片块 {"type":"image","image":{"kind":"attachment","id":"真实ID","version":"真实版本"}}，保持比例，文字仍为原生对象。模板传 source + edits，不重建全部页。跨资料制作传 instruction + sources，省略 spec。复杂任务传 outline 等待确认；export_pdf=true 同时导出 PDF。授权目录先 office_import，只有明确覆盖要求才传 overwrite=返回的 original，并等待系统确认。
+新稿可插入本聊天已附图片块 {"type":"image","image":{"kind":"attachment","id":"真实ID","version":"真实版本"}}，保持比例，文字仍为原生对象。模板传 source + edits，不重建全部页。跨资料制作传 instruction + sources，省略 spec。复杂任务传 outline 等待确认；只有用户明确要求额外 PDF 时才设置 export_pdf=true，默认只交付 PPT。授权目录先 office_import，只有明确覆盖要求才传 overwrite=返回的 original，并等待系统确认。

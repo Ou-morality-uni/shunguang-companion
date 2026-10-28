@@ -106,10 +106,21 @@ def register(registry, store, message, work):
                 'ok': True,
                 'background': True,
                 'task': {key: task[key] for key in ('id', 'title', 'status', 'conversation_id')},
-                'message': '已提交后台制作任务。请等待任务卡报告真实结果，不能提前声称成品已生成或校验通过。',
+                'message': '正在制作，完成后在聊天中交付实际文件；不能提前声称成品已生成或校验通过。',
             }
-        except ValidationError:
-            return {'ok': False, 'message': '成品参数无效，请按文件技能提供的结构提交。'}
+        except ValidationError as error:
+            issues = [
+                {'field': '.'.join(map(str, item['loc'])) or 'task', 'message': item['msg'][:180]}
+                for item in error.errors(include_input=False, include_context=False)[:8]
+            ]
+            return {
+                'ok': False,
+                'code': 'invalid_arguments',
+                'validation_errors': issues,
+                'message': '请修正成品参数后重试：'
+                + '；'.join(f'{item["field"]}: {item["message"]}' for item in issues)
+                + '。format 和 name 为顶层字段；source 必须包含 kind、id、version。',
+            }
         except WorkError as error:
             return {'ok': False, 'message': error.message}
 

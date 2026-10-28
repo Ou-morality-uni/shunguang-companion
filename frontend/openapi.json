@@ -180,6 +180,21 @@
         "title": "ApprovalRequest",
         "type": "object"
       },
+      "ArtifactVersionRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "version": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "version"
+        ],
+        "title": "ArtifactVersionRequest",
+        "type": "object"
+      },
       "CandidateConfirm": {
         "properties": {
           "id": {
@@ -694,6 +709,11 @@
         "properties": {
           "can_restore": {
             "title": "Can Restore",
+            "type": "boolean"
+          },
+          "can_retry_summary": {
+            "default": false,
+            "title": "Can Retry Summary",
             "type": "boolean"
           },
           "context": {
@@ -1574,6 +1594,18 @@
         "title": "ResourceRef",
         "type": "object"
       },
+      "RetrySummaryRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "extend_timeout": {
+            "default": false,
+            "title": "Extend Timeout",
+            "type": "boolean"
+          }
+        },
+        "title": "RetrySummaryRequest",
+        "type": "object"
+      },
       "SettingsOut": {
         "properties": {
           "base_url": {
@@ -2405,7 +2437,7 @@
   },
   "info": {
     "title": "瞬光伴行 API",
-    "version": "0.6.3"
+    "version": "0.6.6"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -4401,6 +4433,100 @@
         "summary": "Preview Artifact"
       }
     },
+    "/api/work/artifacts/{task_id}/reveal": {
+      "post": {
+        "operationId": "reveal_artifact_api_work_artifacts__task_id__reveal_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ArtifactVersionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reveal Artifact"
+      }
+    },
+    "/api/work/artifacts/{task_id}/thumbnail": {
+      "get": {
+        "operationId": "artifact_thumbnail_api_work_artifacts__task_id__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "version",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-f]{64}$",
+              "title": "Version",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Artifact Thumbnail"
+      }
+    },
     "/api/work/capabilities": {
       "get": {
         "operationId": "file_capabilities_api_work_capabilities_get",
@@ -5279,6 +5405,55 @@
           }
         },
         "summary": "Restore"
+      }
+    },
+    "/api/work/tasks/{task_id}/retry-summary": {
+      "post": {
+        "operationId": "retry_summary_api_work_tasks__task_id__retry_summary_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetrySummaryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileTaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Summary"
       }
     },
     "/api/work/tasks/{task_id}/vision": {

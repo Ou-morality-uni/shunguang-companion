@@ -52,7 +52,15 @@ export function WorkSpace({ onModelSettings: _settings }: { onModelSettings?: ()
             <div>
               <strong>{file.name}</strong>
               <small>
-                {(file.bytes / 1024).toFixed(1)} KiB · {new Date(file.created_at).toLocaleDateString('zh-CN')}
+                {(file.bytes / 1024).toFixed(1)} KiB ·{' '}
+                {new Date(file.created_at).toLocaleString('zh-CN', {
+                  year: 'numeric',
+                  month: '2-digit',
+                  day: '2-digit',
+                  hour: '2-digit',
+                  minute: '2-digit',
+                  hourCycle: 'h23',
+                })}
               </small>
             </div>
             <Button

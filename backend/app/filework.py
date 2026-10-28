@@ -118,9 +118,25 @@ def move_exclusive(source, destination):
         raise WorkError('当前系统不支持安全的不覆盖移动。', 422)
 
 
+def summary_retryable(record):
+    reads = [step for step in record['steps'] if step['action'] == 'read_document']
+    summaries = [step for step in record['steps'] if step['action'] == 'summarize']
+    return bool(
+        record['status'] == 'failed'
+        and record.get('context', {}).get('stage') == 'summarizing'
+        and reads
+        and len(summaries) == 1
+        and len(reads) + 1 == len(record['steps'])
+        and all(step['state'] == 'complete' and step.get('result') and step.get('read_stamp') for step in reads)
+        and summaries[0]['state'] != 'complete'
+        and not summaries[0].get('result')
+    )
+
+
 def public_task(record):
     return {
         **record,
+        'can_retry_summary': summary_retryable(record),
         'steps': [
             {
                 key: value
@@ -299,6 +315,26 @@ class FileWork:
 
     def submit(self, payload, origin='workbench', conversation_id=None, model_choice=None, source_message_id=None):
         with self.gate:
+            if (
+                origin == 'chat'
+                and not payload.instruction
+                and any(step.action == 'read_document' for step in payload.steps)
+            ):
+                message = (
+                    next(
+                        (
+                            item
+                            for item in self.store.messages(conversation_id)
+                            if item['id'] == source_message_id and item['role'] == 'user'
+                        ),
+                        {},
+                    )
+                    if conversation_id
+                    else {}
+                )
+                payload = payload.model_copy(
+                    update={'instruction': message.get('content', '')[:4000] or '请简要说明资料的主要内容。'}
+                )
             self.jobs = {key: job for key, job in self.jobs.items() if not job[0].done()}
             if self.closed or len(self.jobs) >= 8:
                 raise WorkError('文件任务队列已满或正在停止，请稍后重试。', 429)
@@ -354,7 +390,11 @@ class FileWork:
             task = self.store.create_file_task(
                 payload.workspace_id, payload.title, steps, status, origin, conversation_id
             )
-            task['context'].update(save_result=payload.save_result, source_message_id=source_message_id)
+            task['context'].update(
+                save_result=payload.save_result,
+                source_message_id=source_message_id,
+                chat_reply=origin == 'chat' and bool(payload.instruction),
+            )
             if source_message_id and conversation_id:
                 message = next(
                     (item for item in self.store.messages(conversation_id) if item['id'] == source_message_id), {}
@@ -456,6 +496,36 @@ class FileWork:
                 self.store.save_file_task(task)
             return {'workspace': workspace, 'path': name, 'task': public_task(task)}
 
+    def retry_summary(self, task_id, extend_timeout=False):
+        self.settle_pause(task_id)
+        with self.gate:
+            task = self.task(task_id)
+            if not summary_retryable(task):
+                raise WorkError('当前任务没有可重试的未完成总结。')
+            from .document_tasks import task_model
+
+            value = task_model(task)
+            if not config.public_config(value)['configured']:
+                raise WorkError('请先恢复原任务使用的模型连接。', 422)
+            for step in task['steps']:
+                if step['action'] == 'read_document':
+                    root = self.root(step.get('workspace_id', task['workspace_id']))
+                    self.check_state(root, {step['path']: step['read_stamp']})
+            if self.closed or sum(not job[0].done() for job in self.jobs.values()) >= 8:
+                raise WorkError('文件任务队列已满或正在停止，请稍后重试。', 429)
+            if extend_timeout:
+                task['context']['summary_timeout'] = 120
+            else:
+                task['context'].pop('summary_timeout', None)
+            if task.get('origin') == 'chat':
+                if not task['context'].get('chat_reply'):
+                    task['context']['save_result'] = False
+                task['context']['chat_reply'] = True
+            task.update(status='queued', error='')
+            self.store.save_file_task(task)
+            self.schedule(task_id)
+            return public_task(task)
+
     def continue_task(self, task_id, approved):
         self.settle_pause(task_id)
         with self.gate:
@@ -531,7 +601,7 @@ class FileWork:
         if (
             job
             and not job[0].done()
-            and self.task(task_id)['status'] in ('waiting_vision', 'waiting_limit', 'waiting_output')
+            and self.task(task_id)['status'] in ('waiting_vision', 'waiting_limit', 'waiting_output', 'failed')
         ):
             try:
                 job[0].result(timeout=10)
@@ -702,6 +772,11 @@ class FileWork:
                         if not reader(self, task, step, check):
                             return
                     else:
+                        with self.gate:
+                            for read_step in task['steps']:
+                                if read_step['action'] == 'read_document':
+                                    root = self.root(read_step.get('workspace_id', task['workspace_id']))
+                                    self.check_state(root, {read_step['path']: read_step.get('read_stamp')})
                         document_tasks.summarize(self, task, step, check)
                     step['state'] = 'complete'
                     self.store.save_file_task(task)
@@ -741,10 +816,13 @@ class FileWork:
             task.update(status='cancelled', error='任务已取消，已完成的修改可在记录中检查并恢复。')
         except WorkError as error:
             task.update(status='failed', error=error.message)
-        except OSError:
-            task.update(
-                status='failed', error='文件操作失败，请检查文件占用、磁盘空间和访问权限；已保存的修改可尝试恢复。'
-            )
+        except OSError as error:
+            from .logging_setup import report_error
+
+            phase = task.get('context', {}).get('stage')
+            phase = phase if phase in ('reading', 'recognizing', 'summarizing', 'saving') else 'file_operation'
+            report_error('file_task_io_' + phase, error)
+            task.update(status='failed', error='文件暂时无法访问或写入，本次处理已停止。')
         except Exception as error:
             from .logging_setup import report_error
 

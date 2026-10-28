@@ -117,18 +117,20 @@
 .office-sheet-scroll {
   width: 100%;
   overflow: auto;
-  max-height: 60vh;
+  flex: 1;
+  min-height: 0;
 }
 .office-sheet {
   border-collapse: collapse;
-  width: 100%;
+  width: max-content;
+  min-width: 100%;
   font-size: 13px;
 }
 .office-sheet th,
 .office-sheet td {
   border: 1px solid #ad7d6944;
   padding: 8px;
-  min-width: 68px;
+  min-width: 144px;
   max-width: 360px;
   vertical-align: top;
 }
@@ -137,13 +139,57 @@
   position: sticky;
   top: 0;
 }
+.office-sheet th:first-child {
+  min-width: 42px;
+}
 .office-sheet .annotation-target {
   min-width: 70px;
   padding-right: 24px;
 }
 .office-sheet .target-text {
   white-space: pre-wrap;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
+  min-width: 120px;
+  max-width: 320px;
+}
+.workbook-preview {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  gap: 8px;
+}
+.workbook-preview > .field {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin: 0;
+  gap: 12px;
+}
+.workbook-preview > .field > button {
+  flex: 1;
+}
+.workbook-preview > .space-note {
+  margin: 0;
+  font-size: 11px;
+}
+.office-preview .workbook-more {
+  min-height: 28px;
+  height: 28px;
+  font-size: 12px;
+  margin-top: 4px;
+  padding: 4px 10px;
+}
+.preview-body:has(.workbook-preview),
+.office-preview:has(.workbook-preview) {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.preview-body:has(.workbook-preview) {
+  padding: 10px;
 }
 .office-targets .annotation-target {
   padding: 10px;
@@ -197,4 +243,78 @@
     display: block;
     margin: 4px 0 0;
   }
+}
+.annotation-bubble {
+  z-index: 170;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(320px, calc(100vw - 24px));
+  max-height: min(430px, var(--radix-popover-content-available-height));
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid #ad7d6970;
+  border-radius: 15px;
+  background: #301e28fa;
+  color: #f5e7df;
+  box-shadow: 0 10px 30px #0006;
+}
+.annotation-bubble small {
+  color: #ccb4b8;
+}
+.annotation-bubble textarea {
+  width: 100%;
+  min-height: 80px;
+  max-height: 180px;
+  padding: 8px;
+  resize: vertical;
+  border: 1px solid #ad7d6955;
+  border-radius: 8px;
+  background: #1c131b;
+  color: inherit;
+  font: inherit;
+}
+.annotation-bubble .work-actions {
+  gap: 6px;
+  margin: 0;
+}
+.annotation-bubble .field {
+  margin: 0;
+  gap: 6px;
+}
+.annotation-bubble .work-actions button {
+  padding: 6px 10px;
+  min-height: 30px;
+  height: auto;
+  font-size: 12px;
+}
+.annotation-bubble .annotation-quote {
+  max-height: 60px;
+  font-size: 12px;
+}
+.annotation-pins {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  gap: 3px;
+  z-index: 5;
+}
+.annotation-pins .annotation-pin {
+  border: 1px solid #f4c68a;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: #9d3555;
+  color: #fff;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 22px;
+  box-shadow: 0 2px 6px #0004;
+}
+.annotation-target > .annotation-pins {
+  left: auto;
+  right: 26px;
+  top: -6px;
 }

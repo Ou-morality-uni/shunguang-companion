@@ -1,8 +1,7 @@
 import { createContext, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import { ContextMenu } from 'radix-ui';
+import { ContextMenu, Popover } from 'radix-ui';
 import { MessageSquarePlus, Pencil, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { request } from './api';
 import './annotations.css';
 
@@ -24,14 +23,15 @@ export type AnnotationDraft = AnnotationAnchor & {
   updated_at: string;
 };
 export type AnnotationSubmission = { ids: string[]; scope: string };
-type Editor = AnnotationAnchor & { id?: string; comment: string };
+type ViewAnchor = { getBoundingClientRect: () => DOMRect };
+type Editor = AnnotationAnchor & { id?: string; comment: string; token?: string };
 type State = {
   drafts: AnnotationDraft[];
-  begin: (prepare: () => Promise<AnnotationAnchor>, quote?: string) => Promise<void>;
-  edit: (draft: AnnotationDraft) => void;
+  begin: (prepare: () => Promise<AnnotationAnchor>, quote?: string, view?: ViewAnchor) => Promise<void>;
+  edit: (draft: AnnotationDraft, view?: ViewAnchor, hover?: boolean) => void;
   remove: (id: string) => Promise<void>;
   submitted: (ids: string[]) => void;
-  submission: () => AnnotationSubmission | undefined;
+  submission: () => Promise<AnnotationSubmission | undefined>;
   sending: boolean;
   setSending: (value: boolean) => void;
   error: string;
@@ -63,6 +63,12 @@ export function AnnotationProvider({
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [sending, setSending] = useState(false);
+  const viewAnchor = useRef<ViewAnchor | null>(null);
+  const hoverOpen = useRef(false);
+  const saveLock = useRef(false);
+  const opening = useRef(0);
+  const active = useRef(editor);
+  active.current = editor;
   const scope = conversationId ?? `new:${newScope}`;
   const [draftOwner, setDraftOwner] = useState(scope);
   const visibleDrafts = draftOwner === scope ? drafts : [];
@@ -109,20 +115,44 @@ export function AnnotationProvider({
       });
     return () => abort.abort();
   }, [conversationId, newScope]);
-  async function begin(prepare: () => Promise<AnnotationAnchor>, quote = '') {
+  async function begin(prepare: () => Promise<AnnotationAnchor>, quote = '', view?: ViewAnchor) {
+    const ticket = ++opening.current;
     const expected = scope;
+    if (sending || saveLock.current) return;
+    if (active.current && !(await save())) return;
     setError('');
     try {
       const anchor = await prepare();
-      if (current.current === expected)
-        setEditor({ ...anchor, quote: quote || anchor.quote || '', comment: '' });
+      if (current.current === expected && opening.current === ticket) {
+        viewAnchor.current = view ?? null;
+        hoverOpen.current = false;
+        setEditor({ ...anchor, quote: quote || anchor.quote || '', comment: '', token: crypto.randomUUID() });
+      }
     } catch (failure) {
       if (current.current === expected) setError((failure as Error).message);
     }
   }
   async function save() {
-    if (!editor || !editor.comment.trim() || saving) return;
+    const editor = active.current;
+    if (saveLock.current) return false;
+    if (!editor) return true;
+    if (!editor.comment.trim()) {
+      if (editor.id) {
+        setError('批注不能为空；如需删除，请使用草稿列表的删除按钮。');
+        return false;
+      }
+      setEditor(null);
+      return true;
+    }
+    if (
+      editor.id &&
+      visibleDrafts.some((draft) => draft.id === editor.id && draft.comment === editor.comment)
+    ) {
+      setEditor(null);
+      return true;
+    }
     const expected = scope;
+    saveLock.current = true;
     setSaving(true);
     setError('');
     try {
@@ -152,11 +182,14 @@ export function AnnotationProvider({
         setDrafts((items) =>
           editor.id ? items.map((item) => (item.id === editor.id ? value : item)) : [...items, value],
         );
-        setEditor(null);
+        setEditor((current) => (current?.token === editor.token ? null : current));
       }
+      return true;
     } catch (failure) {
       if (current.current === expected) setError((failure as Error).message);
+      return false;
     } finally {
+      saveLock.current = false;
       setSaving(false);
     }
   }
@@ -177,71 +210,174 @@ export function AnnotationProvider({
       value={{
         drafts: visibleDrafts,
         begin,
-        edit: setEditor,
+        edit: (draft, view, hover = false) => {
+          if (
+            sending ||
+            saveLock.current ||
+            (hover && active.current && (!hoverOpen.current || active.current.id === draft.id))
+          )
+            return;
+          const expected = scope;
+          const ticket = ++opening.current;
+          void (async () => {
+            if (active.current && !(await save())) return;
+            if (current.current !== expected || opening.current !== ticket) return;
+            viewAnchor.current =
+              view ?? document.querySelector<HTMLElement>(`[data-annotation-id="${draft.id}"]`);
+            hoverOpen.current = hover;
+            setError('');
+            setEditor({ ...draft, token: crypto.randomUUID() });
+          })();
+        },
         remove,
-        sending,
+        sending: sending || saving,
         setSending,
         error,
         submitted: (ids) => {
           ids.forEach((id) => changes.current.set(id, null));
           setDrafts((items) => items.filter((item) => !ids.includes(item.id)));
         },
-        submission: () =>
-          visibleDrafts.length ? { ids: visibleDrafts.map((item) => item.id), scope: newScope } : undefined,
+        submission: async () => {
+          const expected = scope;
+          if (!(await save()) || current.current !== expected)
+            throw new Error('批注尚未保存，请保存成功后再发送。');
+          const items = new Map(visibleDrafts.map((draft) => [draft.id, draft]));
+          for (const [id, draft] of changes.current) {
+            if (draft) items.set(id, draft);
+            else items.delete(id);
+          }
+          return items.size ? { ids: [...items.keys()], scope: newScope } : undefined;
+        },
       }}
     >
       {children}
-      <Dialog
+      <Popover.Root
+        modal={false}
         open={!!editor}
         onOpenChange={(open) => {
-          if (!open && !saving) setEditor(null);
+          if (!open) void save();
         }}
       >
-        <DialogContent className="annotation-dialog">
-          <DialogTitle>{editor?.id ? '编辑批注' : '添加批注'}</DialogTitle>
-          <DialogDescription>
-            {editor?.name} · {editor?.location}。保存为草稿，确认发送后再修改。
-          </DialogDescription>
-          {editor?.quote && (
-            <blockquote className="annotation-quote">{editor.quote.slice(0, 1000)}</blockquote>
-          )}
-          <label className="field">
-            修改意见
-            <textarea
-              autoFocus
-              rows={4}
-              maxLength={2000}
-              value={editor?.comment ?? ''}
-              onChange={(event) => setEditor((value) => value && { ...value, comment: event.target.value })}
-            />
-          </label>
-          {error && <p role="alert">{error}</p>}
-          <div className="work-actions">
-            <Button type="button" disabled={saving || !editor?.comment.trim()} onClick={() => void save()}>
-              保存批注草稿
-            </Button>
-            <Button type="button" variant="outline" disabled={saving} onClick={() => setEditor(null)}>
-              取消
-            </Button>
-          </div>
-        </DialogContent>
-      </Dialog>
+        <Popover.Anchor virtualRef={viewAnchor} />
+        <Popover.Portal>
+          <Popover.Content
+            className="annotation-bubble"
+            side="bottom"
+            align="start"
+            sideOffset={6}
+            collisionPadding={12}
+            updatePositionStrategy="always"
+            onOpenAutoFocus={(event) => {
+              if (hoverOpen.current) event.preventDefault();
+            }}
+            onCloseAutoFocus={(event) => event.preventDefault()}
+            onInteractOutside={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+            onEscapeKeyDown={(event) => {
+              event.preventDefault();
+              void save();
+            }}
+            aria-label={editor?.id ? '编辑批注' : '添加批注'}
+          >
+            <strong>{editor?.id ? '编辑批注' : '添加批注'}</strong>
+            <small>
+              {editor?.name} · {editor?.location}。保存为草稿，确认发送后再修改。
+            </small>
+            {editor?.quote && (
+              <blockquote className="annotation-quote">{editor.quote.slice(0, 1000)}</blockquote>
+            )}
+            <label className="field">
+              修改意见
+              <textarea
+                rows={3}
+                disabled={saving || sending}
+                maxLength={2000}
+                value={editor?.comment ?? ''}
+                onChange={(event) => {
+                  hoverOpen.current = false;
+                  setEditor((value) => value && { ...value, comment: event.target.value });
+                }}
+              />
+            </label>
+            {error && <p role="alert">{error}</p>}
+            <div className="work-actions">
+              <Button type="button" disabled={saving || !editor?.comment.trim()} onClick={() => void save()}>
+                保存批注草稿
+              </Button>
+              <Button type="button" variant="outline" disabled={saving} onClick={() => setEditor(null)}>
+                取消
+              </Button>
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     </Context.Provider>
+  );
+}
+
+export function AnnotationPins({
+  anchor,
+  messageId,
+  draftId,
+}: {
+  anchor?: AnnotationAnchor;
+  messageId?: string;
+  draftId?: string;
+}) {
+  const state = useAnnotations();
+  if (!state) return null;
+  return (
+    <span className="annotation-pins">
+      {state.drafts.map((draft, index) => {
+        const matches = anchor
+          ? draft.source.kind === anchor.source.kind &&
+            draft.source.id === anchor.source.id &&
+            draft.source.version === anchor.source.version &&
+            draft.target_id === anchor.target_id
+          : draft.source.kind === 'message' && draft.source.id === messageId;
+        if (!matches || (draftId && draft.id !== draftId)) return null;
+        return (
+          <button
+            key={draft.id}
+            type="button"
+            className="annotation-pin"
+            data-annotation-id={draft.id}
+            aria-label={`批注 ${index + 1}`}
+            title={draft.comment}
+            disabled={state.sending}
+            onMouseEnter={(event) => state.edit(draft, event.currentTarget, true)}
+            onClick={(event) => {
+              event.stopPropagation();
+              state.edit(draft, event.currentTarget);
+            }}
+          >
+            {index + 1}
+          </button>
+        );
+      })}
+    </span>
   );
 }
 
 export function AnnotationTarget({
   prepare,
+  anchor,
+  messageId,
   label,
   children,
 }: {
   prepare: () => Promise<AnnotationAnchor>;
+  anchor?: AnnotationAnchor;
+  messageId?: string;
   label: string;
   children: ReactNode;
 }) {
   const state = useAnnotations();
   const host = useRef<HTMLDivElement>(null);
   const quote = useRef('');
+  const [loaded, setLoaded] = useState<AnnotationAnchor>();
   function capture() {
     const selection = window.getSelection();
     quote.current =
@@ -251,7 +387,15 @@ export function AnnotationTarget({
   }
   if (!state) return <>{children}</>;
   const begin = () => {
-    void state.begin(prepare, quote.current);
+    void state.begin(
+      async () => {
+        const value = await prepare();
+        setLoaded(value);
+        return value;
+      },
+      quote.current,
+      host.current ?? undefined,
+    );
   };
   return (
     <ContextMenu.Root>
@@ -265,6 +409,7 @@ export function AnnotationTarget({
           }}
         >
           {children}
+          <AnnotationPins anchor={anchor ?? loaded} messageId={messageId} />
           <button
             type="button"
             className="annotation-trigger icon-button"
@@ -279,7 +424,11 @@ export function AnnotationTarget({
         </div>
       </ContextMenu.Trigger>
       <ContextMenu.Portal>
-        <ContextMenu.Content className="annotation-menu" aria-label="选区操作">
+        <ContextMenu.Content
+          className="annotation-menu"
+          aria-label="选区操作"
+          onCloseAutoFocus={(event) => event.preventDefault()}
+        >
           <ContextMenu.Item disabled={state.sending} onSelect={begin}>
             添加评论
           </ContextMenu.Item>
