@@ -16,6 +16,19 @@ mutation_lock = asyncio.Lock()
 work: FileWork | None = None
 weather_care = None
 memory_jobs = None
+qq = None
+
+
+def edition_conversations():
+    from .edition import conversation_ids
+
+    return conversation_ids()
+
+
+def require_web_conversation(conversation_id):
+    from .edition import require_web_conversation as check
+
+    check(conversation_id)
 
 
 def require_conversation(conversation_id):

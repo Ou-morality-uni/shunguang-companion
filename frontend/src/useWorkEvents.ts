@@ -14,8 +14,20 @@ export function useWorkEvents(enabled: boolean, audio: AudioController) {
     let cursor: number | null = null,
       running = false,
       denied = false;
+    let timer: number | undefined;
+    let delay = 1000;
+    function schedule() {
+      window.clearTimeout(timer);
+      if (!abort.signal.aborted && !denied) timer = window.setTimeout(() => void poll(), delay);
+    }
     async function poll() {
-      if (running || denied || abort.signal.aborted || document.hidden) return;
+      if (running || denied || abort.signal.aborted) return;
+      if (document.hidden) {
+        delay = 15000;
+        schedule();
+        return;
+      }
+      window.clearTimeout(timer);
       running = true;
       try {
         const result = await request<{ cursor: number; events: WorkEvent[] }>(
@@ -25,6 +37,8 @@ export function useWorkEvents(enabled: boolean, audio: AudioController) {
         if (abort.signal.aborted) return;
         const current = cursor;
         cursor = result.cursor;
+        delay = current === null || result.events.length ? 1000 : Math.min(15000, delay * 2);
+        if (result.events.length) window.dispatchEvent(new Event('shunguang-work-updated'));
         const terminal = new Set(
           result.events
             .filter((event) =>
@@ -47,17 +61,26 @@ export function useWorkEvents(enabled: boolean, audio: AudioController) {
           audioRef.current.enqueueWork(event);
         }
       } catch (error) {
+        delay = Math.min(15000, delay * 2);
         if (String((error as Error).message).includes('工作台仅供')) denied = true;
         // Network or speech errors do not cancel work; the next poll can recover.
       } finally {
         running = false;
+        schedule();
       }
     }
     void poll();
-    const timer = window.setInterval(() => void poll(), 1000);
+    const visible = () => {
+      if (!document.hidden) {
+        delay = 1000;
+        void poll();
+      }
+    };
+    document.addEventListener('visibilitychange', visible);
     return () => {
       abort.abort();
-      clearInterval(timer);
+      window.clearTimeout(timer);
+      document.removeEventListener('visibilitychange', visible);
     };
   }, [enabled]);
 }

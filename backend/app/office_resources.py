@@ -8,8 +8,8 @@ from pathlib import Path
 from threading import Lock
 
 from . import document_readers
-from .filework import WorkError
 from .work_artifacts import artifact_bytes, attachment_bytes
+from .work_models import WorkError
 
 PREVIEWS = OrderedDict()
 PREVIEW_LOCK = Lock()

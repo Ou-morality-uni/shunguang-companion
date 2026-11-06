@@ -15,7 +15,11 @@ class ToolRegistry:
         self.handlers = {}
 
         async def network(name, args):
-            return await tools.execute(name, args)
+            token = tools.SEARCH_SCOPE.set(str(message.get('conversation_id', 'panel')))
+            try:
+                return await tools.execute(name, args)
+            finally:
+                tools.SEARCH_SCOPE.reset(token)
 
         async def user_memory(name, args):
             return await asyncio.to_thread(memory.execute, name, args, store, message, features.memory, history)

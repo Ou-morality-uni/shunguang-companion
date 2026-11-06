@@ -9,7 +9,7 @@ import uvicorn
 from langchain_core.messages import AIMessageChunk
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from backend.app import config, main, rag, runtime, tools
+from backend.app import config, main, memory_jobs, rag, runtime, tools
 from backend.app.routes import chat as chat_routes
 from backend.app.store import Store
 
@@ -43,6 +43,7 @@ if __name__ == '__main__':
         config.save_config(config.ModelConfig(llm_model='ui-test-only', llm_api_key='dummy-key-not-a-real-credential'))
         runtime.store = Store(Path(folder) / 'qa.sqlite3')
         chat_routes.build_model = lambda _: PreviewModel()
+        memory_jobs.build_memory_model = lambda _: (_ for _ in ()).throw(RuntimeError('Offline UI fixture'))
         tools.schemas = lambda _: []
         rag.status = lambda: {'ready': False}
         uvicorn.run(main.app, host='127.0.0.1', port=8001, access_log=False)

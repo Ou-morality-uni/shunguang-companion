@@ -1,9 +1,11 @@
-# 瞬光伴行 v0.6.6
+# 瞬光伴行 v0.7.3
 
-[v0.6.6 更新说明](versions/0.6.6/README.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md)
+[v0.7.3 更新说明](versions/0.7.3/README.md) · [QQ 接入](docs/qq-setup.md) · [服务器部署](docs/server-deployment.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md)
 
 [English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.7.3](versions/0.7.3/README.md)：QQ私聊／群／成员手动档案、逐条使用范围、摘要隔离和精简控制面板。
+- [v0.7.2](versions/0.7.2/README.md)：统一安装启动入口、完整／轻量选择、可选 QQ 公开接入及服务器部署，包含0.7.1质量改进。
 - [v0.6.6](versions/0.6.6/README.md)：阅读总结直接回到聊天，移除内部工具卡与重复任务面板，精简超时重试，沿用后台自动记忆，上传记录显示时分。
 - [v0.6.5](versions/0.6.5/README.md)：加强 Excel 修订与差异校验，批注改为就地气泡和自动保存的编号球，成果使用紧凑缩图，支持预览、箭头下载及查看位置。
 - [v0.6.4](versions/0.6.4/README.md)：修复连续文件工具调用与阅读恢复，移除聊天顶部两栏，支持可收缩的三分区预览，并丰富随机关怀提醒。
@@ -20,33 +22,36 @@
 
 以《绝区零》叶瞬光为原型的非官方陪伴 Web 应用。支持角色对话、流式回复与停止、多模型连接、角色与世界知识检索及引用、天气与网页搜索、自动跨会话记忆与手动管理、参考音频声音克隆、播放队列和休息提醒。电脑运行后端，电脑或同一 Wi-Fi 的手机通过浏览器使用；所有配置集中在“陪伴设置”。
 
-## 首次安装
+## 首次安装与启动
 
-支持 **Windows 10/11 x64、标准版 CPython 3.11／3.12／3.13／3.14 和 Node.js 24**。Python 使用 64 位稳定版，建议安装对应分支的较新补丁版本；暂不支持 3.15、预发布版或自由线程版。先安装 Python 与 Node.js，确认终端能运行 `py -0p`（列出已有 Python，或能直接运行 `python`）、`node` 和 `npm`。它们是基础运行时，项目安装脚本不会替你安装。建议16GB内存；脚本要求至少12GiB磁盘余量，首次安装需要联网下载数GB依赖和模型。
+支持 **Windows 10/11 x64**。不需要先手动安装 Python 和 Node.js；脚本优先复用标准版64位 CPython 3.11～3.14 和 Node.js 24，缺失时从官方来源准备锁定版本到当前用户目录 `%LOCALAPPDATA%/ShunguangCompanion/runtimes/`，校验下载文件，尽量不修改系统 PATH。VC++系统运行库缺失时可能出现管理员授权提示。首次安装需要联网，无法保证所有地区的官方源都可访问；失败会显示阶段，不静默改用未知镜像。
 
-安装器优先沿用可用的项目环境；首次安装会从已有解释器中选择较新的受支持版本，不再固定要求 3.11。需要指定解释器时可运行 `Install.bat -PythonPath "D:\Python314\python.exe"`；仅检查选择结果可追加 `-CheckPython`。已有环境版本冲突时会停止并提示，不会自动删除环境或用户数据。切换解释器和验证范围见 [0.6.3 Python 兼容说明](versions/0.6.3/README.md)。
-
-1. 获取项目。已安装 Git 时，可在 PowerShell 执行：
+1. 在 PowerShell 克隆，或点击 **Code → Download ZIP** 并完整解压到普通目录：
 
    ```powershell
    git clone https://github.com/Ou-morality-uni/shunguang-companion
    cd shunguang-companion
    ```
 
-   也可点击 **Code → Download ZIP**，解压到普通文件夹并进入项目根目录。
-2. 双击根目录 **`Install.bat`**。安装窗口会显示进度与错误；等待出现 `Installation success`。
-3. 双击 **`Start_up.bat`**。CMD 显示后端日志，服务就绪后自动打开 `http://127.0.0.1:8000/`。
-4. 在“陪伴设置 → 模型连接”填写自己的 API Key，读取并选择模型，保存并测试连接。
+2. 双击 **Start_up.bat**，按向导选择：
+   - **完整安装**：本地知识库、BGE-M3与索引，需要额外下载数GB文件，至少12GiB可用磁盘，建议16GB内存；CPU建索引可能较慢。
+   - **轻量安装**：保留人格、记忆、云端聊天／声音／搜索和可选QQ，不安装向量依赖或权重，至少3GiB可用磁盘；以后可补装。
+   - **QQ接入**：与上面的模式独立选择；暂不接入无需安装桥接。接入仅提供指南和官方入口，不自动下载或登录QQ。
+   - **LibreOffice**：可选择查看官方安装指南；不自动安装，缺失不阻塞聊天或QQ。
+3. 等待安装完成，服务就绪后自动打开 `http://127.0.0.1:8000/`。保留后端日志窗口，关闭网页不会停止后台；正常退出后端可按Ctrl+C。
+4. 在“陪伴设置 → 高级模型连接”填写自己的API、选择模型并测试。脚本不购买服务或填写密钥，模型和工具可能收费。
 
-`Install.bat` 会创建两个隔离的 Python 环境，安装锁定的后端、前端和检索依赖，构建前端，创建空 SQLite 数据库，检查音频组件，下载并校验 BGE-M3，然后使用**仓库已附带的角色与世界资料**建立本地 Qdrant 索引并验证实际检索。不需要自己整理或添加 Markdown/TXT，也不需要另外安装 MySQL、Docker、CUDA Toolkit 或独立 Qdrant 服务。
+之后双击相同入口快速启动；检测到依赖或前端输入变化时提示更新，不自动拉取源码。重新进入向导／补装知识库：先正常停止后端，在根目录执行 `Start_up.bat -Setup`，重新选择完整安装。已有环境不会被自动删除，切换为轻量也不删除已有模型或历史。
 
-安装会检查 NVIDIA 驱动与显存条件，尝试 CUDA 12.8 版 PyTorch并验证实际运算；条件不满足时使用CPU，CPU索引和检索可能较慢。脚本不会安装或修改显卡驱动。若缺少Microsoft Visual C++运行库，会从微软官方下载并检查签名，Windows可能要求管理员确认。主动使用CPU可执行：
+`Install.bat` 保留为明确安装／修复入口，复用已保存的轻量选择；命令行可用 `-Lite` 或 `-Full` 明确指定，指定兼容Python可用 `-PythonPath "D:/Python313/python.exe"`；`-CheckPython`只检查已有解释器，不下载。安装失败修复窗口提示的问题后重试，不能把部分安装当作完成。
 
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Cpu
-```
+安装使用隔离Python环境、锁定依赖和前端构建。完整模式从仓库附带的角色资料建立本地索引，不需要单独安装MySQL、Qdrant服务、CUDA Toolkit或Docker。脚本按条件尝试GPU计算，否则使用CPU；不安装显卡驱动。实际安装清单见 `data/install-list.md`，组件说明见 [INSTALL_LIST.md](INSTALL_LIST.md)。安装与运行使用互斥保护，不强杀未知进程或覆盖私人数据。
 
-安装项目清单见 [INSTALL_LIST.md](INSTALL_LIST.md)。每次运行还会生成 **`data/install-list.md`**，列出本次处理的 Python包、实际安装的 npm包、模型文件、来源和数据库位置，区分已有依赖与本次安装；包管理器可能使用缓存。失败会返回非零退出码并保留阶段记录，不能把失败清单当作安装成功。
+## 可选 QQ 与服务器
+
+[QQ接入指南](docs/qq-setup.md) 包含NapCat安装入口、OneBot配置、绑定、逐联系人／群权限、图片与表情、定时摘要和免责声明。QQ记录在QQ接入内独立查看。第三方桥接可能掉线或触发账号限制，不保证防封；API和识图使用自己的服务与授权。QQ语音回复不在此版。
+
+[Linux服务器部署指南](docs/server-deployment.md) 提供轻量Docker部署、SSH访问、可选QQ、更新及加密备份恢复。默认只运行Web，不拉取NapCat；选用QQ再配置桥接。2GB仅为受限试运行目标，4GB更有余量。服务器与Windows数据不自动同步。
 
 ## LibreOffice：按需手动安装
 
@@ -64,7 +69,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -C
 
 完整模型在 [GitHub Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)，包括 PyTorch权重、tokenizer、配置、来源记录、模型卡和MIT许可。ZIP约1.42GB，解压后模型组件约2.3GB；不需要Git LFS。
 
-**默认自动安装：**`Install.bat` 下载ZIP并验证包与每个模型组件的SHA256，解压到：
+**完整安装时自动准备：**安装器 下载ZIP并验证包与每个模型组件的SHA256，解压到：
 
 ```text
 source/resources/models/bge-m3/
@@ -103,7 +108,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -M
 
 工程进度、交付清单、验收报告、私人日志和原开发Git历史不在公开仓库；README与安装清单是面向使用者的操作文档。安装不会替你填写API、购买服务、训练声音或上传参考音频。
 
-## 开始使用 0.6.6
+## 开始使用 0.7.2
 
 - **模型选择**：在设置中保存可用的 API 连接后，可从输入区按服务切换模型及支持的思考强度；每个聊天独立记住选择，新聊天使用默认配置。
 - **文件阅读与修改**：在聊天中拖入或上传文件，再发送自然语言要求。普通阅读的总结直接出现在聊天正文，不默认生成文件，也不展示内部工具卡或“状态与操作”面板；明确要求修改、保存或制作文件时才交付成果。修改生成新副本，默认沿用对应文件类型，不自动额外导出 PDF。PDF 无法可靠保留原版式时会简短说明并停止，不会静默转为 Word。读取超时后可点击“再试一次”，复用已读内容继续总结。
@@ -148,18 +153,18 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\start-lan.ps1
    git pull --ff-only
    ```
 
-3. 双击 **`Install.bat`**，更新依赖、构建前端并处理资料索引，等待出现 `Installation success`。
+3. 双击 **`Start_up.bat`**，按提示更新依赖／构建；保留原安装模式。
 4. 双击 **`Start_up.bat`**，重新启动后刷新网页。
 
 ### 使用 GitHub Desktop 更新
 
 1. 先停止后端，再打开 GitHub Desktop，选中该项目和原来使用的分支。
 2. 点击 **Fetch origin**；发现更新后，点击 **Pull origin**。
-3. 双击 **`Install.bat`**，等待出现 `Installation success`，再运行 **`Start_up.bat`** 并刷新网页。
+3. 双击 **`Start_up.bat`**，按提示更新依赖／构建，服务就绪后刷新网页。
 
 ### ZIP 下载用户
 
-ZIP 下载的项目不能使用 `git pull`。先停止后端并备份自己的 `data/`，再下载新版 ZIP，解压到新的普通文件夹，将原来的 `data/` 复制到新项目根目录，然后依次运行 **`Install.bat` → `Start_up.bat`**。若要复用已有模型，可将原项目的 `source/resources/models/bge-m3/` 一并复制到新项目的相同位置，否则安装器会重新下载模型。
+ZIP 下载的项目不能使用 `git pull`。先停止后端并备份自己的 `data/`，再下载新版 ZIP，解压到新的普通文件夹，将原来的 `data/` 复制到新项目根目录，然后运行 **`Start_up.bat`** 并选择所需安装模式。若要复用已有模型，可将原项目的 `source/resources/models/bge-m3/` 一并复制到新项目的相同位置，否则安装器会重新下载模型。
 
 ### 个人数据与更新冲突
 

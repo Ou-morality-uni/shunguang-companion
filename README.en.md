@@ -1,9 +1,10 @@
-# Shunguang Companion v0.6.3
+# Shunguang Companion v0.7.3
 
-[v0.6.3 release notes (Chinese)](versions/0.6.3/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
+[v0.7.3 release notes (Chinese)](versions/0.7.3/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.7.3](versions/0.7.3/README.md): Add isolated QQ private/group/member profiles, per-entry visibility, filtered summaries and a compact control panel.
 - [v0.6.3](versions/0.6.3/README.md): Support standard CPython 3.11-3.14, discover installed interpreters, preserve project environments and data, and verify installation and retrieval across versions.
 - [v0.6.2](versions/0.6.2/README.md): Add continuous original-layout previews, positioned comments and on-demand local OCR; simplify chat tasks, model choices and the workbench, and filter low-value recall.
 - [v0.6.1](versions/0.6.1/README.md): Add built-in Office skills, editable documents and targeted revisions, PDF export, basic image operations, and annotation drafts.
@@ -19,31 +20,16 @@ An unofficial browser companion inspired by Ye Shunguang from Zenless Zone Zero.
 
 ## Install and start
 
-Use **Windows 10/11 x64, standard 64-bit CPython 3.11, 3.12, 3.13 or 3.14, and Node.js 24**. Prefer a recent stable patch release; Python 3.15, prereleases and free-threaded builds are not supported in this release. Install Python and Node.js first and make sure `py -0p` (to list existing interpreters, or use `python` directly), `node`, and `npm` work in a new terminal. The project installer checks these prerequisites; it does not download them. 16GB RAM is recommended. The installer requires at least 12 GiB of free disk space and an internet connection for several GB of dependencies and model files.
+Use Windows 10/11 x64. Download/clone the repository, fully extract it, and double-click **Start_up.bat**. The wizard offers full installation (local BGE-M3 retrieval, several GB of downloads, 12 GiB free disk) or lite installation (no vector runtime or model, 3 GiB free disk), independently optional QQ setup guidance, and a LibreOffice guide. QQ bridge and LibreOffice are not automatically installed.
 
-The installer reuses a valid project environment. For a new installation it selects a newer supported interpreter already on the computer, instead of requiring 3.11. Use `Install.bat -PythonPath "D:\Python314\python.exe"` to select an interpreter, or add `-CheckPython` to inspect the choice without installing. Conflicting existing environments cause a clear error; they and your data are not deleted automatically. See this release's notes for interpreter migration and verification details.
+Compatible standard 64-bit CPython 3.11–3.14 and Node.js 24 are reused. Missing runtimes are prepared from official sources under `%LOCALAPPDATA%/ShunguangCompanion/runtimes/`, with verified downloads and no persistent PATH changes. Project dependencies remain isolated. A missing VC++ runtime may require a Windows authorization prompt. Network access to official sources is required; errors are reported rather than silently switching mirrors.
 
-1. Get the project. If Git is installed, run these commands in PowerShell:
+After installation the foreground server opens `http://127.0.0.1:8000/`. Configure your own model API in Companion Settings. Paid services are not included. On later runs the launcher starts quickly and prompts when dependency/build inputs change; it does not fetch GitHub updates automatically. Stop the service before updates. To change choices or add retrieval, run `Start_up.bat -Setup`. Data and existing models are not automatically deleted.
 
-   ```powershell
-   git clone https://github.com/Ou-morality-uni/shunguang-companion
-   cd shunguang-companion
-   ```
+`Install.bat` remains an explicit repair/install entry and preserves a saved lite choice. Use `-Full` or `-Lite` to select explicitly, `-PythonPath` for a compatible interpreter, or `-CheckPython` to probe existing Python without downloads. Installation receipts are in `data/install-list.md`.
 
-   Alternatively, select **Code → Download ZIP**, extract it into a regular folder, and open the project root.
-2. Double-click **`Install.bat`** in the project root. Wait for `Installation success`; the window shows progress and errors.
-3. Double-click **`Start_up.bat`**. A CMD window displays backend logs and the browser opens at `http://127.0.0.1:8000/` once the server is ready.
-4. Open Companion Settings (陪伴设置) → Model Connection (模型连接), enter your own API key, discover/select a model, save, and test the connection.
+See [QQ setup and disclaimer](docs/qq-setup.md) and [Linux server deployment](docs/server-deployment.md). The server defaults to Web-only, supports an optional QQ bridge, and excludes local vector retrieval. QQ bridging is unofficial and can be restricted or disconnected. Credentials, conversations, bridge sessions and backups must stay private. Local and server data do not synchronize automatically. QQ voice replies are outside this release.
 
-The installer creates isolated application and retrieval Python environments, installs pinned dependencies, builds the frontend, initializes an empty SQLite database, checks the audio component, downloads and verifies BGE-M3, and builds a local Qdrant index from the **character and world documents already included in this repository**. You do not need to supply your own Markdown/TXT files, MySQL, Docker, CUDA Toolkit, or a separate Qdrant server.
-
-The installer checks NVIDIA driver and VRAM conditions, tries CUDA 12.8 PyTorch, and verifies actual GPU execution. Otherwise it uses CPU; indexing and retrieval may be slower. It does not install or modify graphics drivers. If the Microsoft Visual C++ runtime is missing, the installer downloads it from Microsoft and checks its signature; Windows may request administrator approval. To explicitly use CPU:
-
-```powershell
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -Cpu
-```
-
-[INSTALL_LIST.md](INSTALL_LIST.md) describes the downloads. Each run also produces **`data/install-list.md`** with Python package actions, installed npm packages, model sources/hashes, and local storage paths. Package managers may use their caches. Failed runs return a nonzero exit code and record the failed stage; a receipt alone does not prove success.
 
 ## LibreOffice: optional manual installation
 
@@ -61,7 +47,7 @@ Neither `Install.bat` nor `Start_up.bat` installs LibreOffice. The bundle is an 
 
 The [GitHub model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f) contains the complete pinned PyTorch model, tokenizer, configuration, provenance, model card, and MIT license. The ZIP is approximately 1.42 GB; extracted model components occupy approximately 2.3 GB. Git LFS is not required.
 
-By default, `Install.bat` downloads the ZIP, verifies its SHA256 and individual model components, and places them in:
+In full mode, the installer downloads the ZIP, verifies its SHA256 and individual model components, and places them in:
 
 ```text
 source/resources/models/bge-m3/
@@ -143,18 +129,18 @@ Checks use the version in the public repository's `update.json`; changes within 
    git pull --ff-only
    ```
 
-3. Double-click **`Install.bat`** to update dependencies, build the frontend, and process knowledge indexes. Wait for `Installation success`.
-4. Double-click **`Start_up.bat`**, then refresh the browser after startup.
+3. Double-click **`Start_up.bat`** and follow any dependency/build update prompt. Your selected full or lite mode is preserved.
+4. Refresh the browser once the service is ready.
 
 ### Update with GitHub Desktop
 
 1. Stop the backend, open GitHub Desktop, and select the project and the branch you normally use.
 2. Click **Fetch origin**, then **Pull origin** if updates are available.
-3. Run **`Install.bat`**, wait for `Installation success`, then run **`Start_up.bat`** and refresh the browser.
+3. Run **`Start_up.bat`**, follow any update prompt, and refresh the browser.
 
 ### Update a ZIP download
 
-ZIP downloads cannot use `git pull`. Stop the backend and back up your private `data/` directory. Download the latest ZIP, extract it into a new ordinary folder, copy your original `data/` into the new project root, then run **`Install.bat` → `Start_up.bat`**. To reuse the existing model, also copy `source/resources/models/bge-m3/` to the same location in the new project; otherwise, the installer downloads the model again.
+ZIP downloads cannot use `git pull`. Stop the backend and back up your private `data/` directory. Download the latest ZIP, extract it into a new ordinary folder, copy your original `data/` into the new project root, then run **`Start_up.bat`**. To reuse the existing model, also copy `source/resources/models/bge-m3/` to the same location in the new project; otherwise, full mode downloads the model again.
 
 ### Personal data and update conflicts
 

@@ -5,7 +5,7 @@ import re
 import warnings
 import zipfile
 
-from .filework import WorkError
+from .work_models import WorkError
 
 
 def calculated(data, check):

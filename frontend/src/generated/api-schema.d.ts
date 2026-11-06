@@ -468,6 +468,385 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/qq/binding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Binding */
+        post: operations["binding_api_qq_binding_post"];
+        /** Unbind */
+        delete: operations["unbind_api_qq_binding_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/chats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chats */
+        get: operations["chats_api_qq_chats_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/chats/{kind}/{target}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chat Messages */
+        get: operations["chat_messages_api_qq_chats__kind___target__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/chats/{kind}/{target}/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Chat Image */
+        get: operations["chat_image_api_qq_chats__kind___target__images__image_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/chats/{kind}/{target}/stickers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Chat Stickers */
+        patch: operations["chat_stickers_api_qq_chats__kind___target__stickers_patch"];
+        trace?: never;
+    };
+    "/api/qq/connection": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Connection */
+        patch: operations["connection_api_qq_connection_patch"];
+        trace?: never;
+    };
+    "/api/qq/members/{target}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Members */
+        get: operations["members_api_qq_members__target__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/peers/{kind}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Peers */
+        get: operations["peers_api_qq_peers__kind__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/policies/{kind}/{target}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Policy */
+        get: operations["get_policy_api_qq_policies__kind___target__get"];
+        /** Policy */
+        put: operations["policy_api_qq_policies__kind___target__put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/profiles/{kind}/{target}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Profile Get */
+        get: operations["profile_get_api_qq_profiles__kind___target__get"];
+        /** Profile Put */
+        put: operations["profile_put_api_qq_profiles__kind___target__put"];
+        post?: never;
+        /** Profile Delete */
+        delete: operations["profile_delete_api_qq_profiles__kind___target__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/records/{kind}/{target}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Records */
+        get: operations["records_api_qq_records__kind___target__get"];
+        put?: never;
+        post?: never;
+        /** Clear Records */
+        delete: operations["clear_records_api_qq_records__kind___target__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Refresh */
+        post: operations["refresh_api_qq_refresh_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/scope": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scope */
+        get: operations["scope_api_qq_scope_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/scope/history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete History */
+        delete: operations["delete_history_api_qq_scope_history_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/scope/memories/{memory_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Memory */
+        delete: operations["delete_memory_api_qq_scope_memories__memory_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/scopes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Scopes */
+        get: operations["scopes_api_qq_scopes_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/state": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** State */
+        get: operations["state_api_qq_state_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/summaries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Summaries */
+        get: operations["summaries_api_qq_summaries_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/summaries/{key}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Delete Summary */
+        delete: operations["delete_summary_api_qq_summaries__key__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/summaries/{key}/deliver": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Delivery */
+        post: operations["retry_delivery_api_qq_summaries__key__deliver_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/summaries/{key}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Summary */
+        post: operations["retry_summary_api_qq_summaries__key__retry_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/qq/summaries/{target}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Summary */
+        post: operations["summary_api_qq_summaries__target__post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/rag/rebuild": {
         parameters: {
             query?: never;
@@ -1516,6 +1895,13 @@ export interface components {
             /** Version */
             version: string;
         };
+        /** BindingOut */
+        BindingOut: {
+            /** Code */
+            code: string;
+            /** Expires */
+            expires: number;
+        };
         /** CandidateConfirm */
         CandidateConfirm: {
             /** Id */
@@ -1527,6 +1913,17 @@ export interface components {
         };
         /** CapabilitiesOut */
         CapabilitiesOut: {
+            /**
+             * Deployment Mode
+             * @default desktop
+             * @enum {string}
+             */
+            deployment_mode: "desktop" | "server";
+            /**
+             * Local Knowledge
+             * @default true
+             */
+            local_knowledge: boolean;
             /**
              * Max Message Length
              * @default 6000
@@ -1603,6 +2000,35 @@ export interface components {
         CommentUpdate: {
             /** Comment */
             comment: string;
+        };
+        /** Connection */
+        Connection: {
+            /**
+             * Bot Id
+             * @default
+             */
+            bot_id: string;
+            /**
+             * Enabled
+             * @default false
+             */
+            enabled: boolean;
+            model_choice?: components["schemas"]["ModelChoice"] | null;
+            /**
+             * Retention Days
+             * @default 30
+             */
+            retention_days: number;
+            /**
+             * Token
+             * @default
+             */
+            token: string;
+            /**
+             * Url
+             * @default ws://127.0.0.1:3001
+             */
+            url: string;
         };
         /** ConnectionOptions */
         ConnectionOptions: {
@@ -1831,6 +2257,36 @@ export interface components {
              */
             password: string;
         };
+        /** Member */
+        Member: {
+            /**
+             * Card
+             * @default
+             */
+            card: string;
+            /** Name */
+            name: string;
+            /**
+             * Source
+             * @enum {string}
+             */
+            source: "bridge" | "captured" | "manual";
+            /** User Id */
+            user_id: string;
+        };
+        /** MemberPage */
+        MemberPage: {
+            /** Items */
+            items: components["schemas"]["Member"][];
+            /** Notice */
+            notice: string;
+            /** Refreshed */
+            refreshed: number;
+            /** Stale */
+            stale: boolean;
+            /** Total */
+            total: number;
+        };
         /** MemoryConfirmRequest */
         MemoryConfirmRequest: {
             /** Candidates */
@@ -2006,6 +2462,97 @@ export interface components {
             /** Workspace Id */
             workspace_id: string;
         };
+        /** PeerPage */
+        PeerPage: {
+            /** Items */
+            items: {
+                [key: string]: unknown;
+            }[];
+            /** Total */
+            total: number;
+        };
+        /** Policy */
+        Policy: {
+            /**
+             * Allow Group Send
+             * @default false
+             */
+            allow_group_send: boolean;
+            /**
+             * Chat
+             * @default off
+             * @enum {string}
+             */
+            chat: "off" | "mention" | "natural";
+            /**
+             * Collect
+             * @default false
+             */
+            collect: boolean;
+            /**
+             * Daily Time
+             * @default 22:00
+             */
+            daily_time: string;
+            /**
+             * Delivery
+             * @default panel
+             * @enum {string}
+             */
+            delivery: "panel" | "owner" | "group";
+            /**
+             * Images
+             * @default false
+             */
+            images: boolean;
+            /**
+             * Interval Hours
+             * @default 6
+             */
+            interval_hours: number;
+            /**
+             * Knowledge
+             * @default true
+             */
+            knowledge: boolean;
+            /**
+             * Schedule
+             * @default off
+             * @enum {string}
+             */
+            schedule: "off" | "daily" | "interval";
+            /**
+             * Stickers
+             * @default true
+             */
+            stickers: boolean;
+            /**
+             * Vision Profile
+             * @default
+             */
+            vision_profile: string;
+            /**
+             * Vision Signature
+             * @default
+             */
+            vision_signature: string;
+            /**
+             * Window
+             * @default incremental
+             * @enum {string}
+             */
+            window: "incremental" | "fixed";
+            /**
+             * Window End
+             * @default 23:59
+             */
+            window_end: string;
+            /**
+             * Window Start
+             * @default 00:00
+             */
+            window_start: string;
+        };
         /** PreviewRequest */
         PreviewRequest: {
             /**
@@ -2028,6 +2575,93 @@ export interface components {
         ProfileActivate: {
             /** Id */
             id: string;
+        };
+        /** ProfileEntry */
+        ProfileEntry: {
+            /** Key */
+            key: string;
+            /**
+             * Title
+             * @default
+             */
+            title: string;
+            /** Value */
+            value: string;
+            /** Visibility */
+            visibility?: ("group" | "self") | null;
+        };
+        /** ProfileOut */
+        ProfileOut: {
+            /** Bot */
+            bot: string;
+            /** Entries */
+            entries?: components["schemas"]["ProfileEntry"][];
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "private" | "group";
+            /** Revision */
+            revision: number;
+            /** Subject */
+            subject: string;
+            /** Target */
+            target: string;
+        };
+        /** ProfileUpdate */
+        ProfileUpdate: {
+            /** Entries */
+            entries?: components["schemas"]["ProfileEntry"][];
+            /** Revision */
+            revision: number;
+        };
+        /** QQState */
+        QQState: {
+            /**
+             * Chat View Ready
+             * @default true
+             */
+            chat_view_ready: boolean;
+            connection: components["schemas"]["Connection"];
+            /**
+             * Deployment Mode
+             * @default desktop
+             * @enum {string}
+             */
+            deployment_mode: "desktop" | "server";
+            /** Error */
+            error: string;
+            /** Has Token */
+            has_token: boolean;
+            /** Last Event */
+            last_event: number | null;
+            /**
+             * Local Knowledge
+             * @default true
+             */
+            local_knowledge: boolean;
+            /**
+             * Manual Profiles Ready
+             * @default true
+             */
+            manual_profiles_ready: boolean;
+            /** Owner */
+            owner: string;
+            /** Policies */
+            policies: {
+                [key: string]: unknown;
+            }[];
+            /** Status */
+            status: string;
+            /**
+             * Sticker Controls Ready
+             * @default true
+             */
+            sticker_controls_ready: boolean;
+            /** Vision Profiles */
+            vision_profiles: {
+                [key: string]: unknown;
+            }[];
         };
         /** RagQuery */
         RagQuery: {
@@ -2085,6 +2719,11 @@ export interface components {
             /** Configured */
             configured: boolean;
             /**
+             * Context Window
+             * @default 32768
+             */
+            context_window: number;
+            /**
              * Effort
              * @default default
              */
@@ -2114,6 +2753,11 @@ export interface components {
              * @enum {string}
              */
             vision: "unknown" | "supported" | "unsupported";
+            /**
+             * Warning
+             * @default
+             */
+            warning: string;
         };
         /** SettingsUpdate */
         SettingsUpdate: {
@@ -2126,6 +2770,11 @@ export interface components {
              * @default false
              */
             clear_api_key: boolean;
+            /**
+             * Context Window
+             * @default 32768
+             */
+            context_window: number;
             /**
              * Effort
              * @default default
@@ -2201,6 +2850,24 @@ export interface components {
             scene: string;
             /** Url */
             url: string;
+        };
+        /** StickerSwitch */
+        StickerSwitch: {
+            /** Enabled */
+            enabled: boolean;
+        };
+        /** SummaryRequest */
+        SummaryRequest: {
+            /**
+             * Delivery
+             * @default panel
+             * @enum {string}
+             */
+            delivery: "panel" | "owner" | "group";
+            /** End */
+            end: number;
+            /** Start */
+            start: number;
         };
         /** SynthesisRequest */
         SynthesisRequest: {
@@ -2628,8 +3295,9 @@ export interface operations {
     get_messages_api_conversations__conversation_id__messages_get: {
         parameters: {
             query?: {
-                limit?: number | null;
+                limit?: number;
                 before?: number | null;
+                after?: number | null;
             };
             header?: never;
             path: {
@@ -3247,6 +3915,858 @@ export interface operations {
                 };
                 content: {
                     "application/json": unknown;
+                };
+            };
+        };
+    };
+    binding_api_qq_binding_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BindingOut"];
+                };
+            };
+        };
+    };
+    unbind_api_qq_binding_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    chats_api_qq_chats_get: {
+        parameters: {
+            query?: {
+                search?: string;
+                offset?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_messages_api_qq_chats__kind___target__get: {
+        parameters: {
+            query?: {
+                before?: string;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_image_api_qq_chats__kind___target__images__image_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    chat_stickers_api_qq_chats__kind___target__stickers_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StickerSwitch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    connection_api_qq_connection_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Connection"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QQState"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    members_api_qq_members__target__get: {
+        parameters: {
+            query?: {
+                search?: string;
+                offset?: number;
+                limit?: number;
+                refresh?: boolean;
+            };
+            header?: never;
+            path: {
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MemberPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    peers_api_qq_peers__kind__get: {
+        parameters: {
+            query?: {
+                search?: string;
+                offset?: number;
+                limit?: number;
+            };
+            header?: never;
+            path: {
+                kind: "private" | "group";
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PeerPage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_policy_api_qq_policies__kind___target__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    policy_api_qq_policies__kind___target__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Policy"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Policy"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    profile_get_api_qq_profiles__kind___target__get: {
+        parameters: {
+            query?: {
+                subject?: string;
+            };
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    profile_put_api_qq_profiles__kind___target__put: {
+        parameters: {
+            query?: {
+                subject?: string;
+            };
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProfileUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    profile_delete_api_qq_profiles__kind___target__delete: {
+        parameters: {
+            query: {
+                revision: number;
+                subject?: string;
+            };
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProfileOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    records_api_qq_records__kind___target__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    clear_records_api_qq_records__kind___target__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                kind: "private" | "group";
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    refresh_api_qq_refresh_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+        };
+    };
+    scope_api_qq_scope_get: {
+        parameters: {
+            query: {
+                key: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_history_api_qq_scope_history_delete: {
+        parameters: {
+            query: {
+                key: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_memory_api_qq_scope_memories__memory_id__delete: {
+        parameters: {
+            query: {
+                key: string;
+            };
+            header?: never;
+            path: {
+                memory_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    scopes_api_qq_scopes_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
+    state_api_qq_state_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["QQState"];
+                };
+            };
+        };
+    };
+    summaries_api_qq_summaries_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    }[];
+                };
+            };
+        };
+    };
+    delete_summary_api_qq_summaries__key__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_delivery_api_qq_summaries__key__deliver_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_summary_api_qq_summaries__key__retry_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                key: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    summary_api_qq_summaries__target__post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                target: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SummaryRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: unknown;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

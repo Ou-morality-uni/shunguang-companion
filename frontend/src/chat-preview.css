@@ -5,10 +5,10 @@
   gap: 7px;
   max-width: 260px;
   padding: 7px 11px;
-  border: 1px solid #dab09542;
+  border: 1px solid color-mix(in srgb, var(--tone-gold-bright) 26%, transparent);
   border-radius: 999px;
-  background: #e9bacb13;
-  color: var(--text, #ead6d8);
+  background: color-mix(in srgb, var(--tone-text-secondary) 7%, transparent);
+  color: var(--text, var(--tone-text-primary));
   font: inherit;
   font-size: 12px;
   min-height: 32px;
@@ -22,18 +22,22 @@
   white-space: nowrap;
 }
 .model-pill:hover {
-  background: #e9bacb22;
-  border-color: #dfbe8c7a;
+  background: color-mix(in srgb, var(--tone-text-secondary) 13%, transparent);
+  border-color: color-mix(in srgb, var(--tone-gold-bright) 48%, transparent);
 }
 .model-menu {
   z-index: 90;
   width: min(345px, calc(100vw - 26px));
   padding: 12px;
-  border: 1px solid #e8bd9650;
+  border: 1px solid color-mix(in srgb, var(--tone-gold-bright) 31%, transparent);
   border-radius: 18px;
-  color: #eedcdf;
-  background: linear-gradient(145deg, #35262eee, #211a23fa);
-  box-shadow: 0 14px 50px #0007;
+  color: var(--tone-text-primary);
+  background: linear-gradient(
+    145deg,
+    color-mix(in srgb, var(--tone-surface-panel) 93%, transparent),
+    color-mix(in srgb, var(--tone-surface-base) 98%, transparent)
+  );
+  box-shadow: 0 14px 50px color-mix(in srgb, var(--tone-shadow) 47%, transparent);
   backdrop-filter: blur(22px);
   animation: menu-enter 0.18s ease-out;
 }
@@ -66,12 +70,12 @@
 }
 .model-option:hover,
 .model-option:focus-visible {
-  background: #ecd2af1c;
+  background: color-mix(in srgb, var(--tone-accent-soft) 11%, transparent);
   outline: none;
 }
 .model-option.selected {
-  background: #deb4b122;
-  border-color: #e2bd8d42;
+  background: color-mix(in srgb, var(--tone-text-secondary) 13%, transparent);
+  border-color: color-mix(in srgb, var(--tone-gold-bright) 26%, transparent);
 }
 .model-efforts {
   display: flex;
@@ -80,12 +84,12 @@
   margin: 10px 0;
   padding-top: 10px;
   border: 0;
-  border-top: 1px solid #deb4972c;
+  border-top: 1px solid color-mix(in srgb, var(--tone-gold-bright) 17%, transparent);
 }
 .model-efforts legend {
   padding: 8px 0 5px;
-  font-size: 11px;
-  color: #cda8ad;
+  font-size: 12px;
+  color: var(--tone-text-secondary);
 }
 .model-efforts label {
   position: relative;
@@ -102,15 +106,15 @@
   padding: 5px 9px;
   border-radius: 9px;
   font-size: 12px;
-  border: 1px solid #d1a89c3a;
+  border: 1px solid color-mix(in srgb, var(--tone-text-muted) 23%, transparent);
   transition: background 0.18s;
 }
 .model-efforts input:checked + span {
-  background: #be899143;
-  border-color: #e9bda675;
+  background: color-mix(in srgb, var(--tone-text-muted) 26%, transparent);
+  border-color: color-mix(in srgb, var(--tone-accent-soft) 46%, transparent);
 }
 .model-efforts input:focus-visible + span {
-  outline: 2px solid #ebc99a;
+  outline: 2px solid var(--tone-gold-bright);
 }
 .model-menu .text-button {
   margin-top: 7px;
@@ -118,8 +122,8 @@
 }
 .settings-modal .glide-trigger,
 .field > .glide-trigger {
-  border: 1px solid #b88e9b66;
-  background: #1e142380;
+  border: 1px solid color-mix(in srgb, var(--tone-text-muted) 40%, transparent);
+  background: color-mix(in srgb, var(--tone-surface-base) 50%, transparent);
   border-radius: 10px;
   min-height: 36px;
 }
@@ -154,7 +158,7 @@
 }
 .upload-record .space-note {
   margin: 0;
-  font-size: 11px;
+  font-size: 12px;
 }
 .upload-record button {
   flex-shrink: 0;
@@ -174,12 +178,12 @@
 }
 .file-card .work-actions button:hover {
   transform: translateY(-1px);
-  box-shadow: 0 3px 12px #e9bd8c1e;
+  box-shadow: 0 3px 12px color-mix(in srgb, var(--tone-gold-bright) 12%, transparent);
 }
 .model-advanced > summary {
   cursor: pointer;
   padding: 8px 0;
-  color: #d9b7b8;
+  color: var(--tone-text-secondary);
   font-size: 13px;
 }
 .model-advanced[open] > summary {
@@ -201,7 +205,7 @@
 @media (max-width: 600px) {
   .model-pill {
     max-width: 180px;
-    font-size: 11px;
+    font-size: 12px;
   }
   .composer-right {
     gap: 4px;
@@ -235,9 +239,9 @@ html[data-reduce-motion='true'] .file-card .work-actions button {
   align-items: center;
   gap: 12px;
   padding: 12px 15px;
-  border: 1px solid #cba49c30;
+  border: 1px solid color-mix(in srgb, var(--tone-text-muted) 19%, transparent);
   border-radius: 13px;
-  background: #dabccc09;
+  background: color-mix(in srgb, var(--tone-text-secondary) 4%, transparent);
 }
 .upload-record-list li > div {
   display: grid;
@@ -252,14 +256,14 @@ html[data-reduce-motion='true'] .file-card .work-actions button {
   font-size: 14px;
 }
 .upload-record-list small {
-  font-size: 11px;
-  color: #b99ea5;
+  font-size: 12px;
+  color: var(--tone-text-muted);
 }
 
 .model-option-glide {
   position: absolute;
   inset: 0;
-  background: #ecd2af1c;
+  background: color-mix(in srgb, var(--tone-accent-soft) 11%, transparent);
   border-radius: inherit;
   pointer-events: none;
 }
@@ -283,8 +287,8 @@ html[data-reduce-motion='true'] .file-card .work-actions button {
   width: 50px;
   height: 62px;
   flex-shrink: 0;
-  color: #e8c49b;
-  background: #472e3a;
+  color: var(--tone-gold-bright);
+  background: var(--tone-surface-raised);
   border-radius: 6px;
   overflow: hidden;
 }
@@ -305,8 +309,8 @@ html[data-reduce-motion='true'] .file-card .work-actions button {
   font-size: 13px;
 }
 .artifact-copy small {
-  font-size: 10px;
-  color: #c3a9af;
+  font-size: 12px;
+  color: var(--tone-text-secondary);
 }
 .artifact-tile .work-actions {
   gap: 6px;
@@ -316,7 +320,7 @@ html[data-reduce-motion='true'] .file-card .work-actions button {
   height: 28px;
   min-height: 28px;
   padding: 3px 7px;
-  font-size: 11px;
+  font-size: 12px;
 }
 .artifact-tile .work-actions > button:first-child {
   max-width: 175px;
@@ -332,7 +336,7 @@ html[data-reduce-motion='true'] .file-card .work-actions button {
   border-radius: 6px;
 }
 .artifact-download:hover {
-  background: #81536466;
+  background: color-mix(in srgb, var(--tone-accent-base) 40%, transparent);
 }
 .artifact-tile > p,
 .artifact-tile > .standalone-preview {
@@ -340,7 +344,7 @@ html[data-reduce-motion='true'] .file-card .work-actions button {
   font-size: 12px;
 }
 .artifact-details {
-  font-size: 11px;
+  font-size: 12px;
 }
 .chat-task-card.natural-file-feedback {
   padding: 0;

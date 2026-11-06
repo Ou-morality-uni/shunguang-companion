@@ -81,6 +81,8 @@ class SettingsOut(BaseModel):
     temperature: float
     timeout: float
     max_tokens: int
+    context_window: int = 32768
+    warning: str = ''
     has_api_key: bool
     configured: bool
     provider: str
@@ -92,6 +94,8 @@ class SettingsOut(BaseModel):
 
 class CapabilitiesOut(BaseModel):
     max_message_length: int = MAX_MESSAGE_LENGTH
+    deployment_mode: Literal['desktop', 'server'] = 'desktop'
+    local_knowledge: bool = True
 
 
 class WorkspaceOut(BaseModel):

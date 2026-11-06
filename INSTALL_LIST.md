@@ -1,15 +1,18 @@
-# Install list / 安装与下载清单
+# v0.7.2 安装范围说明
 
-入口：根目录 `Install.bat` → `scripts/install.ps1` → `scripts/install-project.py`。
+完整与轻量的步骤有所区别，以下检索组件仅在完整安装时处理。实际结果以每次安装生成的清单为准。
+
+统一入口：根目录 `Start_up.bat`，首次进入安装向导，之后快速启动。`Install.bat` 保留为明确安装／修复入口。
 
 本文件列出默认完整安装涉及的组件。每次安装的实际包名、版本、处理状态和模型文件SHA256会写入 **`data/install-list.md`**；详细阶段记录在 `data/install/result.json`。这些本机记录不上传GitHub。
 
-## 基础条件：脚本不会下载
+## 基础条件与首次选择
 
-- Windows 64位。
-- 标准版 CPython 3.11／3.12／3.13／3.14，Windows x64 稳定版，含标准库 SQLite；暂不支持 3.15、预发布版和自由线程版。已有项目环境优先复用，首次安装自动选择已有的受支持版本；可用 `Install.bat -PythonPath "D:\Python314\python.exe" -CheckPython` 只检查解释器。
-- Node.js 24，含npm。
-- 可用的NVIDIA驱动用于GPU模式；脚本不会安装显卡驱动。
+- Windows10/11 x64；联网访问官方运行时、PyPI、npm和完整模式的模型源。
+- Start_up.bat向导选择完整／轻量、QQ与LibreOffice指南。完整至少12GiB，轻量至少3GiB可用磁盘。
+- 优先复用兼容标准64位CPython3.11～3.14及Node24；缺失时自动准备Python3.13.12和Node24.22.2到当前用户专用目录，使用锁定SHA-256；Python安装器另验PSF签名。不修改系统PATH。
+- 轻量跳过torch、transformers、Qdrant依赖和BGE-M3；共享依赖仍安装。QQ桥接和LibreOffice由用户按指南安装，不由项目自动下载。
+- GPU驱动由用户管理，不自动安装。首次VC++运行库安装可能需要系统授权。
 
 ## 下载或从包管理器缓存安装
 
@@ -52,7 +55,7 @@
 
 ## 已在仓库中：无需使用者另外准备
 
-默认头像、5张立绘／壁纸、23张表情、默认MP3、参考片段和原MP4；角色与世界资料及历史版本、manifest、核实摘要。安装直接索引这些资料。
+默认头像、5张立绘／壁纸、23张表情、默认MP3、参考片段和原MP4；角色与世界资料及历史版本、manifest、核实摘要。完整安装会索引这些资料，轻量安装不建立向量索引。
 
 安装不调用付费聊天/TTS服务，不读取或上传作者的私人数据，不购买服务、不训练声音。API须由使用者在设置中自行填写；参考音频外传默认关闭。
 

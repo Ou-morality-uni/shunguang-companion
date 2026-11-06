@@ -1,4 +1,4 @@
-import { useId, useState } from 'react';
+import { useId, useState, useEffect, useRef } from 'react';
 import { motion, useReducedMotion } from 'motion/react';
 import { MessageSquare, Trash2 } from 'lucide-react';
 import type { Conversation } from './api';
@@ -18,6 +18,15 @@ export function ConversationHistory({
   onDelete: (id: string) => Promise<void>;
 }) {
   const [confirm, setConfirm] = useState<string | null>(null);
+  const confirmButton = useRef<HTMLButtonElement>(null);
+  const triggerButton = useRef<HTMLButtonElement | null>(null);
+  const container = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (confirm) confirmButton.current?.focus();
+    else if (triggerButton.current?.isConnected) triggerButton.current.focus();
+    else if (triggerButton.current)
+      container.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+  }, [confirm]);
   const highlightId = useId(),
     reduced = useReducedMotion();
   const [deleting, setDeleting] = useState(false);
@@ -35,7 +44,7 @@ export function ConversationHistory({
     }
   }
   return (
-    <div className="history-list">
+    <div className="history-list" ref={container}>
       {!conversations.length && (
         <div className="empty-history">
           <MessageSquare size={17} />
@@ -69,7 +78,9 @@ export function ConversationHistory({
               className="icon-button"
               disabled={disabled || deleting}
               aria-label={`删除对话 ${item.title}`}
-              onClick={() => {
+              aria-expanded={confirm === item.id}
+              onClick={(event) => {
+                triggerButton.current = event.currentTarget;
                 setConfirm(item.id);
                 setError('');
               }}
@@ -79,8 +90,15 @@ export function ConversationHistory({
           </div>
           {confirm === item.id && (
             <div className="delete-confirm" role="group" aria-label="确认删除对话">
-              <p>删除这段对话及消息？已确认的长期记忆会保留，可在记忆空间单独删除。</p>
-              <Button disabled={disabled || deleting} variant="outline" onClick={() => void remove(item.id)}>
+              <p>
+                删除这段对话、消息及其独占附件和成果？其他对话或任务仍引用的文件、工作区原文件与已确认的长期记忆会保留。历史备份和另存副本不随之删除。
+              </p>
+              <Button
+                ref={confirmButton}
+                disabled={disabled || deleting}
+                variant="outline"
+                onClick={() => void remove(item.id)}
+              >
                 确认删除
               </Button>
               <button disabled={deleting} className="text-link" onClick={() => setConfirm(null)}>

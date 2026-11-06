@@ -1,10 +1,14 @@
 """Bounded, genuine network tools. Results are data, never trusted instructions."""
 
 import asyncio
+import hashlib
 import html
 import ipaddress
+import json
+import random
 import re
 import xml.etree.ElementTree as ET
+from contextvars import ContextVar
 from urllib.parse import parse_qs, quote, urlparse
 
 import httpx
@@ -13,6 +17,9 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
 from .feature_config import FeatureConfig, load
 from .transport import ssl_context
+
+SEARCH_SCOPE = ContextVar('search_scope', default='panel')
+_search_tasks = {}
 
 
 class WeatherArgs(BaseModel):
@@ -88,7 +95,7 @@ async def request_json(method: str, url: str, *, timeout: float, **kwargs):
                 if status in (432, 433):
                     raise ToolServiceError('quota', '搜索服务额度或套餐限制，请在 Tavily 后台核对。')
                 if status >= 500 and attempt + 1 < attempts:
-                    await asyncio.sleep(0.2)
+                    await asyncio.sleep(0.2 * 2**attempt * (0.5 + random.random()))
                     continue
                 if status != 200:
                     raise ToolServiceError('upstream', '上游服务返回错误，未取得可用结果。')
@@ -101,7 +108,7 @@ async def request_json(method: str, url: str, *, timeout: float, **kwargs):
             except (httpx.TimeoutException, httpx.NetworkError):
                 if attempt + 1 >= attempts:
                     raise ToolServiceError('timeout', '服务超时或网络不可达，未取得结果。')
-                await asyncio.sleep(0.2)
+                await asyncio.sleep(0.2 * 2**attempt * (0.5 + random.random()))
             except ValueError:
                 raise ToolServiceError('invalid_response', '上游响应格式不正确。')
 
@@ -563,7 +570,71 @@ async def web_search(args: SearchArgs, settings):
     }
 
 
-async def execute(name: str, args: dict) -> dict:
+async def guarded_search(args, settings, scope):
+    from datetime import datetime, timezone
+
+    from . import config, search_state
+
+    signature = json.dumps(
+        [
+            str(config.DATA_DIR),
+            scope,
+            args.model_dump(),
+            settings.model_dump(exclude={'api_key'}),
+            hashlib.sha256(settings.api_key.get_secret_value().encode()).hexdigest(),
+        ],
+        sort_keys=True,
+    )
+    key = hashlib.sha256(signature.encode()).hexdigest()
+    hit = search_state.cached(key, settings.cache_seconds)
+    if hit:
+        return hit
+
+    async def perform():
+        if settings.search_provider == 'tavily':
+            if not settings.api_key.get_secret_value():
+                return {'ok': False, 'code': 'missing_config', 'message': '请先保存 Tavily 搜索密钥。'}
+            if not search_state.reserve(settings.daily_limit):
+                return {
+                    'ok': False,
+                    'code': 'daily_limit',
+                    'message': '今日搜索 API 调用已达上限，请调整上限或明日再试。',
+                }
+        try:
+            result = await web_search(args, settings)
+        except (ToolServiceError, httpx.HTTPError):
+            if not settings.public_fallback or settings.search_provider != 'tavily':
+                raise
+            result = await public_search(args, settings)
+        else:
+            if not result.get('ok') and settings.public_fallback and settings.search_provider == 'tavily':
+                result = await public_search(args, settings)
+        if result.get('ok'):
+            result = {**result, 'cached': False, 'fetched_at': datetime.now(timezone.utc).isoformat()}
+            if settings.read_pages:
+                from .web_pages import enrich
+
+                result = await enrich(result, settings.timeout)
+            if settings.cache_seconds:
+                search_state.remember(key, result)
+        return result
+
+    task = _search_tasks.get(key)
+    if task is None or task.get_loop() is not asyncio.get_running_loop():
+        task = asyncio.create_task(asyncio.wait_for(perform(), timeout=settings.timeout * 3 + 1))
+        _search_tasks[key] = task
+
+        def done(completed):
+            if _search_tasks.get(key) is completed:
+                _search_tasks.pop(key, None)
+            if not completed.cancelled():
+                completed.exception()
+
+        task.add_done_callback(done)
+    return await asyncio.shield(task)
+
+
+async def execute(name: str, args: dict, *, scope: str | None = None) -> dict:
     settings = load().tools
     try:
         if not isinstance(args, dict):
@@ -574,7 +645,8 @@ async def execute(name: str, args: dict) -> dict:
             )
         if name == 'web_search' and settings.search_enabled:
             return await asyncio.wait_for(
-                web_search(SearchArgs.model_validate(args), settings), timeout=settings.timeout * 2 + 1
+                guarded_search(SearchArgs.model_validate(args), settings, scope or SEARCH_SCOPE.get()),
+                timeout=settings.timeout * 3 + 2,
             )
         return {'ok': False, 'code': 'disabled', 'message': '该工具未启用或不受支持。'}
     except (ValidationError, ValueError, KeyError, TypeError):

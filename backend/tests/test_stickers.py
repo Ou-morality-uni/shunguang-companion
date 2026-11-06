@@ -87,6 +87,14 @@ def test_reply_with_only_a_control_is_empty_and_does_not_fabricate_prose():
     assert decoration.push('[[sticker:comfort]]') + decoration.finish() == ''
 
 
+def test_leading_empty_lines_are_removed_at_every_stream_split_without_losing_markdown():
+    raw = '\r\n  \n[[sticker:comfort]]\n\n    缩进正文\n\n第二段'
+    for split in range(len(raw) + 1):
+        decoration = stickers.ReplyDecoration()
+        visible = decoration.push(raw[:split]) + decoration.push(raw[split:]) + decoration.finish()
+        assert visible == '    缩进正文\n\n第二段'
+
+
 def test_case_variations_and_oversized_controls_are_filtered_and_bounded():
     decoration = stickers.ReplyDecoration()
     raw = '先听你说。[[StIcKeR:COMFORT]]'

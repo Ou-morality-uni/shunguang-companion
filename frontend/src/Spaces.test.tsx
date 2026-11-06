@@ -1,6 +1,6 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
-import { MemorySpace } from './Spaces';
+import { MemorySpace, WorldArchive } from './Spaces';
 import { request } from './api';
 
 vi.mock('./api', async (original) => ({ ...(await original<typeof import('./api')>()), request: vi.fn() }));
@@ -43,4 +43,15 @@ it('shows background memory progress without asking the user to summarize a conv
   expect(await screen.findByText('正在后台整理 · 1 个进行中，2 个排队')).toBeTruthy();
   expect(screen.getByText(/已整理 3 段对话摘要/)).toBeTruthy();
   expect(screen.queryByText('手动总结这段对话')).toBeNull();
+});
+it('server mode explains character prompts and hides local index operations', async () => {
+  vi.mocked(request).mockResolvedValue({
+    enabled: false,
+    ready: false,
+    notice: '服务器轻量模式使用角色提示词。',
+  });
+  render(<WorldArchive />);
+  expect(await screen.findByText('服务器轻量模式使用角色提示词。')).toBeTruthy();
+  expect(screen.queryByRole('button', { name: /更新索引/ })).toBeNull();
+  expect(screen.queryByRole('button', { name: '检索' })).toBeNull();
 });

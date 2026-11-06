@@ -57,7 +57,7 @@ def output_root(work):
 
 
 def save_file(work, task, name, data, validation):
-    from .filework import MAX_FILE_BYTES
+    from .work_models import MAX_FILE_BYTES
 
     if len(data) > MAX_FILE_BYTES:
         raise WorkError('成果超过单文件 20 MiB 上限，请缩小任务范围。', 422)

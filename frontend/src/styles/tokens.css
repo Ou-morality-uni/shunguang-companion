@@ -1,0 +1,23 @@
+:root {
+  --tone-surface-deep: #160e14;
+  --tone-surface-base: #23151d;
+  --tone-surface-panel: #34202a;
+  --tone-surface-raised: #442730;
+  --tone-text-primary: #f6e5de;
+  --tone-text-secondary: #d4b2b7;
+  --tone-text-muted: #be979e;
+  --tone-text-dim: #b0959f;
+  --tone-accent-base: #ab3b50;
+  --tone-accent-strong: #d85f79;
+  --tone-accent-soft: #efadab;
+  --tone-gold-base: #d7a474;
+  --tone-gold-bright: #e5bd8d;
+  --tone-gold-soft: #ffe1d3;
+  --tone-danger-base: #ef8b91;
+  --tone-danger-surface: #5e2530;
+  --tone-success-base: #9dcbb1;
+  --tone-success-surface: #233c32;
+  --tone-info-base: #9abbd5;
+  --tone-info-surface: #263345;
+  --tone-shadow: #000000;
+}

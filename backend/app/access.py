@@ -1,5 +1,6 @@
 """Single-user LAN protection. Passwords/tokens never appear in URLs or logs."""
 
+import asyncio
 import hashlib
 import hmac
 import ipaddress
@@ -14,11 +15,17 @@ from urllib.parse import urlparse
 from fastapi.responses import JSONResponse
 
 from . import config
+from .config_files import quarantine, read_object
 
 SESSION_LOCK = RLock()
 sessions = {}
 attempts = {}
+MAX_SESSIONS = 1024
+MAX_ATTEMPT_HOSTS = 4096
 COOKIE = 'shunguang_session'
+HOST_LOCK = RLock()
+_host_addresses = set()
+_host_expires = 0.0
 
 
 def lan_mode():
@@ -41,9 +48,17 @@ def check_password(password):
     path = config.DATA_DIR / 'access.json'
     if not path.exists():
         return False
-    record = json.loads(path.read_text(encoding='utf-8'))
-    digest = hashlib.pbkdf2_hmac('sha256', password.encode(), bytes.fromhex(record['salt']), 300_000).hex()
-    return hmac.compare_digest(digest, record['hash'])
+    record = read_object(path)
+    try:
+        salt = bytes.fromhex(record.get('salt', ''))
+        expected = bytes.fromhex(record.get('hash', ''))
+        if len(salt) != 16 or len(expected) != 32:
+            raise ValueError()
+    except (ValueError, TypeError):
+        quarantine(path)
+        return False
+    digest = hashlib.pbkdf2_hmac('sha256', password.encode(), salt, 300_000)
+    return hmac.compare_digest(digest, expected)
 
 
 def authenticated(request):
@@ -51,6 +66,7 @@ def authenticated(request):
         return True
     token = request.cookies.get(COOKIE, '')
     with SESSION_LOCK:
+        prune_auth()
         expiry = sessions.get(token, 0)
         return expiry > time.time()
 
@@ -58,6 +74,9 @@ def authenticated(request):
 def login(request, password):
     host = request.client.host if request.client else 'unknown'
     with SESSION_LOCK:
+        prune_auth()
+        if host not in attempts and len(attempts) >= MAX_ATTEMPT_HOSTS:
+            return JSONResponse({'detail': '登录请求较多，请稍后重试。'}, status_code=429)
         recent = [t for t in attempts.get(host, []) if time.time() - t < 300]
         attempts[host] = recent
         if len(recent) >= 8:
@@ -67,8 +86,9 @@ def login(request, password):
         return JSONResponse({'detail': '访问口令不正确，或局域网保护尚未设置。'}, status_code=401)
     token = secrets.token_urlsafe(32)
     with SESSION_LOCK:
-        for old in [k for k, expiry in sessions.items() if expiry <= time.time()]:
-            del sessions[old]
+        prune_auth()
+        if len(sessions) >= MAX_SESSIONS:
+            return JSONResponse({'detail': '登录会话已满，请稍后重试。'}, status_code=429)
         sessions[token] = time.time() + 12 * 3600
         attempts.pop(host, None)
     response = JSONResponse({'ok': True})
@@ -84,12 +104,29 @@ def login(request, password):
     return response
 
 
+def prune_auth():
+    now = time.time()
+    for token in [key for key, expiry in sessions.items() if expiry <= now]:
+        del sessions[token]
+    for host, recent in list(attempts.items()):
+        recent = [stamp for stamp in recent if now - stamp < 300]
+        if recent:
+            attempts[host] = recent
+        else:
+            del attempts[host]
+
+
 def allowed_hosts():
     hosts = {'127.0.0.1', 'localhost', '::1'}
-    try:
-        hosts.update(row[4][0] for row in socket.getaddrinfo(socket.gethostname(), None))
-    except OSError:
-        pass
+    global _host_addresses, _host_expires
+    with HOST_LOCK:
+        if time.monotonic() >= _host_expires:
+            try:
+                _host_addresses = {row[4][0] for row in socket.getaddrinfo(socket.gethostname(), None)}
+            except OSError:
+                _host_addresses = set()
+            _host_expires = time.monotonic() + 60
+        hosts.update(_host_addresses)
     hosts.update(x.strip() for x in os.environ.get('SHUNGUANG_ALLOWED_HOSTS', '').split(',') if x.strip())
     return hosts
 
@@ -97,7 +134,11 @@ def allowed_hosts():
 async def guard(request, call_next):
     host = request.url.hostname
     is_test = host == 'testserver' and request.client and request.client.host == 'testclient'
-    if host not in allowed_hosts() and not is_test:
+    if (
+        host not in {'localhost', '127.0.0.1', '::1'}
+        and not is_test
+        and host not in await asyncio.to_thread(allowed_hosts)
+    ):
         return JSONResponse({'detail': '访问地址不属于本机服务。'}, status_code=403)
     if not lan_mode() and request.client:
         peer = request.client.host
@@ -114,7 +155,12 @@ async def guard(request, call_next):
         dev = not lan_mode() and parsed.hostname in ('127.0.0.1', 'localhost') and parsed.port == 5173
         if not (same or dev):
             return JSONResponse({'detail': '跨站访问已阻止。'}, status_code=403)
-    public = request.url.path in ('/', '/api/auth/status', '/api/auth/login') or request.url.path.startswith('/assets/')
+    public = request.url.path in (
+        '/',
+        '/api/health',
+        '/api/auth/status',
+        '/api/auth/login',
+    ) or request.url.path.startswith('/assets/')
     if lan_mode() and not public and not authenticated(request):
         return JSONResponse({'detail': '请先输入局域网访问口令。', 'code': 'lan_auth_required'}, status_code=401)
     response = await call_next(request)

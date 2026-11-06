@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from ..config import (
     ROOT,
+    local_knowledge_enabled,
 )
 
 router = APIRouter()
@@ -19,6 +20,14 @@ class RagQuery(BaseModel):
 
 @router.get('/api/rag/status')
 def rag_status():
+    if not local_knowledge_enabled():
+        return {
+            'enabled': False,
+            'ready': False,
+            'available': False,
+            'runtime_installed': False,
+            'notice': '轻量模式不提供本地知识库，角色设定通过提示词提供。',
+        }
     from .. import rag
 
     return rag.status()
@@ -26,6 +35,8 @@ def rag_status():
 
 @router.post('/api/rag/rebuild')
 async def rag_rebuild():
+    if not local_knowledge_enabled():
+        raise HTTPException(409, '轻量模式已禁用本地知识库。')
     from .. import rag
 
     try:
@@ -36,6 +47,8 @@ async def rag_rebuild():
 
 @router.post('/api/rag/search')
 async def rag_search(payload: RagQuery):
+    if not local_knowledge_enabled():
+        raise HTTPException(409, '轻量模式已禁用本地知识库。')
     from .. import rag
 
     try:

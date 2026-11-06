@@ -195,6 +195,24 @@
         "title": "ArtifactVersionRequest",
         "type": "object"
       },
+      "BindingOut": {
+        "properties": {
+          "code": {
+            "title": "Code",
+            "type": "string"
+          },
+          "expires": {
+            "title": "Expires",
+            "type": "number"
+          }
+        },
+        "required": [
+          "code",
+          "expires"
+        ],
+        "title": "BindingOut",
+        "type": "object"
+      },
       "CandidateConfirm": {
         "properties": {
           "id": {
@@ -224,6 +242,20 @@
       },
       "CapabilitiesOut": {
         "properties": {
+          "deployment_mode": {
+            "default": "desktop",
+            "enum": [
+              "desktop",
+              "server"
+            ],
+            "title": "Deployment Mode",
+            "type": "string"
+          },
+          "local_knowledge": {
+            "default": true,
+            "title": "Local Knowledge",
+            "type": "boolean"
+          },
           "max_message_length": {
             "default": 6000,
             "title": "Max Message Length",
@@ -398,6 +430,53 @@
           "comment"
         ],
         "title": "CommentUpdate",
+        "type": "object"
+      },
+      "Connection": {
+        "additionalProperties": false,
+        "properties": {
+          "bot_id": {
+            "default": "",
+            "pattern": "^\\d{5,20}$|^$",
+            "title": "Bot Id",
+            "type": "string"
+          },
+          "enabled": {
+            "default": false,
+            "title": "Enabled",
+            "type": "boolean"
+          },
+          "model_choice": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelChoice"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "retention_days": {
+            "default": 30,
+            "maximum": 3650.0,
+            "minimum": 1.0,
+            "title": "Retention Days",
+            "type": "integer"
+          },
+          "token": {
+            "default": "",
+            "maxLength": 512,
+            "title": "Token",
+            "type": "string"
+          },
+          "url": {
+            "default": "ws://127.0.0.1:3001",
+            "maxLength": 250,
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "title": "Connection",
         "type": "object"
       },
       "ConnectionOptions": {
@@ -971,6 +1050,75 @@
         "title": "LoginRequest",
         "type": "object"
       },
+      "Member": {
+        "properties": {
+          "card": {
+            "default": "",
+            "title": "Card",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "source": {
+            "enum": [
+              "bridge",
+              "captured",
+              "manual"
+            ],
+            "title": "Source",
+            "type": "string"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "name",
+          "source"
+        ],
+        "title": "Member",
+        "type": "object"
+      },
+      "MemberPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Member"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "notice": {
+            "title": "Notice",
+            "type": "string"
+          },
+          "refreshed": {
+            "title": "Refreshed",
+            "type": "number"
+          },
+          "stale": {
+            "title": "Stale",
+            "type": "boolean"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total",
+          "stale",
+          "refreshed",
+          "notice"
+        ],
+        "title": "MemberPage",
+        "type": "object"
+      },
       "MemoryConfirmRequest": {
         "properties": {
           "candidates": {
@@ -1460,6 +1608,136 @@
         "title": "OverwriteTarget",
         "type": "object"
       },
+      "PeerPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "total": {
+            "title": "Total",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "items",
+          "total"
+        ],
+        "title": "PeerPage",
+        "type": "object"
+      },
+      "Policy": {
+        "additionalProperties": false,
+        "properties": {
+          "allow_group_send": {
+            "default": false,
+            "title": "Allow Group Send",
+            "type": "boolean"
+          },
+          "chat": {
+            "default": "off",
+            "enum": [
+              "off",
+              "mention",
+              "natural"
+            ],
+            "title": "Chat",
+            "type": "string"
+          },
+          "collect": {
+            "default": false,
+            "title": "Collect",
+            "type": "boolean"
+          },
+          "daily_time": {
+            "default": "22:00",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Daily Time",
+            "type": "string"
+          },
+          "delivery": {
+            "default": "panel",
+            "enum": [
+              "panel",
+              "owner",
+              "group"
+            ],
+            "title": "Delivery",
+            "type": "string"
+          },
+          "images": {
+            "default": false,
+            "title": "Images",
+            "type": "boolean"
+          },
+          "interval_hours": {
+            "default": 6,
+            "maximum": 168.0,
+            "minimum": 1.0,
+            "title": "Interval Hours",
+            "type": "integer"
+          },
+          "knowledge": {
+            "default": true,
+            "title": "Knowledge",
+            "type": "boolean"
+          },
+          "schedule": {
+            "default": "off",
+            "enum": [
+              "off",
+              "daily",
+              "interval"
+            ],
+            "title": "Schedule",
+            "type": "string"
+          },
+          "stickers": {
+            "default": true,
+            "title": "Stickers",
+            "type": "boolean"
+          },
+          "vision_profile": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Vision Profile",
+            "type": "string"
+          },
+          "vision_signature": {
+            "default": "",
+            "maxLength": 64,
+            "title": "Vision Signature",
+            "type": "string"
+          },
+          "window": {
+            "default": "incremental",
+            "enum": [
+              "incremental",
+              "fixed"
+            ],
+            "title": "Window",
+            "type": "string"
+          },
+          "window_end": {
+            "default": "23:59",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Window End",
+            "type": "string"
+          },
+          "window_start": {
+            "default": "00:00",
+            "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$",
+            "title": "Window Start",
+            "type": "string"
+          }
+        },
+        "title": "Policy",
+        "type": "object"
+      },
       "PreviewRequest": {
         "additionalProperties": false,
         "properties": {
@@ -1499,6 +1777,210 @@
           "id"
         ],
         "title": "ProfileActivate",
+        "type": "object"
+      },
+      "ProfileEntry": {
+        "additionalProperties": false,
+        "properties": {
+          "key": {
+            "pattern": "^[a-z][a-z0-9_]{0,39}$",
+            "title": "Key",
+            "type": "string"
+          },
+          "title": {
+            "default": "",
+            "maxLength": 80,
+            "title": "Title",
+            "type": "string"
+          },
+          "value": {
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Value",
+            "type": "string"
+          },
+          "visibility": {
+            "anyOf": [
+              {
+                "enum": [
+                  "group",
+                  "self"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Visibility"
+          }
+        },
+        "required": [
+          "key",
+          "value"
+        ],
+        "title": "ProfileEntry",
+        "type": "object"
+      },
+      "ProfileOut": {
+        "additionalProperties": false,
+        "properties": {
+          "bot": {
+            "title": "Bot",
+            "type": "string"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEntry"
+            },
+            "maxItems": 40,
+            "title": "Entries",
+            "type": "array"
+          },
+          "kind": {
+            "enum": [
+              "private",
+              "group"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "revision": {
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "subject": {
+            "title": "Subject",
+            "type": "string"
+          },
+          "target": {
+            "title": "Target",
+            "type": "string"
+          }
+        },
+        "required": [
+          "revision",
+          "bot",
+          "kind",
+          "target",
+          "subject"
+        ],
+        "title": "ProfileOut",
+        "type": "object"
+      },
+      "ProfileUpdate": {
+        "additionalProperties": false,
+        "properties": {
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileEntry"
+            },
+            "maxItems": 40,
+            "title": "Entries",
+            "type": "array"
+          },
+          "revision": {
+            "minimum": 0.0,
+            "title": "Revision",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "revision"
+        ],
+        "title": "ProfileUpdate",
+        "type": "object"
+      },
+      "QQState": {
+        "properties": {
+          "chat_view_ready": {
+            "default": true,
+            "title": "Chat View Ready",
+            "type": "boolean"
+          },
+          "connection": {
+            "$ref": "#/components/schemas/Connection"
+          },
+          "deployment_mode": {
+            "default": "desktop",
+            "enum": [
+              "desktop",
+              "server"
+            ],
+            "title": "Deployment Mode",
+            "type": "string"
+          },
+          "error": {
+            "title": "Error",
+            "type": "string"
+          },
+          "has_token": {
+            "title": "Has Token",
+            "type": "boolean"
+          },
+          "last_event": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event"
+          },
+          "local_knowledge": {
+            "default": true,
+            "title": "Local Knowledge",
+            "type": "boolean"
+          },
+          "manual_profiles_ready": {
+            "default": true,
+            "title": "Manual Profiles Ready",
+            "type": "boolean"
+          },
+          "owner": {
+            "title": "Owner",
+            "type": "string"
+          },
+          "policies": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Policies",
+            "type": "array"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
+          },
+          "sticker_controls_ready": {
+            "default": true,
+            "title": "Sticker Controls Ready",
+            "type": "boolean"
+          },
+          "vision_profiles": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "title": "Vision Profiles",
+            "type": "array"
+          }
+        },
+        "required": [
+          "connection",
+          "has_token",
+          "status",
+          "error",
+          "owner",
+          "last_event",
+          "policies",
+          "vision_profiles"
+        ],
+        "title": "QQState",
         "type": "object"
       },
       "RagQuery": {
@@ -1616,6 +2098,11 @@
             "title": "Configured",
             "type": "boolean"
           },
+          "context_window": {
+            "default": 32768,
+            "title": "Context Window",
+            "type": "integer"
+          },
           "effort": {
             "default": "default",
             "title": "Effort",
@@ -1669,6 +2156,11 @@
             ],
             "title": "Vision",
             "type": "string"
+          },
+          "warning": {
+            "default": "",
+            "title": "Warning",
+            "type": "string"
           }
         },
         "required": [
@@ -1709,6 +2201,13 @@
             "default": false,
             "title": "Clear Api Key",
             "type": "boolean"
+          },
+          "context_window": {
+            "default": 32768,
+            "maximum": 1048576.0,
+            "minimum": 4096.0,
+            "title": "Context Window",
+            "type": "integer"
           },
           "effort": {
             "default": "default",
@@ -1974,6 +2473,50 @@
           "scene"
         ],
         "title": "StickerOut",
+        "type": "object"
+      },
+      "StickerSwitch": {
+        "properties": {
+          "enabled": {
+            "title": "Enabled",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "enabled"
+        ],
+        "title": "StickerSwitch",
+        "type": "object"
+      },
+      "SummaryRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "delivery": {
+            "default": "panel",
+            "enum": [
+              "panel",
+              "owner",
+              "group"
+            ],
+            "title": "Delivery",
+            "type": "string"
+          },
+          "end": {
+            "exclusiveMinimum": 0.0,
+            "title": "End",
+            "type": "number"
+          },
+          "start": {
+            "minimum": 0.0,
+            "title": "Start",
+            "type": "number"
+          }
+        },
+        "required": [
+          "start",
+          "end"
+        ],
+        "title": "SummaryRequest",
         "type": "object"
       },
       "SynthesisRequest": {
@@ -2437,7 +2980,7 @@
   },
   "info": {
     "title": "瞬光伴行 API",
-    "version": "0.6.6"
+    "version": "0.7.3"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -2690,17 +3233,11 @@
             "name": "limit",
             "required": false,
             "schema": {
-              "anyOf": [
-                {
-                  "maximum": 500,
-                  "minimum": 1,
-                  "type": "integer"
-                },
-                {
-                  "type": "null"
-                }
-              ],
-              "title": "Limit"
+              "default": 200,
+              "maximum": 500,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
             }
           },
           {
@@ -2718,6 +3255,23 @@
                 }
               ],
               "title": "Before"
+            }
+          },
+          {
+            "in": "query",
+            "name": "after",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "After"
             }
           }
         ],
@@ -3394,6 +3948,1392 @@
           }
         },
         "summary": "Test Provider"
+      }
+    },
+    "/api/qq/binding": {
+      "delete": {
+        "operationId": "unbind_api_qq_binding_delete",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Unbind Api Qq Binding Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Unbind",
+        "tags": [
+          "qq"
+        ]
+      },
+      "post": {
+        "operationId": "binding_api_qq_binding_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BindingOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Binding",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/chats": {
+      "get": {
+        "operationId": "chats_api_qq_chats_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Search",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Chats Api Qq Chats Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chats",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/chats/{kind}/{target}": {
+      "get": {
+        "operationId": "chat_messages_api_qq_chats__kind___target__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "before",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Before",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Chat Messages Api Qq Chats  Kind   Target  Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chat Messages",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/chats/{kind}/{target}/images/{image_id}": {
+      "get": {
+        "operationId": "chat_image_api_qq_chats__kind___target__images__image_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chat Image",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/chats/{kind}/{target}/stickers": {
+      "patch": {
+        "operationId": "chat_stickers_api_qq_chats__kind___target__stickers_patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StickerSwitch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Chat Stickers",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/connection": {
+      "patch": {
+        "operationId": "connection_api_qq_connection_patch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Connection"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QQState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Connection",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/members/{target}": {
+      "get": {
+        "operationId": "members_api_qq_members__target__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Search",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MemberPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Members",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/peers/{kind}": {
+      "get": {
+        "operationId": "peers_api_qq_peers__kind__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "search",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 100,
+              "title": "Search",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "offset",
+            "required": false,
+            "schema": {
+              "default": 0,
+              "minimum": 0,
+              "title": "Offset",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 30,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PeerPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Peers",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/policies/{kind}/{target}": {
+      "get": {
+        "operationId": "get_policy_api_qq_policies__kind___target__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Policy",
+        "tags": [
+          "qq"
+        ]
+      },
+      "put": {
+        "operationId": "policy_api_qq_policies__kind___target__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Policy"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Policy"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Policy",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/profiles/{kind}/{target}": {
+      "delete": {
+        "operationId": "profile_delete_api_qq_profiles__kind___target__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "revision",
+            "required": true,
+            "schema": {
+              "minimum": 0,
+              "title": "Revision",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 20,
+              "title": "Subject",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile Delete",
+        "tags": [
+          "qq"
+        ]
+      },
+      "get": {
+        "operationId": "profile_get_api_qq_profiles__kind___target__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 20,
+              "title": "Subject",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile Get",
+        "tags": [
+          "qq"
+        ]
+      },
+      "put": {
+        "operationId": "profile_put_api_qq_profiles__kind___target__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "subject",
+            "required": false,
+            "schema": {
+              "default": "",
+              "maxLength": 20,
+              "title": "Subject",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProfileUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProfileOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Profile Put",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/records/{kind}/{target}": {
+      "delete": {
+        "operationId": "clear_records_api_qq_records__kind___target__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Clear Records Api Qq Records  Kind   Target  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Clear Records",
+        "tags": [
+          "qq"
+        ]
+      },
+      "get": {
+        "operationId": "records_api_qq_records__kind___target__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "enum": [
+                "private",
+                "group"
+              ],
+              "title": "Kind",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Records Api Qq Records  Kind   Target  Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Records",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/refresh": {
+      "post": {
+        "operationId": "refresh_api_qq_refresh_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Refresh Api Qq Refresh Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Refresh",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/scope": {
+      "get": {
+        "operationId": "scope_api_qq_scope_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Scope Api Qq Scope Get",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Scope",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/scope/history": {
+      "delete": {
+        "operationId": "delete_history_api_qq_scope_history_delete",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete History Api Qq Scope History Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete History",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/scope/memories/{memory_id}": {
+      "delete": {
+        "operationId": "delete_memory_api_qq_scope_memories__memory_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "memory_id",
+            "required": true,
+            "schema": {
+              "title": "Memory Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "maxLength": 200,
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Memory Api Qq Scope Memories  Memory Id  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Memory",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/scopes": {
+      "get": {
+        "operationId": "scopes_api_qq_scopes_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Scopes Api Qq Scopes Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Scopes",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/state": {
+      "get": {
+        "operationId": "state_api_qq_state_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QQState"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "State",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/summaries": {
+      "get": {
+        "operationId": "summaries_api_qq_summaries_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "title": "Response Summaries Api Qq Summaries Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Summaries",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/summaries/{key}": {
+      "delete": {
+        "operationId": "delete_summary_api_qq_summaries__key__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Delete Summary Api Qq Summaries  Key  Delete",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Summary",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/summaries/{key}/deliver": {
+      "post": {
+        "operationId": "retry_delivery_api_qq_summaries__key__deliver_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retry Delivery Api Qq Summaries  Key  Deliver Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Delivery",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/summaries/{key}/retry": {
+      "post": {
+        "operationId": "retry_summary_api_qq_summaries__key__retry_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "key",
+            "required": true,
+            "schema": {
+              "title": "Key",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Retry Summary Api Qq Summaries  Key  Retry Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Summary",
+        "tags": [
+          "qq"
+        ]
+      }
+    },
+    "/api/qq/summaries/{target}": {
+      "post": {
+        "operationId": "summary_api_qq_summaries__target__post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "target",
+            "required": true,
+            "schema": {
+              "title": "Target",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SummaryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "title": "Response Summary Api Qq Summaries  Target  Post",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Summary",
+        "tags": [
+          "qq"
+        ]
       }
     },
     "/api/rag/rebuild": {

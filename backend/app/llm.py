@@ -9,7 +9,7 @@ from functools import lru_cache
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
-from .config import ROOT, ModelConfig
+from .config import ROOT, ModelConfig, local_knowledge_enabled
 from .constants import HISTORY_WINDOW
 
 
@@ -61,10 +61,10 @@ def build_messages(history: list[dict], memories=None, sources=None, capabilitie
     directory = ROOT / 'backend' / 'prompts'
     # Both are developer-maintained character context, independent of RAG/user memory.
     # Keep one system message for providers that accept a single system prompt.
-    prompt = '\n\n'.join(
-        read_prompt(str(path), path.stat().st_mtime_ns)
-        for path in (directory / 'character.md', directory / 'profile.md')
-    )
+    paths = [directory / 'character.md', directory / 'profile.md']
+    if not local_knowledge_enabled():
+        paths.append(directory / 'server.md')
+    prompt = '\n\n'.join(read_prompt(str(path), path.stat().st_mtime_ns) for path in paths)
     messages = [SystemMessage(content=prompt)]
     if capabilities:
         messages.append(SystemMessage(content=capabilities))
@@ -114,6 +114,10 @@ def extract_text(content) -> str:
 
 
 def friendly_error(error: Exception) -> str:
+    from .context_budget import ContextBudgetError
+
+    if isinstance(error, ContextBudgetError):
+        return str(error)
     if isinstance(error, EmptyResponseError):
         return '模型已连接，但没有返回文本，请重试或更换模型。'
     code = getattr(error, 'code', '')

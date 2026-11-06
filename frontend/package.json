@@ -1,7 +1,7 @@
 {
   "name": "shunguang-companion-web",
   "private": true,
-  "version": "0.6.6",
+  "version": "0.7.3",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1 --port 5173 --strictPort",
@@ -13,7 +13,8 @@
     "format:check": "prettier --check src",
     "test": "vitest run",
     "gen:api": "openapi-typescript openapi.json -o src/generated/api-schema.d.ts",
-    "verify": "npm run typecheck && npm run lint && npm run format:check && npm test && npm run build"
+    "style:check": "node scripts/check-styles.mjs",
+    "verify": "npm run typecheck && npm run lint && npm run style:check && npm run format:check && npm test && npm run build"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.15.27",

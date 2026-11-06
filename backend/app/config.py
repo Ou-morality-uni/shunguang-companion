@@ -8,11 +8,44 @@ from urllib.parse import urlparse
 
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, field_validator
 
+from .config_files import quarantine, read_object, warnings
 from .credentials import decrypt_secret, encrypt_secret
 
 ROOT = Path(__file__).resolve().parents[2]
-DATA_DIR = ROOT / 'data'
+
+
+def server_mode() -> bool:
+    value = os.environ.get('SHUNGUANG_MODE', 'desktop')
+    if value not in ('desktop', 'server'):
+        raise ValueError('SHUNGUANG_MODE 只允许 desktop 或 server')
+    return value == 'server'
+
+
+def data_directory() -> Path:
+    value = os.environ.get('SHUNGUANG_DATA_DIR')
+    if not value:
+        return ROOT / 'data'
+    path = Path(value)
+    if not path.is_absolute():
+        raise ValueError('SHUNGUANG_DATA_DIR 必须是绝对路径')
+    return path
+
+
+DATA_DIR = data_directory()
 CONFIG_LOCK = RLock()
+
+
+def local_knowledge_enabled() -> bool:
+    if server_mode():
+        return False
+    path = DATA_DIR / 'install/preferences.json'
+    if not path.exists():
+        return True  # Existing desktop installations retain their knowledge base.
+    try:
+        value = json.loads(path.read_text(encoding='utf-8-sig'))
+        return isinstance(value, dict) and value.get('mode') == 'full'
+    except (OSError, ValueError):
+        return False  # Corrupt preferences must not launch a heavy model unexpectedly.
 
 
 class ModelConfig(BaseModel):
@@ -24,6 +57,7 @@ class ModelConfig(BaseModel):
     llm_timeout: float = Field(default=45, ge=5, le=120)
     llm_provider: str = Field(default='custom', max_length=40)
     llm_max_tokens: int = Field(default=1800, ge=128, le=8192)
+    llm_context_window: int = Field(default=32768, ge=4096, le=1048576)
     llm_protocol: Literal['openai', 'anthropic'] = 'openai'
     llm_vision: Literal['unknown', 'supported', 'unsupported'] = 'unknown'
     llm_effort: Literal['default', 'off', 'on', 'low', 'medium', 'high', 'xhigh', 'max'] = 'default'
@@ -50,7 +84,28 @@ def load_config() -> ModelConfig:
         path = DATA_DIR / 'settings.json'
         if not path.exists():
             return ModelConfig()
-        record = json.loads(path.read_text(encoding='utf-8'))
+        record = read_object(path)
+        try:
+            ModelConfig(**{k: v for k, v in record.items() if k != 'llm_api_key'})
+            if not isinstance(record.get('api_key_encrypted', ''), str):
+                raise ValueError()
+            if not isinstance(record.get('profiles', []), list) or any(
+                not isinstance(p, dict) for p in record.get('profiles', [])
+            ):
+                raise ValueError()
+            for profile in record.get('profiles', []):
+                identity = profile.get('id')
+                if (
+                    not isinstance(identity, str)
+                    or len(identity) != 24
+                    or any(char not in '0123456789abcdef' for char in identity)
+                ):
+                    raise ValueError()
+                if not isinstance(profile.get('api_key_encrypted', ''), str):
+                    raise ValueError()
+                ModelConfig(**{key: value for key, value in profile.items() if key != 'llm_api_key'})
+        except ValueError:
+            record = quarantine(path)
         encrypted = record.pop('api_key_encrypted', '')
         record.pop('llm_api_key', None)  # never accept a legacy plaintext field
         record['llm_api_key'] = SecretStr(decrypt_secret(encrypted) if encrypted else '')
@@ -70,7 +125,7 @@ def save_config(config: ModelConfig) -> None:
             record['api_key_encrypted'] = encrypt_secret(secret)
         profiles = []
         if path.exists():
-            old = json.loads(path.read_text(encoding='utf-8'))
+            old = read_object(path)
             profiles = old.get('profiles', [])
             if old.get('llm_model'):
                 old_profile = {k: v for k, v in old.items() if k not in ('profiles', 'llm_api_key')}
@@ -80,6 +135,7 @@ def save_config(config: ModelConfig) -> None:
         record['profiles'] = [p for p in profiles if p.get('id') != item['id']] + [item]
         temp.write_text(json.dumps(record, ensure_ascii=False, indent=2), encoding='utf-8')
         os.replace(temp, path)
+        warnings.pop(str(path), None)
 
 
 def profile_id(base_url, protocol):
@@ -90,7 +146,11 @@ def saved_profiles():
     path = DATA_DIR / 'settings.json'
     if not path.exists():
         return []
-    record = json.loads(path.read_text(encoding='utf-8'))
+    with CONFIG_LOCK:
+        load_config()  # Validate before exposing saved profiles.
+        record = read_object(path)
+    if not record:
+        return []
     profiles = record.get('profiles', [])
     active = {k: v for k, v in record.items() if k != 'profiles'}
     active['id'] = profile_id(record.get('llm_base_url', ''), record.get('llm_protocol', 'openai'))
@@ -127,6 +187,8 @@ def public_config(config: ModelConfig) -> dict:
         'temperature': config.llm_temperature,
         'timeout': config.llm_timeout,
         'max_tokens': config.llm_max_tokens,
+        'context_window': config.llm_context_window,
+        'warning': warnings.get(str(DATA_DIR / 'settings.json'), ''),
         'has_api_key': bool(config.llm_api_key.get_secret_value()),
         'configured': bool(config.llm_api_key.get_secret_value() and config.llm_model.strip()),
         'provider': config.llm_provider,

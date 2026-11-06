@@ -77,6 +77,13 @@ export interface Features {
     search_provider: string;
     has_api_key: boolean;
     timeout?: number;
+    call_timeout?: number;
+    file_timeout?: number;
+    daily_limit?: number;
+    cache_seconds?: number;
+    public_fallback?: boolean;
+    read_pages?: boolean;
+    usage?: { day: string; used: number; timezone: string };
   };
   tts: {
     provider: string;
@@ -179,16 +186,44 @@ export function safeSourceUrl(value?: string) {
   }
 }
 
-export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`/api${path}`, {
-    ...options,
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-  });
-  if (!response.ok) {
-    throw await httpError(response, `请求失败（${response.status}）`);
+export async function request<T>(
+  path: string,
+  options: RequestInit & { timeoutMs?: number } = {},
+): Promise<T> {
+  const { timeoutMs, signal, ...init } = options;
+  // These endpoints perform bounded upstream/Office work or wait for durable stop.
+  const longOperation =
+    /^\/(providers\/(discover|test)|tools\/run|tts\/|voice\/|asr\/|work\/.*(vision|probe)|model-options\/.*\/refresh|chat\/.*\/stop|qq\/refresh)/.test(
+      path,
+    );
+  const controller = new AbortController();
+  let timedOut = false;
+  const cancel = () => controller.abort(signal?.reason);
+  if (signal?.aborted) cancel();
+  else signal?.addEventListener('abort', cancel, { once: true });
+  const timer = setTimeout(
+    () => {
+      timedOut = true;
+      controller.abort();
+    },
+    timeoutMs ?? (longOperation ? 180000 : 15000),
+  );
+  try {
+    const response = await fetch(`/api${path}`, {
+      ...init,
+      signal: controller.signal,
+      headers: { 'Content-Type': 'application/json', ...options.headers },
+    });
+    if (!response.ok) throw await httpError(response, `请求失败（${response.status}）`);
+    if (response.status === 204) return undefined as T;
+    return await response.json();
+  } catch (error) {
+    if (timedOut) throw new Error('服务无响应，请检查后端状态后重试；操作可能仍在后台处理。');
+    throw error;
+  } finally {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', cancel);
   }
-  if (response.status === 204) return undefined as T;
-  return response.json();
 }
 
 export async function streamChat(

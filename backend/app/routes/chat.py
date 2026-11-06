@@ -1,65 +1,23 @@
 import asyncio
-import json
-import re
-import time
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from fastapi.responses import StreamingResponse
-from langchain_core.messages import HumanMessage, ToolMessage
-from pydantic import BaseModel, Field, field_validator
 
-from .. import runtime, stickers
-from ..config import profile_id
-from ..constants import CHAT_TIMEOUT, HISTORY_WINDOW, MAX_MESSAGE_LENGTH, MAX_TOOL_CALLS, MAX_TOOL_ROUNDS
-from ..filework import local_request
-from ..llm import EmptyResponseError, build_messages, build_model, extract_text, friendly_error
-from ..logging_setup import report_error
-from ..model_choices import ModelChoice, ModelChoiceOut, choice_config, default_choice, public_choice
-from ..runtime import require_config, require_conversation
+from .. import runtime
+from ..chat_models import ChatRequest
+from ..llm import build_model
+from ..model_choices import ModelChoice, ModelChoiceOut, default_choice, public_choice
+from ..runtime import require_conversation
 from ..schemas import ConversationOut, MessageOut
-from ..tool_registry import ToolRegistry
+from ..turn_stream import cancellable_chunks, event, tool_content
 
+__all__ = ['ChatRequest', 'cancellable_chunks', 'event', 'tool_content', 'generate_chat']
 router = APIRouter()
-
-
-class StopRequested(Exception):
-    pass
-
-
-async def interruptible(awaitable, stop):
-    work = asyncio.ensure_future(awaitable)
-    stopper = asyncio.create_task(stop.wait())
-    try:
-        done, _ = await asyncio.wait({work, stopper}, return_when=asyncio.FIRST_COMPLETED)
-        if stopper in done:
-            raise StopRequested()
-        return work.result()
-    finally:
-        for task in (work, stopper):
-            if not task.done():
-                task.cancel()
-        await asyncio.gather(work, stopper, return_exceptions=True)
-
-
-class ChatRequest(BaseModel):
-    conversation_id: str | None = None
-    content: str = Field(min_length=1, max_length=MAX_MESSAGE_LENGTH)
-    attachments: list[str] = Field(default_factory=list, max_length=10)
-    model_choice: ModelChoice | None = None
-    annotations: list[str] = Field(default_factory=list, max_length=30)
-    annotation_scope: str = Field(default='', max_length=80)
-
-    @field_validator('content')
-    @classmethod
-    def not_blank(cls, value: str) -> str:
-        if not value.strip():
-            raise ValueError('消息不能为空')
-        return value.strip()
 
 
 @router.get('/api/conversations', response_model=list[ConversationOut])
 def conversations():
-    return runtime.store.list_conversations()
+    edition_ids = runtime.edition_conversations()
+    return [item for item in runtime.store.list_conversations() if item['id'] not in edition_ids]
 
 
 @router.post('/api/conversations', status_code=201, response_model=ConversationOut)
@@ -70,11 +28,14 @@ def create_conversation():
 @router.get('/api/conversations/{conversation_id}/messages', response_model=list[MessageOut])
 def get_messages(
     conversation_id: str,
-    limit: int | None = Query(default=None, ge=1, le=500),
+    limit: int = Query(default=200, ge=1, le=500),
     before: int | None = Query(default=None, ge=1),
+    after: int | None = Query(default=None, ge=1),
 ):
     require_conversation(conversation_id)
-    return runtime.store.messages(conversation_id, limit, before)
+    if before is not None and after is not None:
+        raise HTTPException(422, 'before 与 after 不能同时使用。')
+    return runtime.store.messages(conversation_id, limit, before, after)
 
 
 @router.get('/api/conversations/{conversation_id}/model', response_model=ModelChoiceOut)
@@ -86,6 +47,7 @@ def conversation_model(conversation_id: str):
 
 @router.patch('/api/conversations/{conversation_id}/model', response_model=ModelChoiceOut)
 async def update_conversation_model(conversation_id: str, payload: ModelChoice):
+    runtime.require_web_conversation(conversation_id)
     async with runtime.mutation_lock:
         require_conversation(conversation_id)
         result = public_choice(payload.model_dump())
@@ -93,56 +55,24 @@ async def update_conversation_model(conversation_id: str, payload: ModelChoice):
         return result
 
 
-def event(name: str, data: dict) -> str:
-    return f'event: {name}\ndata: {json.dumps(data, ensure_ascii=False)}\n\n'
-
-
-def tool_content(result):
-    text = json.dumps(result, ensure_ascii=False)
-    if len(text) <= 16000:
-        return text
-    return json.dumps(
-        {
-            'ok': result.get('ok', False),
-            'truncated': True,
-            'task_id': result.get('task', {}).get('id'),
-            'message': '工具结果过长，以下只是部分预览。不能将未返回的内容当作已读资料；文件任务完整结果可在工作台查看。',
-            'preview': text[:12000],
-        },
-        ensure_ascii=False,
-    )
-
-
-async def cancellable_chunks(model, history, stop):
-    iterator = model.astream(history).__aiter__()
-    pending = None
-    stopper = asyncio.create_task(stop.wait())
-    try:
-        while not stop.is_set():
-            pending = asyncio.create_task(anext(iterator))
-            done, _ = await asyncio.wait({pending, stopper}, return_when=asyncio.FIRST_COMPLETED)
-            if stopper in done:
-                return
-            try:
-                yield pending.result()
-            except StopAsyncIteration:
-                return
-    finally:
-        if pending and not pending.done():
-            pending.cancel()
-            await asyncio.gather(pending, return_exceptions=True)
-        stopper.cancel()
-        await asyncio.gather(stopper, return_exceptions=True)
-        if hasattr(iterator, 'aclose'):
-            await iterator.aclose()
-
-
 @router.delete('/api/conversations/{conversation_id}', status_code=204)
 async def delete_conversation(conversation_id: str):
+    runtime.require_web_conversation(conversation_id)
     async with runtime.mutation_lock:
         if conversation_id in runtime.busy:
             raise HTTPException(409, '请先停止回复，再删除这段对话。')
-        if not await asyncio.to_thread(runtime.store.delete_conversation, conversation_id):
+        from ..conversation_cleanup import delete
+        from ..filework import WorkError
+
+        try:
+            deleted = (
+                await asyncio.to_thread(delete, runtime.work, conversation_id)
+                if runtime.work
+                else await asyncio.to_thread(runtime.store.delete_conversation, conversation_id)
+            )
+        except WorkError as error:
+            raise HTTPException(error.status, error.message) from None
+        if not deleted:
             raise HTTPException(404, '对话不存在')
     return Response(status_code=204)
 
@@ -166,354 +96,10 @@ async def stop_chat(conversation_id: str):
 
 @router.post('/api/chat')
 async def chat(payload: ChatRequest, request: Request = None):
-    attachments = []
-    if payload.attachments:
-        if not local_request(request) or runtime.work is None:
-            raise HTTPException(403, '本机附件仅能由本机对话使用。')
-        from ..work_artifacts import attachment
-        from .work import invoke
+    return await generate_chat(payload, request)
 
-        for attachment_id in dict.fromkeys(payload.attachments):
-            attachments.append(await asyncio.to_thread(invoke, attachment, runtime.work, attachment_id))
-    # Reserve before yielding to I/O. Deletion shares the gate; never discard a live lock.
-    async with runtime.mutation_lock:
-        annotation_items = []
-        if payload.annotations:
-            from .. import annotations
-            from ..filework import WorkError
-            from ..work_artifacts import attachment
 
-            if not local_request(request) or runtime.work is None:
-                raise HTTPException(403, '本机批注仅能由本机对话使用。')
-            try:
-                annotation_items = await asyncio.to_thread(
-                    annotations.prepare,
-                    runtime.store,
-                    runtime.work,
-                    payload.annotations,
-                    payload.conversation_id,
-                    payload.annotation_scope,
-                )
-                for item in annotation_items:
-                    if item['source']['kind'] == 'attachment' and not any(
-                        reference['id'] == item['source']['id'] for reference in attachments
-                    ):
-                        attachments.append(await asyncio.to_thread(attachment, runtime.work, item['source']['id']))
-            except WorkError as error:
-                raise HTTPException(error.status, error.message)
-        if payload.conversation_id:
-            await asyncio.to_thread(require_conversation, payload.conversation_id)
-            if payload.conversation_id in runtime.busy:
-                raise HTTPException(409, '这段对话正在回复中，请稍后再发。')
-        selected = (
-            payload.model_choice.model_dump()
-            if payload.model_choice
-            else (
-                await asyncio.to_thread(runtime.store.conversation_model, payload.conversation_id)
-                if payload.conversation_id
-                else None
-            )
-        )
-        config = (
-            await asyncio.to_thread(choice_config, selected) if selected else await asyncio.to_thread(require_config)
-        )
-        if selected is None:
-            selected = {
-                'profile_id': profile_id(config.llm_base_url, config.llm_protocol),
-                'model': config.llm_model,
-                'effort': config.llm_effort,
-            }
-        model = await asyncio.to_thread(build_model, config)
-        from ..filework import WorkError
+async def generate_chat(payload: ChatRequest, request=None, **channel_options):
+    from ..turn import generate_chat as run
 
-        try:
-            user_message = await asyncio.to_thread(
-                runtime.store.begin_turn,
-                payload.conversation_id,
-                payload.content,
-                {'attachments': attachments, 'model_choice': selected, 'annotations': annotation_items},
-            )
-        except WorkError as error:
-            raise HTTPException(error.status, error.message)
-        conversation_id = user_message['conversation_id']
-        await asyncio.to_thread(runtime.store.set_conversation_model, conversation_id, selected)
-        runtime.busy.add(conversation_id)
-        stop = runtime.stops[conversation_id] = asyncio.Event()
-        finished = runtime.finished[conversation_id] = asyncio.get_running_loop().create_future()
-
-    async def io(function, *args):
-        # Starlette shields thread work from disconnect cancellation, including final persistence.
-        from starlette.concurrency import run_in_threadpool
-
-        return await run_in_threadpool(function, *args)
-
-    async def stream():
-        text = ''
-        persisted = False
-        metadata = {
-            'sources': [],
-            'context_sources': [],
-            'tools': [],
-            'model_choice': selected,
-            'annotations': annotation_items,
-        }
-        assistant = None
-        try:
-            assistant = await io(runtime.store.add_message, conversation_id, 'assistant', '', 'streaming')
-            stored_history = await io(runtime.store.messages, conversation_id, HISTORY_WINDOW + 1)
-            yield event('user', user_message)
-            from .. import memory, rag, retrieval_router
-            from ..feature_config import load_features
-
-            features = await io(load_features)
-            sticker_catalog = await io(stickers.load_catalog)
-            registry = ToolRegistry(
-                features,
-                runtime.store,
-                user_message,
-                stored_history,
-                work=runtime.work if local_request(request) else None,
-            )
-            schemas = registry.definitions
-            decision = await io(retrieval_router.route, payload.content)
-            metadata['retrieval'] = {'domain': decision['domain'], 'candidate_count': 0, 'context_count': 0}
-            try:
-                memory_result = await interruptible(
-                    memory.update_from_message(
-                        runtime.store, model, user_message, features.memory, stored_history, allow_model=False
-                    ),
-                    stop,
-                )
-            except StopRequested:
-                raise
-            except Exception:
-                memory_result = {'status': 'failed'}
-            if runtime.memory_jobs:
-                try:
-                    await io(runtime.memory_jobs.enqueue, conversation_id, selected)
-                except Exception as error:
-                    report_error('memory_queue', error)
-            recalled = (
-                await io(runtime.store.recall_history, payload.content, conversation_id, 6, True)
-                if features.memory.recall_history
-                else []
-            )
-            metadata['history_sources'] = recalled
-            try:
-                if decision['search'] and (await interruptible(asyncio.to_thread(rag.status), stop)).get('ready'):
-                    permit = bool(re.search(r'(允许|接受|可以)剧透', payload.content)) and not bool(
-                        re.search(r'(不允许|不接受|不要|禁止|不能).*剧透', payload.content)
-                    )
-                    sources = await interruptible(asyncio.to_thread(rag.search, decision['query'], 8, permit), stop)
-                    metadata['retrieval']['candidate_count'] = len(sources)
-                    sources = await io(retrieval_router.relevant_sources, decision['query'], sources)
-                    metadata['context_sources'] = [
-                        {**s, 'number': i + 1, 'usage': 'context'} for i, s in enumerate(sources)
-                    ]
-                    metadata['retrieval']['context_count'] = len(sources)
-            except StopRequested:
-                raise
-            except Exception:
-                yield event(
-                    'tool',
-                    {
-                        'name': 'knowledge',
-                        'status': 'error',
-                        'message': '知识检索暂时不可用，本次不使用未返回的检索结果。',
-                    },
-                )
-            capabilities = (
-                '用户事实与实际记忆操作结果在参考数据中；长期记忆由后台自动整理，不主动调用即时事实保存工具，不承诺没有成功写入的记忆。'
-                '日常不要复述技术说明、工具名称或调用过程。工具可用列表：'
-                + ','.join(t.get('name', t.get('function', {}).get('name', '')) for t in schemas)
-                + '。工具关闭时不得假称查过天气或网页；需要实时信息请使用可用工具。一次回复最多4次工具调用。TTS和休息提醒由网页设置及播放控件管理，不能通过聊天声称改变设置或创建后台通知。'
-                + stickers.instruction(sticker_catalog)
-                + (
-                    '文件处理在后台进行；提交成功时只需自然说一句先看看，不能声称已经读完或拿到结果，不复述任务标题或操作步骤。完成后的实际结果会直接回到聊天，聊天仍可继续。'
-                    '根据用户意图设置 read_document 的 scope：总结整份或全部附件使用 full；回答具体问题用 focused 并提供简短检索关键词 query；仅指定范围时用 range。'
-                    '普通阅读使用 instruction 回答用户问题，只在聊天中给简要回答，不生成文件；只有用户明确要求保存或制作文件才设置 save_result=true。'
-                    '修改已有文件须明确指定 source，默认保留原格式，不自动附送 PDF。PDF 无法可靠保留排版时说明并停止，不暗中改成 Word 重排。'
-                    '工作量或视觉服务授权会就地询问，不能自行批准或无限创建任务绕过上限。'
-                    if local_request(request)
-                    else ''
-                )
-            )
-            history = await io(
-                build_messages,
-                stored_history,
-                memory.recall_facts(await io(runtime.store.list_memories), payload.content),
-                metadata['context_sources'],
-                capabilities,
-                {'memory_action': memory_result, 'shared_history': recalled},
-            )
-            if local_request(request) and runtime.work:
-                from ..work_artifacts import task_context
-
-                references = {item['id']: item for record in stored_history for item in record.get('attachments', [])}
-                facts = await io(task_context, runtime.work, conversation_id)
-                if references or facts:
-                    history.append(
-                        HumanMessage(
-                            content='以下为本对话的附件引用和后台任务记录，仅作参考数据；附件清单不代表文件内容已读取；summary_preview_only 表示仅有摘要预览，不能据此声称拿到了全文。\n'
-                            + json.dumps(
-                                {'attachments': list(references.values())[-10:], 'tasks': facts}, ensure_ascii=False
-                            )
-                        )
-                    )
-            if annotation_items:
-                from ..annotations import model_context
-
-                history.append(HumanMessage(content=await io(model_context, runtime.store, annotation_items)))
-            count, last_save = 0, time.monotonic()
-            sticker_hint = ''
-            async with asyncio.timeout(CHAT_TIMEOUT):
-                for round_index in range(MAX_TOOL_ROUNDS):
-                    from ..reply_text import ReplyText
-
-                    reply_text = ReplyText()
-                    decoration = stickers.ReplyDecoration()
-                    round_text = ''
-                    current = (
-                        model.bind_tools(schemas)
-                        if schemas
-                        and hasattr(model, 'bind_tools')
-                        and count < MAX_TOOL_CALLS
-                        and round_index < MAX_TOOL_ROUNDS - 1
-                        else model
-                    )
-                    accumulated = None
-                    async for chunk in cancellable_chunks(current, history, stop):
-                        accumulated = chunk if accumulated is None else accumulated + chunk
-                        delta = decoration.push(reply_text.push(extract_text(chunk.content)))
-                        if delta:
-                            round_text += delta
-                            text += delta
-                            yield event('delta', {'text': delta})
-                            if time.monotonic() - last_save >= 0.4:
-                                await io(runtime.store.update_message, assistant['id'], text, 'streaming', metadata)
-                                last_save = time.monotonic()
-                    tail = decoration.push(reply_text.finish()) + decoration.finish()
-                    if reply_text.leaked:
-                        metadata['tool_protocol_error'] = True
-                    if tail:
-                        round_text += tail
-                        text += tail
-                        yield event('delta', {'text': tail})
-                    if stop.is_set():
-                        result = await io(
-                            runtime.store.update_message,
-                            assistant['id'],
-                            text or '回复已停止。',
-                            'interrupted',
-                            metadata,
-                        )
-                        persisted = True
-                        yield event('done', result)
-                        return
-                    calls = getattr(accumulated, 'tool_calls', []) if accumulated else []
-                    if not calls:
-                        sticker_hint = decoration.hint
-                        break
-                    history.append(
-                        accumulated.model_copy(
-                            update={
-                                'content': round_text if isinstance(accumulated.content, str) else accumulated.content
-                            }
-                        )
-                    )
-                    allowed_names = {t.get('name', t.get('function', {}).get('name')) for t in schemas}
-                    for call in calls:
-                        if stop.is_set():
-                            break
-                        name, args = call['name'], call['args']
-                        count += 1
-                        state = {'id': call['id'], 'name': name, 'status': 'running'}
-                        yield event('tool', state)
-                        if count > MAX_TOOL_CALLS or name not in allowed_names:
-                            result = {'ok': False, 'error': '工具未启用或调用次数已达上限。'}
-                        else:
-                            try:
-                                result = await interruptible(
-                                    asyncio.wait_for(
-                                        registry.execute(name, args), timeout=180 if name == 'workspace_files' else 25
-                                    ),
-                                    stop,
-                                )
-                            except StopRequested:
-                                raise
-                            except Exception:
-                                result = {'ok': False, 'error': '工具执行失败或超时，请稍后重试。'}
-                        state = {
-                            **state,
-                            'status': 'waiting_approval'
-                            if result.get('task', {}).get('status') in ('waiting_approval', 'waiting_vision')
-                            else 'complete'
-                            if result.get('ok', False)
-                            else 'error',
-                            'result': result,
-                        }
-                        if name == 'recall_conversations' and result.get('ok'):
-                            combined = metadata['history_sources'] + result.get('episodes', [])
-                            metadata['history_sources'] = list(
-                                {item['message_id']: item for item in combined}.values()
-                            )[:12]
-                        metadata['tools'].append(state)
-                        yield event('tool', state)
-                        history.append(ToolMessage(content=tool_content(result), tool_call_id=call['id']))
-            if not text.strip():
-                raise EmptyResponseError()
-            metadata['sources'] = retrieval_router.cited_sources(text, metadata['context_sources'])
-            metadata['sticker'] = stickers.choose(sticker_catalog, sticker_hint, stored_history, assistant['id'])
-            result = await io(
-                runtime.store.update_message,
-                assistant['id'],
-                text,
-                'error' if metadata.get('tool_protocol_error') else 'complete',
-                metadata,
-            )
-            persisted = True
-            yield event('done', result)
-        except StopRequested:
-            result = await io(
-                runtime.store.update_message, assistant['id'], text or '回复已停止。', 'interrupted', metadata
-            )
-            persisted = True
-            yield event('done', result)
-        except asyncio.CancelledError:
-            raise
-        except Exception as error:
-            report_error('chat', error)
-            result = (
-                await io(
-                    runtime.store.update_message, assistant['id'], text or friendly_error(error), 'error', metadata
-                )
-                if assistant
-                else await io(runtime.store.add_message, conversation_id, 'assistant', friendly_error(error), 'error')
-            )
-            persisted = True
-            yield event('error', {'message': friendly_error(error), 'record': result})
-        finally:
-            try:
-                if not persisted:
-                    if assistant:
-                        import anyio
-
-                        with anyio.CancelScope(shield=True):
-                            await io(
-                                runtime.store.update_message,
-                                assistant['id'],
-                                text or '回复已停止。',
-                                'interrupted',
-                                metadata,
-                            )
-                            persisted = True
-            finally:
-                runtime.busy.discard(conversation_id)
-                runtime.stops.pop(conversation_id, None)
-                runtime.finished.pop(conversation_id, None)
-                if not finished.done():
-                    finished.set_result(persisted)
-
-    return StreamingResponse(
-        stream(), media_type='text/event-stream', headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'}
-    )
+    return await run(payload, request, model_factory=build_model, **channel_options)

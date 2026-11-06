@@ -14,8 +14,10 @@ from ..config import (
     public_config,
     save_config,
     saved_profiles,
+    server_mode,
 )
 from ..constants import VERSION
+from ..filework import local_request
 from ..llm import EmptyResponseError, build_model, extract_text, friendly_error
 from ..logging_setup import report_error
 from ..model_choices import (
@@ -84,6 +86,7 @@ class SettingsUpdate(BaseModel):
     api_key: SecretStr | None = None
     clear_api_key: bool = False
     max_tokens: int = Field(default=1800, ge=128, le=8192)
+    context_window: int = Field(default=32768, ge=4096, le=1048576)
     provider: str = Field(default='custom', max_length=40)
     protocol: Literal['openai', 'anthropic'] = 'openai'
     vision: Literal['unknown', 'supported', 'unsupported'] | None = None
@@ -113,8 +116,14 @@ def auth_login(payload: LoginRequest, request: Request):
 
 
 @router.get('/api/health')
-def health():
-    return {'status': 'ok', 'version': VERSION}
+def health(request: Request):
+    result = {'status': 'ok', 'version': VERSION}
+    if access.lan_mode() and not access.authenticated(request):
+        return result
+    from ..health import dependencies
+
+    state = dependencies()
+    return {**result, 'ready': state['storage'] == state['model'] == 'ready', 'dependencies': state}
 
 
 @router.get('/api/settings', response_model=SettingsOut)
@@ -123,7 +132,9 @@ def settings():
 
 
 @router.patch('/api/settings', response_model=SettingsOut)
-def update_settings(payload: SettingsUpdate):
+def update_settings(payload: SettingsUpdate, request: Request):
+    if not server_mode() and not local_request(request):
+        raise HTTPException(403, '模型连接设置仅能在本机修改。')
     with CONFIG_LOCK:
         current = load_config()
         if payload.model.strip().lower().startswith('sk-'):
@@ -144,6 +155,7 @@ def update_settings(payload: SettingsUpdate):
                     'llm_temperature': payload.temperature,
                     'llm_timeout': payload.timeout,
                     'llm_max_tokens': payload.max_tokens,
+                    'llm_context_window': payload.context_window,
                     'llm_effort': payload.effort,
                     'llm_api_key': SecretStr(secret),
                     'llm_provider': payload.provider,
@@ -186,7 +198,9 @@ class ProfileActivate(BaseModel):
 
 
 @router.post('/api/providers/activate')
-def provider_activate(payload: ProfileActivate):
+def provider_activate(payload: ProfileActivate, request: Request):
+    if not server_mode() and not local_request(request):
+        raise HTTPException(403, '模型连接设置仅能在本机修改。')
     with CONFIG_LOCK:
         for item in saved_profiles():
             if item['id'] == payload.id:

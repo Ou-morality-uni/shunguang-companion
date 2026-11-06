@@ -10,6 +10,20 @@ import {
   type ToolEvent,
 } from './api';
 
+async function updatesAfter(id: string, after?: number | null) {
+  const records: Message[] = [];
+  let cursor = after ?? 0;
+  for (;;) {
+    const page = await request<Message[]>(
+      `/conversations/${id}/messages${cursor > 0 ? `?after=${cursor}` : ''}`,
+    );
+    records.push(...page);
+    const next = page.at(-1)?.seq;
+    if (page.length < 200 || !next || next <= cursor) return records;
+    cursor = next;
+  }
+}
+
 /** Server owns durable turns; this hook owns selection and transient stream display. */
 export function useConversation(
   onComplete: (message: Message) => void,
@@ -22,6 +36,11 @@ export function useConversation(
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [active, setActive] = useState<string | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
+  const messagesRef = useRef(messages);
+  messagesRef.current = messages;
+  const [hasEarlier, setHasEarlier] = useState(false);
+  const [loadingEarlier, setLoadingEarlier] = useState(false);
+  const earlierRequest = useRef(false);
   const [busy, setBusy] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [error, setError] = useState('');
@@ -46,9 +65,10 @@ export function useConversation(
     const id = activeRef.current;
     if (!id || busyRef.current) return false;
     const ticket = ++historyRequest.current;
-    const records = await request<Message[]>(`/conversations/${id}/messages`);
+    const seq = [...messagesRef.current].reverse().find((item) => item.seq)?.seq;
+    const records = await updatesAfter(id, seq ? seq - 1 : undefined);
     if (activeRef.current !== id || busyRef.current || ticket !== historyRequest.current) return false;
-    setMessages(records);
+    setMessages((items) => [...new Map([...items, ...records].map((item) => [item.id, item])).values()]);
     return true;
   }, []);
 
@@ -66,6 +86,7 @@ export function useConversation(
     request<Message[]>(`/conversations/${active}/messages`)
       .then((records) => {
         if (live && ticket === historyRequest.current) setMessages(records);
+        if (live && ticket === historyRequest.current) setHasEarlier(records.length === 200);
       })
       .catch(() => {
         if (live) setError('无法读取这段对话，请重试。');
@@ -78,6 +99,25 @@ export function useConversation(
     };
   }, [active]);
 
+  async function loadEarlier() {
+    const id = activeRef.current;
+    const before = messagesRef.current[0]?.seq;
+    if (!id || !before || busyRef.current || earlierRequest.current) return;
+    earlierRequest.current = true;
+    setLoadingEarlier(true);
+    try {
+      const records = await request<Message[]>(`/conversations/${id}/messages?before=${before}`);
+      if (activeRef.current !== id) return;
+      setMessages((items) => [...new Map([...records, ...items].map((item) => [item.id, item])).values()]);
+      setHasEarlier(records.length === 200);
+    } catch (failure) {
+      setError((failure as Error).message);
+    } finally {
+      earlierRequest.current = false;
+      setLoadingEarlier(false);
+    }
+  }
+
   function selectConversation(id: string | null) {
     if (busyRef.current || historyLoading) return;
     if (id === activeRef.current) return;
@@ -86,6 +126,7 @@ export function useConversation(
     activeRef.current = id;
     setActive(id);
     setMessages([]);
+    setHasEarlier(false);
     setError('');
   }
 
@@ -118,6 +159,7 @@ export function useConversation(
   ) {
     text = text.trim();
     if (!text || busyRef.current || historyLoading) return false;
+    const syncAfter = [...messagesRef.current].reverse().find((item) => item.seq)?.seq;
     busyRef.current = true;
     historyRequest.current++;
     stopRequestedRef.current = false;
@@ -190,7 +232,10 @@ export function useConversation(
       setPartial(null);
       if (id && accepted) {
         try {
-          setMessages(await request<Message[]>(`/conversations/${id}/messages`));
+          const records = await updatesAfter(id, syncAfter);
+          setMessages((items) => [
+            ...new Map([...items, ...records].map((item) => [item.id, item])).values(),
+          ]);
         } catch {
           /* Preserve the confirmed visible transcript while offline. */
         }
@@ -210,6 +255,9 @@ export function useConversation(
     conversations,
     active,
     messages,
+    hasEarlier,
+    loadingEarlier,
+    loadEarlier,
     busy,
     historyLoading,
     error,

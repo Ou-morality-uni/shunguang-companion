@@ -4,7 +4,7 @@ import hashlib
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .filework import WorkError
+from .work_models import WorkError
 
 
 class OverwriteTarget(BaseModel):

@@ -9,6 +9,16 @@ from datetime import datetime, timezone
 
 import httpx
 import pytest
+
+
+def test_tool_execution_timeouts_are_saved_with_validated_bounds(client):
+    response = client.patch('/api/features', json={'tools': {'call_timeout': 35, 'file_timeout': 240}})
+    assert response.status_code == 200
+    assert response.json()['tools']['call_timeout'] == 35
+    assert response.json()['tools']['file_timeout'] == 240
+    assert client.patch('/api/features', json={'tools': {'call_timeout': 0}}).status_code == 422
+
+
 from fastapi import FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse

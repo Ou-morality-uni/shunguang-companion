@@ -18,7 +18,7 @@ INSTALL_URL = 'https://www.libreoffice.org/download/download-libreoffice/'
 
 def safe_package(data):
     from .document_readers import check_archive
-    from .filework import WorkError
+    from .work_models import WorkError
 
     check_archive(data)
     with zipfile.ZipFile(io.BytesIO(data)) as archive:
@@ -77,7 +77,7 @@ def safe_package(data):
 
 def convert(data, suffix, target='pdf', check=lambda: None):
     """Use an owned process/profile and a temporary copy; never overwrite source."""
-    from .filework import MAX_FILE_BYTES, WorkError
+    from .work_models import MAX_FILE_BYTES, WorkError
 
     executable = find_office()
     if not executable:

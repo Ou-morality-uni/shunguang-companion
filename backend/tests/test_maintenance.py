@@ -107,7 +107,11 @@ def test_future_schema_is_rejected_without_downgrade(tmp_path):
 
 
 def test_health_contract_and_private_logging(client, monkeypatch):
-    assert set(client.get('/api/health').json()) == {'status', 'version'}
+    health = client.get('/api/health').json()
+    assert {'status', 'version', 'ready', 'dependencies'} <= set(health)
+    assert health['dependencies']['storage'] == 'ready'
+    assert health['dependencies']['model'] == 'unconfigured'
+    assert health['ready'] is False
     captured = []
     from backend.app import logging_setup
 

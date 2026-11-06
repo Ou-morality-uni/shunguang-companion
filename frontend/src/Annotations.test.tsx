@@ -7,6 +7,22 @@ import { AnnotationProvider, AnnotationTarget, AnnotationTray, useAnnotations } 
 vi.mock('./api', () => ({ request: vi.fn() }));
 afterEach(cleanup);
 
+it('waits for server authentication before loading annotation drafts', async () => {
+  vi.mocked(request).mockReset().mockResolvedValue([]);
+  const view = render(
+    <AnnotationProvider conversationId={null} enabled={false}>
+      <AnnotationTray />
+    </AnnotationProvider>,
+  );
+  expect(request).not.toHaveBeenCalled();
+  view.rerender(
+    <AnnotationProvider conversationId={null} enabled>
+      <AnnotationTray />
+    </AnnotationProvider>,
+  );
+  await waitFor(() => expect(request).toHaveBeenCalledTimes(1));
+});
+
 it('keeps a newly saved draft when the initial draft-list request arrives late', async () => {
   let resolveList: (value: unknown) => void = () => {};
   const delayed = new Promise((resolve) => {

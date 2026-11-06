@@ -1,5 +1,11 @@
 # 维护与扩展
 
+## 数据与备份隐私
+
+`data/`、运行备份及手工导出的副本可能含完整聊天、记忆、附件和加密配置，不应随源码分享。删除当前对话或遗忘记忆不等于从历史备份或用户另存副本中物理抹除。
+
+自动迁移前会生成并校验数据库备份；仅在迁移成功后保留同库最近 5 份自动备份，手工备份不自动删除。旧备份回收失败会记入脱敏诊断日志。恢复时应停止服务，将程序、数据库及需要的运行文件成套还原；不要让低版本程序打开已升级数据库。
+
 2026-10-15 工程改造。本版本更新见 [v0.1.5 更新说明](../RELEASE_NOTES_v0.1.5.md)。本文说明模块边界、开发流程及评审取舍。
 
 ## 代码边界
@@ -11,13 +17,23 @@
 | `backend/app/runtime.py` | 单 worker 运行状态、Store 实例、对话互斥与停止完成信号。进程状态不是持久数据。 |
 | `backend/app/store.py` / `migrations.py` | 数据读写和有序迁移。业务模块不直接执行 SQL。 |
 | `backend/app/schemas.py` | 核心响应契约；接口变更先更新模型，再生成前端类型。 |
-| `backend/app/llm.py` / `anthropic_adapter.py` | 模型与协议适配；保持 UI 配置、零自动重试、不上传云端追踪的约定。 |
+| `backend/app/llm.py` / `anthropic_adapter.py` | 模型与协议适配；保持 UI 配置，SDK 不自行重试；应用只在无输出的暂时故障时有界重试，不上传云端追踪。 |
 | `frontend/src/useConversation.ts` | 会话选择、历史、发送/停止/删除及临时流式状态。 |
 | `frontend/src/sse.ts` / `api.ts` | 流协议解析和 HTTP 传输；不依赖页面布局。 |
 | `frontend/src/ConversationHistory.tsx` | 会话列表及删除确认。 |
 | `frontend/src/generated/` | 自动生成的核心类型与输入长度限制；不要手工修改。 |
 
 `services.py` 的语音、工具和提醒路由继续复用公共访问保护。检索继续使用现有模型；语音新增多厂商适配，见 [TTS 接入与选型](tts.md)。
+
+## 0.7.2 安装与共同源码边界
+
+`Start_up.bat` → `start-console.ps1` 管理首次选择和前台服务；`prepare-launch.ps1` 管理非敏感安装选择与输入变更检测，`windows-runtime.ps1` 只准备官方校验运行时，`install-project.py` 负责所选依赖和安装清单。`project_lock.py` 让安装器与桌面／LAN前台服务互斥；不依赖已弃用的健康字段来替代进程互斥。
+
+本地与公开源码共用 `edition.py`／`edition.tsx` 的QQ装配点，不再在公开导出时剔除QQ。后端 `turn.py`、`turn_stream.py`、`turn_lifecycle.py` 承担共同回合，HTTP路由不重复维护第二套编排；QQ权限与独立库仍由QQ模块管理。只有禁用的后台服务不应进行高频轮询。
+
+部署模式和本地知识库开关分别管理：Windows轻量保留桌面凭据与文件权限语义，不能仅为了关闭知识库而切换server模式。Linux采用显式主密钥文件、单worker和持久化目录；默认Web-only，NapCat为明确选择的Compose profile。
+
+交付时仅同步公开白名单，保留源代码和契约一致性；验证实际导出树而不只测试开发目录。安装选择、API密钥、QQ登录目录、data和验收报告均属于本机数据，不同步到公开树。更新使用用户自行拉取源码、停止后端再安装的流程，不在日常启动时自动git pull。
 
 聊天表情由 `stickers.py`、图片场景清单和前端 `MessageSticker` 管理；沿用消息 metadata 保存，不新增数据库表或独立模型请求。扩展方式见 [聊天表情附件](chat-stickers.md)。
 

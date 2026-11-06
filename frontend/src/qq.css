@@ -1,0 +1,337 @@
+.qq-space {
+  overflow-wrap: anywhere;
+}
+.qq-space .page-heading {
+  padding: 18px 0 4px;
+  margin-bottom: 4px;
+}
+.qq-space .page-heading h1 {
+  font-size: 26px;
+  margin: 8px 0;
+}
+.qq-space .page-heading p {
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 6px 0;
+}
+.qq-manager {
+  display: grid;
+  grid-template-columns: minmax(230px, 28%) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+.qq-manager-list {
+  position: sticky;
+  top: 12px;
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+}
+.qq-manager-list .qq-peer-list {
+  grid-template-columns: 1fr;
+}
+.qq-manager-detail,
+.qq-profile-value {
+  min-width: 0;
+}
+.qq-manager .qq-card {
+  padding: 16px;
+  margin: 0 0 12px;
+}
+.qq-detail-heading h2 {
+  margin: 0;
+  font-size: 19px;
+}
+.qq-detail-heading small {
+  display: block;
+  font-size: 12px;
+  color: var(--tone-text-secondary);
+  margin-top: 4px;
+}
+.qq-detail-heading p,
+.qq-save-row span {
+  font-size: 12px;
+  color: var(--tone-text-secondary);
+}
+.qq-profiles h3 small {
+  font-size: 12px;
+  font-weight: normal;
+  color: var(--tone-text-secondary);
+}
+.qq-profile-fields {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+.qq-profile-row {
+  display: flex;
+  gap: 12px;
+  align-items: end;
+  border-bottom: 1px solid color-mix(in srgb, var(--tone-text-primary) 7%, transparent);
+}
+.qq-profile-value,
+.qq-grow {
+  flex: 1;
+}
+.qq-visibility {
+  width: 142px;
+  flex-shrink: 0;
+}
+.qq-field textarea {
+  resize: vertical;
+  min-height: 64px;
+  max-height: 320px;
+  width: 100%;
+  border-radius: 8px;
+  padding: 9px;
+  background: var(--tone-surface-base);
+  color: var(--tone-text-primary);
+  border: 1px solid color-mix(in srgb, var(--tone-text-primary) 15%, transparent);
+  font: inherit;
+}
+.qq-space details {
+  margin: 14px 0;
+}
+.qq-space summary {
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.qq-save-row {
+  padding-top: 16px;
+}
+.qq-mobile-back {
+  display: none;
+}
+.qq-space :is(button, summary, select, textarea):focus-visible {
+  outline: 2px solid var(--tone-accent-soft);
+  outline-offset: 3px;
+}
+.qq-space .page-heading small,
+.qq-status,
+.qq-actions,
+.qq-tabs {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.qq-status {
+  padding: 14px 0;
+  color: var(--muted-foreground, var(--tone-text-muted));
+}
+.qq-status > span:last-child {
+  margin-left: auto;
+}
+.qq-online,
+.qq-notice {
+  color: var(--tone-success-base);
+}
+.qq-tabs {
+  margin: 8px 0 20px;
+  gap: 4px;
+}
+.qq-card {
+  padding: 22px;
+  margin: 16px 0;
+  border: 1px solid color-mix(in srgb, var(--tone-text-primary) 9%, transparent);
+  background: color-mix(in srgb, var(--tone-text-primary) 2%, transparent);
+  border-radius: 18px;
+  min-width: 0;
+}
+.qq-card h2 {
+  font-size: 19px;
+  margin: 0 0 14px;
+}
+.qq-card h3 {
+  margin: 16px 0 10px;
+}
+.qq-card p {
+  font-size: 13px;
+  line-height: 1.8;
+  color: var(--tone-text-secondary);
+  margin: 10px 0 16px;
+}
+.qq-card hr {
+  border: 0;
+  border-top: 1px solid color-mix(in srgb, var(--tone-text-primary) 8%, transparent);
+  margin: 24px 0;
+}
+.qq-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+.qq-field {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  margin: 12px 0;
+  font-size: 13px;
+}
+.qq-field select {
+  width: 100%;
+  min-width: 0;
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--tone-text-primary) 15%, transparent);
+  background: var(--tone-surface-base);
+  color: var(--tone-text-primary);
+  font: inherit;
+}
+.qq-field input {
+  min-width: 0;
+  color-scheme: dark;
+}
+.qq-toggle {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 17px 0;
+  cursor: pointer;
+}
+.qq-toggle input {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--tone-accent-soft);
+  flex-shrink: 0;
+}
+.qq-binding {
+  margin-top: 20px;
+  padding: 15px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--tone-text-primary) 3%, transparent);
+}
+.qq-binding code {
+  user-select: all;
+}
+.qq-peer-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 14px 0;
+}
+.qq-peer-list button {
+  text-align: left;
+  padding: 13px;
+  border: 1px solid color-mix(in srgb, var(--tone-text-primary) 8%, transparent);
+  border-radius: 10px;
+  background: transparent;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  cursor: pointer;
+}
+.qq-peer-list button.qq-selected {
+  border-color: var(--tone-text-muted);
+  background: color-mix(in srgb, var(--tone-text-muted) 7%, transparent);
+}
+.qq-peer-list span,
+.qq-peer-list small,
+.qq-card h2 small {
+  color: var(--tone-text-secondary);
+  font-size: 12px;
+  font-weight: normal;
+}
+.qq-summary {
+  border-top: 1px solid color-mix(in srgb, var(--tone-text-primary) 9%, transparent);
+  padding: 12px 0 20px;
+}
+.qq-summary pre,
+.qq-message {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.85;
+}
+.qq-memory {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 15px;
+  border-bottom: 1px solid color-mix(in srgb, var(--tone-text-primary) 7%, transparent);
+  padding: 12px 0;
+  font-size: 13px;
+}
+.qq-memory button {
+  flex-shrink: 0;
+}
+.qq-chat-thread {
+  min-width: 0;
+}
+.qq-chat-entry {
+  padding: 20px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--tone-text-primary) 13%, transparent);
+  overflow-wrap: anywhere;
+}
+.qq-chat-meta {
+  font-size: 12px;
+  opacity: 0.7;
+  margin: 8px 0;
+}
+.qq-chat-image img {
+  max-width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+.qq-chat-reply {
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--tone-text-primary) 3%, transparent);
+}
+.qq-chat-thread .document-markdown {
+  overflow-x: auto;
+}
+@media (max-width: 700px) {
+  .qq-manager {
+    display: block;
+  }
+  .qq-manager-list {
+    position: static;
+    max-height: none;
+  }
+  .qq-manager:not(.qq-show-detail) .qq-manager-detail,
+  .qq-manager.qq-show-detail .qq-manager-list {
+    display: none;
+  }
+  .qq-mobile-back {
+    display: inline-flex;
+    margin-bottom: 12px;
+  }
+  .qq-profile-row {
+    flex-wrap: wrap;
+    gap: 0 12px;
+  }
+  .qq-profile-value {
+    flex-basis: 100%;
+  }
+  .qq-visibility {
+    width: auto;
+    flex: 1;
+  }
+  .qq-space .page-heading {
+    padding-top: 20px;
+  }
+  .qq-grid,
+  .qq-peer-list {
+    grid-template-columns: 1fr;
+  }
+  .qq-card {
+    padding: 16px;
+  }
+  .qq-tabs button {
+    font-size: 12px;
+    padding: 7px 9px;
+  }
+  .qq-status > span:last-child {
+    margin-left: 0;
+  }
+}

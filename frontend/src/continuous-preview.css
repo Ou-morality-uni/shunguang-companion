@@ -17,7 +17,7 @@
 .document-surface {
   position: relative;
   min-width: 0;
-  background: #302c30;
+  background: var(--tone-surface-panel);
   isolation: isolate;
 }
 .document-surface:has(.document-scroll) {
@@ -36,7 +36,7 @@
 .document-scroll .pdfViewer .page {
   margin: 8px auto;
   border: 0;
-  box-shadow: 0 2px 12px #0005;
+  box-shadow: 0 2px 12px color-mix(in srgb, var(--tone-shadow) 33%, transparent);
 }
 .document-scroll .pdfViewer .textLayer {
   color: transparent;
@@ -46,14 +46,14 @@
 }
 .document-scroll .pdfViewer .textLayer ::selection,
 .ocr-text-layer ::selection {
-  background: #b97778a6;
+  background: color-mix(in srgb, var(--tone-text-dim) 65%, transparent);
   color: transparent;
 }
 .comment-highlight {
   position: absolute;
   pointer-events: none;
-  outline: 2px solid #e2b584;
-  background: #e2b58426;
+  outline: 2px solid var(--tone-gold-bright);
+  background: color-mix(in srgb, var(--tone-gold-bright) 15%, transparent);
   z-index: 8;
 }
 .comment-mode .textLayer span,
@@ -115,5 +115,5 @@
 }
 .continuous-preview > .space-note {
   margin: 6px 0;
-  font-size: 11px;
+  font-size: 12px;
 }

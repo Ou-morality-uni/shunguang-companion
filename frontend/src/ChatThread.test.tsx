@@ -5,6 +5,41 @@ import { ChatThread } from './ChatThread';
 import { AnnotationProvider } from './Annotations';
 const originalScrollTo = HTMLElement.prototype.scrollTo;
 
+it('keeps the next draft editable while an assistant reply is streaming', () => {
+  HTMLElement.prototype.scrollTo = vi.fn();
+  HTMLElement.prototype.scrollIntoView = vi.fn();
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  );
+  const onSend = vi.fn();
+  render(
+    <ChatThread
+      messages={[]}
+      partial="正在回复"
+      busy
+      loading={false}
+      configured
+      conversationId={null}
+      onSend={onSend}
+      onStop={vi.fn()}
+      onSettings={vi.fn()}
+      onVoice={vi.fn()}
+      onTools={vi.fn()}
+      onWork={vi.fn()}
+    />,
+  );
+  const input = screen.getByLabelText('给瞬光伴行发送消息') as HTMLTextAreaElement;
+  expect(input.disabled).toBe(false);
+  fireEvent.change(input, { target: { value: '下一句草稿' } });
+  expect(input.value).toBe('下一句草稿');
+  expect(onSend).not.toHaveBeenCalled();
+});
+
 vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   request: vi.fn(),

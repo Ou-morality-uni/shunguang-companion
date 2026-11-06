@@ -3,14 +3,15 @@
 The BAT launcher opens the browser outside this process tree. No dependencies,
 settings, credentials, or persistent log files are created by this helper.
 """
+
 import argparse
 import ctypes
-from ctypes import wintypes
-from copy import deepcopy
 import logging
 import os
-from pathlib import Path
 import sys
+from copy import deepcopy
+from ctypes import wintypes
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 _console_job_handle = None
@@ -36,14 +37,27 @@ def bind_console_lifetime():
         ]
 
     class IoCounters(ctypes.Structure):
-        _fields_ = [(name, ctypes.c_ulonglong) for name in (
-            'ReadOperationCount', 'WriteOperationCount', 'OtherOperationCount',
-            'ReadTransferCount', 'WriteTransferCount', 'OtherTransferCount')]
+        _fields_ = [
+            (name, ctypes.c_ulonglong)
+            for name in (
+                'ReadOperationCount',
+                'WriteOperationCount',
+                'OtherOperationCount',
+                'ReadTransferCount',
+                'WriteTransferCount',
+                'OtherTransferCount',
+            )
+        ]
 
     class ExtendedLimits(ctypes.Structure):
-        _fields_ = [('BasicLimitInformation', BasicLimits), ('IoInfo', IoCounters),
-                    ('ProcessMemoryLimit', ctypes.c_size_t), ('JobMemoryLimit', ctypes.c_size_t),
-                    ('PeakProcessMemoryUsed', ctypes.c_size_t), ('PeakJobMemoryUsed', ctypes.c_size_t)]
+        _fields_ = [
+            ('BasicLimitInformation', BasicLimits),
+            ('IoInfo', IoCounters),
+            ('ProcessMemoryLimit', ctypes.c_size_t),
+            ('JobMemoryLimit', ctypes.c_size_t),
+            ('PeakProcessMemoryUsed', ctypes.c_size_t),
+            ('PeakJobMemoryUsed', ctypes.c_size_t),
+        ]
 
     kernel = ctypes.WinDLL('kernel32', use_last_error=True)
     kernel.CreateJobObjectW.argtypes = [ctypes.c_void_p, wintypes.LPCWSTR]
@@ -75,9 +89,11 @@ def bind_console_lifetime():
 
 class SafeAccessFormatter(logging.Formatter):
     """Show method, route template and status; never body, headers or query."""
+
     def __init__(self, paths):
         super().__init__(datefmt='%H:%M:%S')
         from starlette.routing import compile_path
+
         self.paths = [(compile_path(path)[0], path) for path in paths]
 
     def format(self, record):
@@ -91,26 +107,41 @@ class SafeAccessFormatter(logging.Formatter):
 def main():
     parser = argparse.ArgumentParser(description='瞬光伴行 CMD 后端日志')
     parser.add_argument('--port', type=int, default=8000)
+    parser.add_argument('--lan', action='store_true')
     args = parser.parse_args()
     if not 1 <= args.port <= 65535:
         parser.error('端口需要在 1–65535 之间')
     os.chdir(ROOT)
     sys.path.insert(0, str(ROOT))
-    os.environ['SHUNGUANG_LAN_MODE'] = '0'
+    os.environ['SHUNGUANG_LAN_MODE'] = '1' if args.lan else '0'
     bind_console_lifetime()
 
+    from scripts.project_lock import environment_lock
+
+    lease = environment_lock(ROOT)
+
     import uvicorn
-    from backend.app.main import app
+
     from backend.app import rag
+    from backend.app.main import app
+
     logs = deepcopy(uvicorn.config.LOGGING_CONFIG)
     logs['formatters']['default'].update(fmt='%(asctime)s %(levelprefix)s %(message)s', datefmt='%H:%M:%S')
     paths = list(app.openapi()['paths']) + ['/', '/assets/{asset:path}', '/docs', '/openapi.json', '/redoc']
     logs['formatters']['access'] = {'()': SafeAccessFormatter, 'paths': paths}
     try:
-        uvicorn.run(app, host='127.0.0.1', port=args.port, log_level='info',
-                    log_config=logs, access_log=True, timeout_graceful_shutdown=5)
+        uvicorn.run(
+            app,
+            host='0.0.0.0' if args.lan else '127.0.0.1',
+            port=args.port,
+            log_level='info',
+            log_config=logs,
+            access_log=True,
+            timeout_graceful_shutdown=5,
+        )
     finally:
         rag.close()
+        lease.close()
 
 
 if __name__ == '__main__':

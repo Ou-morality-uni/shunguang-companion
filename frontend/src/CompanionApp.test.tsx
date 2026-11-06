@@ -70,6 +70,7 @@ it('removes both permanent header bars and keeps all settings reachable from the
   expect(await screen.findByRole('tab', { name: '模型连接' })).toBeTruthy();
   expect(screen.getByRole('tab', { name: '工具服务' })).toBeTruthy();
   expect(screen.getByRole('tab', { name: '沉浸光效' })).toBeTruthy();
+  expect(screen.getByRole('tab', { name: '沉浸光效' }).getAttribute('aria-selected')).toBe('true');
 });
 
 it('opens update settings without checking GitHub and uses the backend version', async () => {

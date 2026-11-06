@@ -61,6 +61,10 @@ def _entities(stamp):
 
 
 def entities():
+    from .config import local_knowledge_enabled
+
+    if not local_knowledge_enabled():
+        return CHARACTER_ENTITIES
     from .rag import RESOURCE_DIR
 
     files = [

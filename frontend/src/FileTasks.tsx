@@ -459,6 +459,7 @@ export function FileTasksProvider({
     [notice, setNotice] = useState('');
   const initialTasks = useRef<Set<string> | null>(null);
   const delivered = useRef(new Set<string>());
+  const activeTasks = useRef(true);
   useEffect(() => {
     const current =
       tasks.find((task) =>
@@ -484,6 +485,8 @@ export function FileTasksProvider({
         if (initialTasks.current === null)
           initialTasks.current = new Set((Array.isArray(result) ? result : []).map((task) => task.id));
         setTasks(Array.isArray(result) ? result : []);
+        activeTasks.current =
+          Array.isArray(result) && result.some((task) => ['queued', 'running'].includes(task.status));
         setNotice('');
         const replies = (Array.isArray(result) ? result : []).flatMap((task) =>
           typeof task.context?.reply_message_id === 'string' &&
@@ -504,8 +507,11 @@ export function FileTasksProvider({
     const abort = new AbortController();
     let polling = false,
       denied = false;
-    async function poll() {
+    let lastPoll: number | null = null;
+    async function poll(force = false) {
       if (polling || denied || abort.signal.aborted || document.hidden) return;
+      if (!force && !activeTasks.current && lastPoll !== null && Date.now() - lastPoll < 15000) return;
+      lastPoll = Date.now();
       polling = true;
       try {
         await refresh(abort.signal);
@@ -520,9 +526,12 @@ export function FileTasksProvider({
     }
     void poll();
     const timer = window.setInterval(() => void poll(), 1500);
+    const changed = () => void poll(true);
+    window.addEventListener('shunguang-work-updated', changed);
     return () => {
       abort.abort();
       clearInterval(timer);
+      window.removeEventListener('shunguang-work-updated', changed);
     };
   }, [refresh]);
   return (

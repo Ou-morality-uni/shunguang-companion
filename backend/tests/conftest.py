@@ -2,12 +2,14 @@
 
 import pytest
 
-from backend.app import access, config, rag
+from backend.app import access, config, rag, runtime
+from backend.app.store import Store
 
 
 @pytest.fixture(autouse=True)
 def isolate_runtime(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'DATA_DIR', tmp_path)
+    monkeypatch.setattr(runtime, 'store', Store(tmp_path / 'offline.sqlite3'))
     monkeypatch.setattr(access, 'allowed_hosts', lambda: {'localhost', '127.0.0.1', '::1'})
     monkeypatch.setattr(rag, 'status', lambda: {'ready': False})
     monkeypatch.delenv('SHUNGUANG_LAN_MODE', raising=False)

@@ -355,6 +355,7 @@ export function CompanionSettings({
           temperature: draft.temperature,
           timeout: draft.timeout,
           max_tokens: draft.max_tokens,
+          context_window: draft.context_window ?? 32768,
           effort: draft.effort ?? 'default',
           api_key: modelKey.trim() || undefined,
           clear_api_key: clearModelKey,
@@ -390,6 +391,7 @@ export function CompanionSettings({
       delete body.configured;
       delete body.notice;
       delete body.coverage;
+      delete body.usage;
       delete body.reference_sha256;
       if (section === 'tts') {
         const current = featureDraft.tts;
@@ -597,6 +599,7 @@ export function CompanionSettings({
                 )}
                 <Icon size={18} />
                 {label}
+                {id === 'model' && <small aria-hidden="true">高级</small>}
               </button>
             ))}
           </nav>
@@ -645,7 +648,9 @@ export function CompanionSettings({
                     void saveModel();
                   }}
                 >
-                  <h2>模型连接</h2>
+                  <h2>高级 · 模型连接</h2>
+                  <p>让小光能说话：连接你选择的模型服务。</p>
+                  {draft.warning && <p role="alert">{draft.warning}</p>}
                   <label className="field">
                     提供商
                     <GlideSelect
@@ -846,7 +851,23 @@ export function CompanionSettings({
                         value={draft.max_tokens}
                         onChange={(e) => setDraft({ ...draft, max_tokens: Number(e.target.value) })}
                       />
-                      <span className="field-hint">更长的输出可能增加费用。请求失败不会自动重试。</span>
+                      <span className="field-hint">
+                        更长的输出可能增加费用。尚未输出时的临时连接故障最多重试一次。
+                      </span>
+                    </label>
+                    <label className="field">
+                      模型上下文预算
+                      <input
+                        type="number"
+                        min={4096}
+                        max={1048576}
+                        value={draft.context_window ?? 32768}
+                        onChange={(e) => setDraft({ ...draft, context_window: Number(e.target.value) })}
+                      />
+                      <span className="field-hint">
+                        包含回复预留。请按模型支持范围填写；输入采用保守估算，过长历史会裁剪，不能代替厂商精确
+                        token 统计。
+                      </span>
                     </label>
                     <label className="field">
                       当前模型的图像理解能力
@@ -1414,6 +1435,66 @@ export function CompanionSettings({
                     onChange={(e) => setTools({ timeout: Number(e.target.value) })}
                   />
                 </label>
+                <label className="field">
+                  单次工具执行超时（秒）
+                  <Input
+                    type="number"
+                    min={5}
+                    max={180}
+                    value={tools.call_timeout ?? 25}
+                    onChange={(e) => setTools({ call_timeout: Number(e.target.value) })}
+                  />
+                </label>
+                <label className="field">
+                  文件工具提交超时（秒）
+                  <Input
+                    type="number"
+                    min={30}
+                    max={600}
+                    value={tools.file_timeout ?? 180}
+                    onChange={(e) => setTools({ file_timeout: Number(e.target.value) })}
+                  />
+                  <span className="field-hint">
+                    整轮回复仍有总时限。已提交的后台文件任务需在工作台单独取消；停止聊天不会撤销已完成操作。
+                  </span>
+                </label>
+                <label className="field">
+                  每日搜索 API 调用上限（北京时间）
+                  <Input
+                    type="number"
+                    min={0}
+                    max={10000}
+                    value={tools.daily_limit ?? 20}
+                    onChange={(e) => setTools({ daily_limit: Number(e.target.value) })}
+                  />
+                  <span className="field-hint">
+                    今日已用 {tools.usage?.used ?? 0} 次。失败请求也计数；这是次数限制，不是账单金额保证。0
+                    表示禁止付费搜索。
+                  </span>
+                </label>
+                <label className="field">
+                  搜索缓存有效时间（秒）
+                  <Input
+                    type="number"
+                    min={0}
+                    max={3600}
+                    value={tools.cache_seconds ?? 300}
+                    onChange={(e) => setTools({ cache_seconds: Number(e.target.value) })}
+                  />
+                  <span className="field-hint">0 表示关闭。按聊天隔离，使用缓存时注明查询时间。</span>
+                </label>
+                <Toggle
+                  label="搜索失败时使用公开搜索备用"
+                  description="仅 Tavily 失败时尝试公开搜索，不切换其他收费服务。额度耗尽时停止付费搜索。"
+                  checked={tools.public_fallback ?? false}
+                  onChange={(public_fallback) => setTools({ public_fallback })}
+                />
+                <Toggle
+                  label="按需读取搜索网页正文"
+                  description="每次最多读取两个公开 HTTPS 页面，限制大小与等待时间；不读取内网或跟随跳转。"
+                  checked={tools.read_pages ?? false}
+                  onChange={(read_pages) => setTools({ read_pages })}
+                />
                 <p className="space-note">
                   开启工具后，模型可在有限调用次数内选择并执行。失败原因会显示，未返回结果时不会冒充调用成功。
                 </p>

@@ -1,6 +1,6 @@
 """Ordered, transactional upgrades from the pre-versioned database (version 0)."""
 
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 
 
 def migrate(db):
@@ -109,6 +109,11 @@ def migrate(db):
         )""")
         db.execute('CREATE INDEX annotations_scope ON annotations(conversation_id,draft_scope,status)')
         db.execute('PRAGMA user_version=9')
+    if version < 10:
+        from .history_index import migrate as migrate_search
+
+        migrate_search(db)
+        db.execute('PRAGMA user_version=10')
 
 
 LEGACY_SCHEMA = """

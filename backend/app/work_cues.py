@@ -163,7 +163,7 @@ class WorkCues:
                 )
 
                 def active():
-                    from .filework import TaskCancelled
+                    from .work_models import TaskCancelled
 
                     record = self.store.get_file_task(task_id)
                     if (

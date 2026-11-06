@@ -72,6 +72,22 @@ class ReplyDecoration:
         self.inside = False
         self.hint = ''
         self.overflow = False
+        self.leading = True
+        self.indent = ''
+
+    def visible_start(self, text):
+        if not self.leading:
+            return text
+        for index, char in enumerate(text):
+            if char in '\r\n':
+                self.indent = ''
+            elif char in ' \t':
+                self.indent += char
+            else:
+                self.leading = False
+                result, self.indent = self.indent + text[index:], ''
+                return result
+        return ''
 
     def push(self, text):
         self.pending += text
@@ -110,14 +126,14 @@ class ReplyDecoration:
             visible += self.pending[:-held] if held else self.pending
             self.pending = self.pending[-held:] if held else ''
             break
-        return visible
+        return self.visible_start(visible)
 
     def finish(self):
         # Preserve ordinary trailing brackets, but never expose a partial control.
         tail = self.pending if not self.inside and len(self.pending) <= 2 else ''
         self.pending = ''
         self.inside = False
-        return tail
+        return self.visible_start(tail)
 
 
 def choose(catalog, hint, history, seed):

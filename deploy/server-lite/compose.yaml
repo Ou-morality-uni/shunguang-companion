@@ -1,0 +1,61 @@
+name: shunguang-server-lite
+services:
+  app:
+    image: ${SHUNGUANG_IMAGE:-shunguang-server-lite:local}
+    build:
+      context: .
+      args:
+        PIP_SOURCE: ${PIP_SOURCE:-official}
+    network_mode: host
+    restart: unless-stopped
+    init: true
+    read_only: true
+    mem_limit: ${APP_MEMORY:-512m}
+    pids_limit: 128
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    stop_grace_period: 30s
+    environment:
+      SHUNGUANG_MODE: server
+      SHUNGUANG_DATA_DIR: /data
+      SHUNGUANG_MASTER_KEY_FILE: /run/secrets/master.key
+      SHUNGUANG_LAN_MODE: '1'
+    volumes:
+      - ${RUNTIME_DIR:-./runtime}/data:/data
+      - ${RUNTIME_DIR:-./runtime}/secrets/master.key:/run/secrets/master.key:ro
+      - ${RUNTIME_DIR:-./runtime}/backups:/backups
+    tmpfs:
+      - /tmp:size=96m,mode=1777
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+    logging:
+      driver: json-file
+      options: {max-size: 5m, max-file: '2'}
+  napcat:
+    profiles: [qq]
+    image: ${NAPCAT_IMAGE:-mlikiowa/napcat-docker:v4.18.41@sha256:b101b8968cc31ae428ec0f8e117386e4ced7773b2d8226ed9f7ddfcec55f1b7e}
+    restart: unless-stopped
+    init: true
+    mem_limit: ${NAPCAT_MEMORY:-1024m}
+    pids_limit: 256
+    stop_grace_period: 30s
+    env_file: ${RUNTIME_DIR:-./runtime}/napcat.env
+    environment:
+      MODE: ws
+      NAPCAT_UID: '10001'
+      NAPCAT_GID: '10001'
+      NAPCAT_ENABLE_COREDUMP: '0'
+    ports:
+      - 127.0.0.1:3001:3001
+      - 127.0.0.1:6099:6099
+    volumes:
+      - ${RUNTIME_DIR:-./runtime}/napcat/qq:/app/.config/QQ
+      - ${RUNTIME_DIR:-./runtime}/napcat/config:/app/napcat/config
+      - ${RUNTIME_DIR:-./runtime}/napcat/plugins:/app/napcat/plugins
+    logging:
+      driver: json-file
+      options: {max-size: 5m, max-file: '2'}

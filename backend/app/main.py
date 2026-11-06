@@ -8,11 +8,11 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import access, runtime, updates
-from .config import ROOT
+from . import access, edition, runtime, updates
+from .config import ROOT, local_knowledge_enabled, server_mode
 from .constants import MAX_MESSAGE_LENGTH, VERSION
 from .filework import FileWork
-from .logging_setup import report_error, setup_logging
+from .logging_setup import RequestTraceMiddleware, report_error, setup_logging
 from .memory_jobs import MemoryJobs
 from .routes import chat, knowledge, memories, settings, work
 from .schemas import CapabilitiesOut
@@ -23,15 +23,18 @@ from .weather_care import WeatherCare
 @asynccontextmanager
 async def lifespan(app):
     setup_logging()
+    await asyncio.to_thread(access.allowed_hosts)
     runtime.mutation_lock = asyncio.Lock()
     updates.checker = updates.UpdateChecker()
     await asyncio.to_thread(runtime.store.initialize)
     runtime.work = await asyncio.to_thread(FileWork, runtime.store)
     runtime.weather_care = WeatherCare(runtime.store)
     runtime.memory_jobs = MemoryJobs(runtime.store)
+    await edition.start()
     try:
         yield
     finally:
+        await edition.close()
         await asyncio.to_thread(runtime.memory_jobs.close)
         runtime.memory_jobs = None
         await asyncio.to_thread(runtime.weather_care.close)
@@ -42,6 +45,7 @@ async def lifespan(app):
 
 app = FastAPI(title='瞬光伴行 API', version=VERSION, lifespan=lifespan)
 app.middleware('http')(access.guard)
+app.add_middleware(RequestTraceMiddleware)
 
 
 @app.exception_handler(RequestValidationError)
@@ -57,10 +61,22 @@ async def unhandled_error(request, error):
 
 @app.get('/api/capabilities', response_model=CapabilitiesOut)
 def capabilities():
-    return {'max_message_length': MAX_MESSAGE_LENGTH}
+    return {
+        'max_message_length': MAX_MESSAGE_LENGTH,
+        'deployment_mode': 'server' if server_mode() else 'desktop',
+        'local_knowledge': local_knowledge_enabled(),
+    }
 
 
-for router in (settings.router, chat.router, memories.router, knowledge.router, work.router, services_router):
+for router in (
+    settings.router,
+    chat.router,
+    memories.router,
+    knowledge.router,
+    work.router,
+    *edition.routers,
+    services_router,
+):
     app.include_router(router)
 
 dist = ROOT / 'frontend' / 'dist'

@@ -6,18 +6,9 @@ from langchain_core.utils.json_schema import dereference_refs
 from pydantic import ValidationError
 
 from . import config, office_runtime, office_tasks
-from .filework import WorkError
+from .office_models import GUIDES
 from .office_resources import belongs_to_chat, import_file, targets
-
-GUIDES = {
-    'docx': 'word',
-    'xlsx': 'excel',
-    'pdf': 'pdf',
-    'pptx': 'ppt',
-    'png': 'image',
-    'jpeg': 'image',
-    'webp': 'image',
-}
+from .work_models import WorkError
 
 
 def register(registry, store, message, work):

@@ -22,6 +22,12 @@ class ToolsConfig(BaseModel):
     search_provider: str = 'public'
     api_key: SecretStr = SecretStr('')
     timeout: float = Field(default=12, ge=3, le=30)
+    call_timeout: float = Field(default=25, ge=5, le=180)
+    file_timeout: float = Field(default=180, ge=30, le=600)
+    daily_limit: int = Field(default=20, ge=0, le=10000)
+    cache_seconds: int = Field(default=300, ge=0, le=3600)
+    public_fallback: bool = False
+    read_pages: bool = False
 
     @field_validator('search_provider')
     @classmethod
@@ -185,7 +191,10 @@ def load() -> FeatureConfig:
     with LOCK:
         path = config.DATA_DIR / 'features.json'
         if not path.exists():
-            return FeatureConfig()
+            value = FeatureConfig()
+            if config.server_mode():
+                value.tools.search_provider = 'tavily'
+            return value
         record = json.loads(path.read_text(encoding='utf-8'))
         for name in ('tools', 'tts', 'asr'):
             block = record.setdefault(name, {})
@@ -291,6 +300,9 @@ def public(value: FeatureConfig) -> dict:
     result['asr']['has_api_key'] = bool(value.asr.api_key.get_secret_value())
     result['asr']['configured'] = bool(value.asr.model and asr_secret(value.asr))
     result['tools']['has_api_key'] = bool(value.tools.api_key.get_secret_value())
+    from .search_state import usage
+
+    result['tools']['usage'] = usage()
     result['tools']['coverage'] = {
         'public': '公开网页搜索，无需 API Key：DuckDuckGo 主查询，最多一次 Bing RSS 回退；公开服务可能限流或要求验证，不保证持续可用。',
         'bing': 'Bing 公开 RSS 网页搜索（尽力服务），无专用 API 可用性保证，结果需核对。',

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import {
   AudioLines,
@@ -11,9 +11,9 @@ import {
   Heart,
   LoaderCircle,
   Menu,
+  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
-  MessageSquare,
   Plus,
   Settings2,
   ShieldCheck,
@@ -38,6 +38,7 @@ import { useConversation } from './useConversation';
 import { ConversationHistory } from './ConversationHistory';
 import { PreviewWorkspace } from './PreviewWorkspace';
 import { WorkSpace } from './WorkSpace';
+import { editionNavigation, renderEditionPage } from './edition';
 import { useWorkEvents } from './useWorkEvents';
 import { AnnotationProvider, type AnnotationSubmission } from './Annotations';
 
@@ -47,6 +48,7 @@ const pages = [
   { key: 'world', label: '世界档案', icon: Compass },
   { key: 'reminders', label: '温柔提醒', icon: Bell },
   { key: 'work', label: '工作台', icon: FolderOpen },
+  ...editionNavigation,
 ] as const;
 function preference(key: string, defaultValue: boolean) {
   try {
@@ -92,6 +94,26 @@ export default function App() {
     [authError, setAuthError] = useState(''),
     [reminder, setReminder] = useState<ReminderEvent | null>(null),
     [weatherNotice, setWeatherNotice] = useState('');
+  const [coarsePointer, setCoarsePointer] = useState(() => matchMedia('(pointer: coarse)').matches);
+  const glowFrame = useRef<number | null>(null);
+  const glowRect = useRef<{ card: HTMLElement; bounds: DOMRect } | null>(null);
+  const glowPointer = useRef<{ x: number; y: number; target: Element; shell: HTMLElement } | null>(null);
+  useEffect(() => {
+    const media = matchMedia('(pointer: coarse)');
+    const change = () => setCoarsePointer(media.matches);
+    const invalidate = () => {
+      glowRect.current = null;
+    };
+    media.addEventListener('change', change);
+    window.addEventListener('resize', invalidate);
+    window.addEventListener('scroll', invalidate, true);
+    return () => {
+      media.removeEventListener('change', change);
+      window.removeEventListener('resize', invalidate);
+      window.removeEventListener('scroll', invalidate, true);
+      if (glowFrame.current !== null) cancelAnimationFrame(glowFrame.current);
+    };
+  }, []);
   const [smallScreen, setSmallScreen] = useState(matchMedia('(max-width:700px)').matches);
   useEffect(() => {
     const media = matchMedia('(max-width:700px)');
@@ -306,6 +328,7 @@ export default function App() {
     setAuthError('');
     try {
       await request('/auth/login', { method: 'POST', body: JSON.stringify({ password }) });
+      window.dispatchEvent(new Event('shunguang-authenticated'));
       setPassword('');
       setAuthRequired(false);
       setLoading(true);
@@ -343,25 +366,33 @@ export default function App() {
           className={`app-shell ${animate ? '' : 'effects-off'}`}
           onPointerMove={(event) => {
             if (!animate || event.pointerType === 'touch') return;
-            const card = (event.target as Element).closest<HTMLElement>(
-              '.file-card, .chat-task-card, .starter-cards button, .nav-item, [data-slot="button"]',
-            );
-            if (card) {
-              const bounds = card.getBoundingClientRect();
-              card.style.setProperty('--glow-x', `${event.clientX - bounds.left}px`);
-              card.style.setProperty('--glow-y', `${event.clientY - bounds.top}px`);
-            }
-            event.currentTarget.style.setProperty(
-              '--dawn-x',
-              `${(event.clientX / window.innerWidth - 0.5) * 10}px`,
-            );
-            event.currentTarget.style.setProperty(
-              '--dawn-y',
-              `${(event.clientY / window.innerHeight - 0.5) * 6}px`,
-            );
+            glowPointer.current = {
+              x: event.clientX,
+              y: event.clientY,
+              target: event.target as Element,
+              shell: event.currentTarget,
+            };
+            if (glowFrame.current !== null) return;
+            glowFrame.current = requestAnimationFrame(() => {
+              glowFrame.current = null;
+              const pointer = glowPointer.current;
+              if (!pointer || !pointer.shell.isConnected) return;
+              const card = pointer.target.closest<HTMLElement>(
+                '.file-card, .chat-task-card, .starter-cards button, .nav-item, [data-slot="button"]',
+              );
+              if (card) {
+                if (glowRect.current?.card !== card)
+                  glowRect.current = { card, bounds: card.getBoundingClientRect() };
+                const bounds = glowRect.current.bounds;
+                card.style.setProperty('--glow-x', `${pointer.x - bounds.left}px`);
+                card.style.setProperty('--glow-y', `${pointer.y - bounds.top}px`);
+              }
+              pointer.shell.style.setProperty('--dawn-x', `${(pointer.x / window.innerWidth - 0.5) * 10}px`);
+              pointer.shell.style.setProperty('--dawn-y', `${(pointer.y / window.innerHeight - 0.5) * 6}px`);
+            });
           }}
         >
-          <Atmosphere enabled={animate && !matchMedia('(pointer: coarse)').matches} style={backgroundStyle} />
+          <Atmosphere enabled={animate && !coarsePointer} style={backgroundStyle} />
           {mobileNav && (
             <button className="nav-overlay" aria-label="关闭导航" onClick={() => setMobileNav(false)} />
           )}
@@ -404,36 +435,38 @@ export default function App() {
               <span>开启新的对话</span>
             </Button>
             <div className="nav-section-label">
-              相伴的日常<span>01 — 05</span>
+              相伴的日常<span>01 — {String(pages.length).padStart(2, '0')}</span>
             </div>
             <nav aria-label="功能导航">
               {pages.map(({ key, label, icon: Icon }) => (
-                <button
-                  key={key}
-                  className={`nav-item ${page === key ? 'selected' : ''}`}
-                  aria-label={label}
-                  title={label}
-                  onClick={() => navigate(key)}
-                  aria-current={page === key ? 'page' : undefined}
-                >
-                  {page === key && (
-                    <motion.span
-                      aria-hidden="true"
-                      className="selection-glide"
-                      layoutId="primary-navigation-highlight"
-                      transition={{ duration: animate ? 0.22 : 0 }}
-                    />
-                  )}
-                  <Icon size={18} strokeWidth={1.6} />
-                  <span>{label}</span>
-                  {key === 'memory' ? (
-                    <span className="nav-count">{memoryCount}</span>
-                  ) : key === 'chat' ? (
-                    <span className="nav-count">{conversations.length}</span>
-                  ) : (
-                    <ChevronRight className="nav-arrow" size={13} />
-                  )}
-                </button>
+                <Fragment key={key}>
+                  {key === 'work' && <div className="nav-section-label">工具与管理</div>}
+                  <button
+                    className={`nav-item ${page === key ? 'selected' : ''}`}
+                    aria-label={label}
+                    title={label}
+                    onClick={() => navigate(key)}
+                    aria-current={page === key ? 'page' : undefined}
+                  >
+                    {page === key && (
+                      <motion.span
+                        aria-hidden="true"
+                        className="selection-glide"
+                        layoutId="primary-navigation-highlight"
+                        transition={{ duration: animate ? 0.22 : 0 }}
+                      />
+                    )}
+                    <Icon size={18} strokeWidth={1.6} />
+                    <span>{label}</span>
+                    {key === 'memory' ? (
+                      <span className="nav-count">{memoryCount}</span>
+                    ) : key === 'chat' ? (
+                      <span className="nav-count">{conversations.length}</span>
+                    ) : (
+                      <ChevronRight className="nav-arrow" size={13} />
+                    )}
+                  </button>
+                </Fragment>
               ))}
             </nav>
             <div className="history-heading">
@@ -454,7 +487,7 @@ export default function App() {
                 className="nav-item"
                 aria-label="陪伴设置"
                 title="陪伴设置"
-                onClick={() => openPanel('model')}
+                onClick={() => openPanel('effects')}
               >
                 <Settings2 size={18} />
                 <span>陪伴设置</span>
@@ -481,7 +514,7 @@ export default function App() {
               <Menu size={20} />
             </button>
             <div className="content-columns">
-              <AnnotationProvider conversationId={active}>
+              <AnnotationProvider conversationId={active} enabled={!loading && !authRequired}>
                 <PreviewWorkspace resetKey={`${page}:${active ?? ''}`} onSettings={() => openPanel('model')}>
                   <section className="chat-column" aria-label="主内容区域">
                     {error && (
@@ -538,6 +571,9 @@ export default function App() {
                               onTaskReply={chat.refreshMessages}
                               key={active ?? 'new'}
                               messages={messages}
+                              hasEarlier={chat.hasEarlier}
+                              loadingEarlier={chat.loadingEarlier}
+                              onLoadEarlier={chat.loadEarlier}
                               partial={partial}
                               tools={currentTools}
                               sources={currentSources}
@@ -565,13 +601,15 @@ export default function App() {
                           ) : page === 'work' ? (
                             <WorkSpace onModelSettings={() => openPanel('model')} />
                           ) : (
-                            <ReminderSpace
-                              features={features}
-                              event={reminder}
-                              onSettings={() => openPanel('reminders')}
-                              onTest={() => void testReminder()}
-                              onPause={() => void pauseReminder()}
-                            />
+                            (renderEditionPage(page) ?? (
+                              <ReminderSpace
+                                features={features}
+                                event={reminder}
+                                onSettings={() => openPanel('reminders')}
+                                onTest={() => void testReminder()}
+                                onPause={() => void pauseReminder()}
+                              />
+                            ))
                           )}
                         </motion.div>
                       </AnimatePresence>

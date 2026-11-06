@@ -10,6 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from .. import runtime
 from ..annotations import AnnotationRequest, CommentUpdate
 from ..filework import MAX_FILE_BYTES, FileTaskRequest, WorkError, local_request, public_task
+from ..office_models import OfficeRequest
 from ..schemas import DocumentUploadOut, FileTaskOut, WorkspaceOut
 
 
@@ -29,9 +30,6 @@ def file_capabilities():
     from ..office_runtime import capabilities
 
     return capabilities()
-
-
-from ..office_tasks import OfficeRequest
 
 
 @router.post('/office/tasks', status_code=201, response_model=FileTaskOut)

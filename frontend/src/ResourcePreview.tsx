@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import { request, type FileTask, type HistorySource } from './api';
 import type { PreviewResource } from './PreviewContext';
 import { TaskDetails } from './FileTasks';
@@ -68,11 +68,13 @@ function HistoryResource({ resource }: { resource: PreviewResource }) {
 function TaskResource({ resource, onSettings }: { resource: PreviewResource; onSettings?: () => void }) {
   const [task, setTask] = useState<FileTask | null>(null);
   const [notice, setNotice] = useState('');
+  const activeTask = useRef(true);
   const refresh = useCallback(
     async (signal?: AbortSignal) => {
       const result = await request<FileTask>(`/work/tasks/${encodeURIComponent(resource.id)}`, { signal });
       if (!signal?.aborted) {
         setTask(result);
+        activeTask.current = ['queued', 'running'].includes(result.status);
         setNotice('');
       }
     },
@@ -81,8 +83,11 @@ function TaskResource({ resource, onSettings }: { resource: PreviewResource; onS
   useEffect(() => {
     const abort = new AbortController();
     let polling = false;
-    async function poll() {
+    let lastPoll: number | null = null;
+    async function poll(force = false) {
       if (polling || abort.signal.aborted || document.hidden) return;
+      if (!force && !activeTask.current && lastPoll !== null && Date.now() - lastPoll < 15000) return;
+      lastPoll = Date.now();
       polling = true;
       try {
         await refresh(abort.signal);
@@ -94,9 +99,12 @@ function TaskResource({ resource, onSettings }: { resource: PreviewResource; onS
     }
     void poll();
     const timer = setInterval(() => void poll(), 1500);
+    const changed = () => void poll(true);
+    window.addEventListener('shunguang-work-updated', changed);
     return () => {
       abort.abort();
       clearInterval(timer);
+      window.removeEventListener('shunguang-work-updated', changed);
     };
   }, [refresh]);
   return (

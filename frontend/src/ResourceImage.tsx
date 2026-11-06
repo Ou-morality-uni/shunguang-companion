@@ -15,6 +15,11 @@ export function ResourceImage({
 }) {
   const [missing, setMissing] = useState(false);
   useEffect(() => setMissing(false), [src]);
+  useEffect(() => {
+    const retry = () => setMissing(false);
+    window.addEventListener('shunguang-authenticated', retry);
+    return () => window.removeEventListener('shunguang-authenticated', retry);
+  }, []);
   return missing ? (
     <span className={`${className} media-fallback`} role="img" aria-label={`${alt}，素材待导入`}>
       <Flower2 size={26} strokeWidth={1.2} />

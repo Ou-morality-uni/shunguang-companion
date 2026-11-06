@@ -8,9 +8,9 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .filework import WorkError
 from .office_resources import targets
 from .store import now
+from .work_models import WorkError
 
 
 class AnnotationSource(BaseModel):

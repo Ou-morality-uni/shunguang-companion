@@ -154,6 +154,5 @@
       "note": "Only the supplied weight file is archived; accompanying configuration and tokenizer files have not been supplied.",
       "original_filename": "pytorch_model.bin"
     }
-  ],
-  "privacy_note": "Original local absolute paths removed from this public archival snapshot; resource hashes are unchanged."
+  ]
 }

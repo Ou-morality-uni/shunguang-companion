@@ -6,6 +6,15 @@ import type { AudioController } from './useAudioQueue';
 
 vi.mock('./api', () => ({ request: vi.fn() }));
 
+it('backs off requests when no new work events exist', async () => {
+  vi.useFakeTimers();
+  vi.mocked(request).mockResolvedValue({ cursor: 0, events: [] });
+  renderHook(() => useWorkEvents(true, { enqueueWork: vi.fn() } as unknown as AudioController));
+  await act(async () => {});
+  await act(async () => vi.advanceTimersByTimeAsync(10000));
+  expect(vi.mocked(request).mock.calls.length).toBeLessThan(6);
+});
+
 it('only announces a short completion cue and never automatically fetches or reads the full summary', async () => {
   vi.useFakeTimers();
   const enqueueWork = vi.fn();

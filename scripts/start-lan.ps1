@@ -15,5 +15,5 @@ $env:SHUNGUANG_ALLOWED_HOSTS = $addresses -join ','
 Write-Host '同一 Wi-Fi 的手机浏览器打开以下电脑地址，输入刚设置的访问口令：'
 foreach ($address in $addresses) { Write-Host "http://${address}:$Port" }
 Write-Host '仅在可信局域网使用。脚本不修改防火墙，不开放公网；关闭终端即停止服务。'
-& $pythonPath -m uvicorn backend.app.main:app --host 0.0.0.0 --port $Port --no-access-log
+& $pythonPath -u scripts/run-console.py --lan --port $Port
 exit $LASTEXITCODE

@@ -19,6 +19,32 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it('reconciles both accepted messages from the cursor before the new turn', async () => {
+  const old = { ...assistant, id: 'old', seq: 10 };
+  vi.mocked(request).mockImplementation(async (path) => {
+    if (path === '/conversations/c/messages') return [old];
+    if (path === '/conversations/c/messages?after=10')
+      return [
+        { ...user, seq: 11 },
+        { ...assistant, seq: 12 },
+      ];
+    if (path === '/conversations/c/messages?after=11') return [{ ...assistant, seq: 12 }];
+    return [];
+  });
+  vi.mocked(streamChat).mockImplementation(async (_id, _text, _signal, emit) => {
+    emit('user', user as unknown as Record<string, unknown>);
+    emit('done', { ...assistant, seq: 12 } as unknown as Record<string, unknown>);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+  const { result } = renderHook(() => useConversation(vi.fn()));
+  await act(async () => result.current.selectConversation('c'));
+  await waitFor(() => expect(result.current.historyLoading).toBe(false));
+  await act(async () => {
+    await result.current.send('你好');
+  });
+  expect(result.current.messages.find((item) => item.id === 'u')?.seq).toBe(11);
+});
+
 it('feeds speech deltas before completion and cancels speech on a failed stream', async () => {
   const events: string[] = [];
   const speech = {

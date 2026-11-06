@@ -3,6 +3,8 @@
 import base64
 import ctypes
 import os
+import stat
+from pathlib import Path
 from threading import RLock
 from typing import Protocol
 
@@ -96,8 +98,37 @@ class KeyringBackend:
             return Fernet(key.encode('ascii'))
 
 
+class FileKeyBackend:
+    """Explicit headless-server vault. The host owns and backs up the master key."""
+
+    def cipher(self):
+        from cryptography.fernet import Fernet
+
+        from .config import server_mode
+
+        if not server_mode():
+            raise RuntimeError('文件主密钥仅供服务器模式使用')
+        path = Path(os.environ.get('SHUNGUANG_MASTER_KEY_FILE', ''))
+        if not path.is_absolute() or path.is_symlink() or not path.is_file():
+            raise RuntimeError('服务器主密钥文件不可用')
+        info = path.stat()
+        if info.st_size != 44 or (os.name != 'nt' and stat.S_IMODE(info.st_mode) & 0o077):
+            raise RuntimeError('服务器主密钥格式或权限不正确')
+        return Fernet(path.read_bytes())
+
+    def encrypt(self, secret: str) -> str:
+        return self.cipher().encrypt(secret.encode()).decode('ascii')
+
+    def decrypt(self, encoded: str) -> str:
+        return self.cipher().decrypt(encoded.encode('ascii')).decode()
+
+
 def encrypt_secret(secret: str) -> str:
+    from .config import server_mode
+
     name, backend = ('dpapi', WindowsDpapiBackend()) if os.name == 'nt' else ('keyring', KeyringBackend())
+    if server_mode():
+        name, backend = 'file', FileKeyBackend()
     try:
         return f'{name}:v1:{backend.encrypt(secret)}'
     except Exception:
@@ -106,6 +137,8 @@ def encrypt_secret(secret: str) -> str:
 
 def decrypt_secret(encoded: str) -> str:
     try:
+        if encoded.startswith('file:v1:'):
+            return FileKeyBackend().decrypt(encoded.removeprefix('file:v1:'))
         if encoded.startswith('keyring:v1:'):
             return KeyringBackend().decrypt(encoded.removeprefix('keyring:v1:'))
         # Unprefixed values are the legacy Windows DPAPI format.

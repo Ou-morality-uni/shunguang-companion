@@ -1,11 +1,12 @@
 import json
 import re
 import sqlite3
-from contextlib import contextmanager
+from contextlib import closing, contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
+from .history_index import match_terms, tokens
 from .migrations import SCHEMA_VERSION, migrate
 
 
@@ -21,6 +22,7 @@ class Store:
     def connect(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
         connection = sqlite3.connect(self.path, timeout=10)
+        connection.create_function('recall_tokens', 1, tokens, deterministic=True)
         connection.row_factory = sqlite3.Row
         connection.execute('PRAGMA foreign_keys=ON')
         connection.execute('PRAGMA busy_timeout=5000')
@@ -34,6 +36,7 @@ class Store:
             connection.close()
 
     def initialize(self):
+        backup = None
         with self.connect() as db:
             version = db.execute('PRAGMA user_version').fetchone()[0]
             if version > SCHEMA_VERSION:
@@ -45,13 +48,31 @@ class Store:
                 backup_dir = self.path.parent / 'backups'
                 backup_dir.mkdir(exist_ok=True)
                 backup = backup_dir / f'{self.path.stem}-v{version}-{uuid4().hex}.sqlite3'
-                with sqlite3.connect(backup) as target:
+                with closing(sqlite3.connect(backup)) as target:
                     db.backup(target)
+                    if target.execute('PRAGMA quick_check').fetchone()[0] != 'ok':
+                        raise RuntimeError('迁移备份校验失败，未开始迁移。')
             db.execute('PRAGMA journal_mode=WAL')
             migrate(db)
             db.execute(
                 "UPDATE messages SET status='interrupted', content=CASE WHEN content='' THEN '回复因服务重启而中断。' ELSE content END WHERE status='streaming'"
             )
+        if backup is not None:
+            # Only our UUID-named migration snapshots; user-managed backups survive.
+            snapshots = [
+                path
+                for path in backup.parent.iterdir()
+                if not path.is_symlink()
+                and path.is_file()
+                and re.fullmatch(re.escape(self.path.stem) + r'-v\d+-[a-f0-9]{32}\.sqlite3', path.name)
+            ]
+            for path in sorted(snapshots, key=lambda item: item.stat().st_mtime_ns, reverse=True)[5:]:
+                try:
+                    path.unlink()
+                except OSError as error:
+                    from .logging_setup import report_error
+
+                    report_error('backup_retention', error)
 
     def list_conversations(self):
         with self.connect() as db:
@@ -107,8 +128,8 @@ class Store:
             if not row:
                 return None
             record = dict(row)
-            record['steps'] = json.loads(record['steps'])
-            record['context'] = json.loads(record['context'])
+            record['steps'] = json.loads(record['steps'] or '[]') or []
+            record['context'] = json.loads(record['context'] or '{}') or {}
             record['events'] = [
                 dict(event)
                 for event in db.execute('SELECT * FROM work_events WHERE task_id=? ORDER BY seq', (task_id,))
@@ -124,7 +145,12 @@ class Store:
                 params.append(conversation_id)
             rows = db.execute(query + ' ORDER BY created_at DESC LIMIT ?', (*params, limit))
             records = [
-                {**dict(row), 'steps': json.loads(row['steps']), 'context': json.loads(row['context'])} for row in rows
+                {
+                    **dict(row),
+                    'steps': json.loads(row['steps'] or '[]') or [],
+                    'context': json.loads(row['context'] or '{}') or {},
+                }
+                for row in rows
             ]
             for record in records:
                 record['events'] = [
@@ -252,7 +278,7 @@ class Store:
                     (conversation_id, record['id'], now(), annotation['id'], annotation['updated_at']),
                 ).rowcount
                 if changed != 1:
-                    from .filework import WorkError
+                    from .work_models import WorkError
 
                     raise WorkError('批注草稿刚刚变化，请刷新后重新发送。')
             db.execute(
@@ -261,7 +287,7 @@ class Store:
             )
             return {**record, **(metadata or {})}
 
-    def delete_conversation(self, conversation_id: str):
+    def delete_conversation(self, conversation_id: str, task_ids=()):
         with self.connect() as db:
             # Confirmed facts survive; provenance is explicitly detached. Unconfirmed candidates do not.
             db.execute(
@@ -269,6 +295,9 @@ class Store:
                 (conversation_id,),
             )
             db.execute('DELETE FROM memory_candidates WHERE conversation_id=?', (conversation_id,))
+            for identity in task_ids:
+                db.execute('DELETE FROM work_events WHERE task_id=?', (identity,))
+                db.execute('DELETE FROM file_tasks WHERE id=?', (identity,))
             return db.execute('DELETE FROM conversations WHERE id=?', (conversation_id,)).rowcount == 1
 
     def get_conversation(self, conversation_id: str):
@@ -291,18 +320,25 @@ class Store:
                 (conversation_id, choice['profile_id'], choice['model'], choice['effort']),
             )
 
-    def messages(self, conversation_id: str, limit: int | None = None, before: int | None = None):
+    def messages(
+        self, conversation_id: str, limit: int | None = None, before: int | None = None, after: int | None = None
+    ):
         with self.connect() as db:
             query = 'SELECT * FROM messages WHERE conversation_id=?'
             params = [conversation_id]
             if before is not None:
                 query += ' AND seq < ?'
                 params.append(before)
-            query += ' ORDER BY seq DESC'
+            if after is not None:
+                query += ' AND seq > ?'
+                params.append(after)
+            query += ' ORDER BY seq ASC' if after is not None else ' ORDER BY seq DESC'
             if limit is not None:
                 query += ' LIMIT ?'
                 params.append(limit)
-            records = [dict(row) for row in db.execute(query, params)][::-1]
+            records = [dict(row) for row in db.execute(query, params)]
+            if after is None:
+                records.reverse()
             for record in records:
                 metadata = json.loads(record.pop('metadata', '{}'))
                 record.update(
@@ -349,14 +385,17 @@ class Store:
 
     def update_message(self, message_id, content, status, metadata=None):
         with self.connect() as db:
-            db.execute(
-                'UPDATE messages SET content=?,status=?,metadata=? WHERE id=?',
-                (content, status, json.dumps(metadata or {}, ensure_ascii=False), message_id),
-            )
+            if metadata is None:
+                db.execute('UPDATE messages SET content=?,status=? WHERE id=?', (content, status, message_id))
+            else:
+                db.execute(
+                    'UPDATE messages SET content=?,status=?,metadata=? WHERE id=?',
+                    (content, status, json.dumps(metadata, ensure_ascii=False), message_id),
+                )
             row = db.execute('SELECT * FROM messages WHERE id=?', (message_id,)).fetchone()
             record = dict(row)
-            record.pop('metadata', None)
-            return {**record, **(metadata or {})}
+            saved_metadata = json.loads(record.pop('metadata') or '{}')
+            return {**record, **saved_metadata}
 
     def list_memories(self):
         with self.connect() as db:
@@ -648,6 +687,8 @@ class Store:
             parameters = [current_conversation_id]
             if terms and not re.search(r'上个聊天|另一个聊天|上次聊|昨天聊', query):
                 bounded_terms = sorted(terms, key=lambda term: (-len(term), term))[:20]
+                sql += ' AND m.seq IN (SELECT rowid FROM message_search WHERE message_search MATCH ?)'
+                parameters.append(match_terms(bounded_terms))
                 sql += ' AND (' + ' OR '.join('instr(lower(m.content),lower(?))>0' for _ in bounded_terms) + ')'
                 parameters.extend(bounded_terms)
             sql += ' ORDER BY m.seq DESC LIMIT 200'
@@ -658,6 +699,7 @@ class Store:
                     """SELECT m.*,c.title,e.summary AS episode_summary FROM conversation_episodes e
                     JOIN json_each(e.source_ids) ids JOIN messages m ON m.id=ids.value JOIN conversations c ON c.id=m.conversation_id
                     WHERE e.conversation_id<>? AND m.status='complete'
+                    AND e.rowid IN (SELECT rowid FROM episode_search WHERE episode_search MATCH ?)
                     AND NOT EXISTS(SELECT 1 FROM json_each(e.source_ids) source LEFT JOIN messages original ON original.id=source.value
                         WHERE original.id IS NULL OR original.id IN (SELECT message_id FROM forgotten_messages)
                         OR EXISTS(SELECT 1 FROM memory_blocks b WHERE original.seq<=b.through_seq AND instr(original.content,b.value)>0))
@@ -665,7 +707,7 @@ class Store:
                     + ' OR '.join('instr(lower(e.summary),lower(?))>0' for _ in bounded)
                     + ') ORDER BY e.end_seq DESC LIMIT 200'
                 )
-                rows += list(db.execute(episode_sql, [current_conversation_id, *bounded]))
+                rows += list(db.execute(episode_sql, [current_conversation_id, match_terms(bounded), *bounded]))
         ranked = []
         for row in rows:
             if SENSITIVE.search(row['content']):

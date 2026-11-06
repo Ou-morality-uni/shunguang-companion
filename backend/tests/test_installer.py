@@ -29,6 +29,35 @@ setup = module('installer_setup', 'setup-project.py')
 installer = module('installer_entry', 'install-project.py')
 
 
+def test_installer_refuses_current_running_backend(tmp_path, monkeypatch):
+    monkeypatch.setattr(installer, 'ROOT', tmp_path)
+    monkeypatch.setattr(installer, 'python_info', lambda: {'supported': True})
+    monkeypatch.setattr(installer.shutil, 'disk_usage', lambda _: SimpleNamespace(free=20 * 1024**3))
+    (tmp_path / 'data').mkdir()
+    (tmp_path / 'data/companion.sqlite3').touch()
+    monkeypatch.setattr(
+        installer.urllib.request,
+        'urlopen',
+        lambda *a, **kw: Response(b'{"status":"ok","version":"0.7.1","dependencies":{"storage":"ready"}}'),
+    )
+    with pytest.raises(RuntimeError, match='running backend'):
+        installer.preflight(rag_only=True)
+
+
+def test_lite_install_plan_excludes_vector_dependencies_and_bridge():
+    result = subprocess.run(
+        [sys.executable, str(ROOT / 'scripts/install-project.py'), '--lite', '--plan'],
+        capture_output=True,
+        text=True,
+        encoding='utf-8',
+    )
+    assert result.returncode == 0, result.stderr
+    plan = json.loads(result.stdout)
+    assert plan['retrieval'] is False
+    assert plan['bridge_download'] is False
+    assert plan['backend'] and plan['frontend']
+
+
 def record(body=b'model component'):
     return {
         'name': 'model.zip',
@@ -196,6 +225,8 @@ def test_installer_can_probe_python_without_installing(tmp_path):
         cwd=tmp_path,
         capture_output=True,
         text=True,
+        encoding='utf-8',
+        errors='replace',
         timeout=15,
     )
     assert result.returncode == 0, result.stderr
@@ -234,6 +265,8 @@ def test_install_entry_accepts_explicit_python_without_installing(entry, install
         ],
         capture_output=True,
         text=True,
+        encoding='utf-8',
+        errors='replace',
         timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -274,6 +307,8 @@ def test_install_entry_finds_python_on_path_without_launcher(installer_entry_scr
         env=environment,
         capture_output=True,
         text=True,
+        encoding='utf-8',
+        errors='replace',
         timeout=30,
     )
     assert result.returncode == 0, result.stdout + result.stderr
@@ -294,6 +329,8 @@ def test_unknown_install_option_is_rejected_before_launch(installer_entry_script
         ],
         capture_output=True,
         text=True,
+        encoding='utf-8',
+        errors='replace',
         timeout=30,
     )
     assert result.returncode != 0

@@ -38,6 +38,7 @@ import {
   type ToolEvent,
 } from './api';
 import { ModelPicker } from './ModelPicker';
+import { indexMessages } from './messageIndex';
 import { VoiceInput } from './VoiceInput';
 import { AttachmentCard, FileTasksProvider, MessageFileTasks } from './FileTasks';
 import { Sources } from './Evidence';
@@ -55,8 +56,39 @@ import {
   type AnnotationAnchor,
 } from './Annotations';
 const MarkdownText = () => <MarkdownTextPrimitive defer smooth remarkPlugins={[remarkGfm]} />;
-const MessagesContext = createContext<Message[]>([]);
+const MessagesContext = createContext<ReturnType<typeof indexMessages<Message>>>(new Map());
 const HistoryContext = createContext<Set<string>>(new Set());
+const convertedMessages = new WeakMap<Message, ThreadMessageLike>();
+function convertMessage(message: Message): ThreadMessageLike {
+  const cached = convertedMessages.get(message);
+  if (cached) return cached;
+  const converted: ThreadMessageLike = {
+    id: message.id,
+    role: message.role,
+    content: [
+      {
+        type: 'text',
+        text: message.role === 'assistant' ? visibleAssistantText(message.content) : message.content,
+      },
+    ],
+    createdAt: new Date(message.created_at),
+    ...(message.role === 'assistant'
+      ? {
+          status:
+            message.status === 'running'
+              ? { type: 'running' as const }
+              : message.status === 'complete'
+                ? { type: 'complete' as const, reason: 'stop' as const }
+                : {
+                    type: 'incomplete' as const,
+                    reason: message.status === 'interrupted' ? ('cancelled' as const) : ('error' as const),
+                  },
+        }
+      : {}),
+  };
+  convertedMessages.set(message, converted);
+  return converted;
+}
 
 const starters = [
   {
@@ -77,15 +109,9 @@ const starters = [
 function ChatMessage() {
   const message = useAuiState((state) => state.message);
   const user = message.role === 'user';
-  const messages = useContext(MessagesContext);
-  const record = messages.find((item) => item.id === message.id);
-  const position = messages.findIndex((item) => item.id === message.id);
-  const before = messages.slice(0, position < 0 ? messages.length : position);
-  const requestIndex = before.map((item) => item.role).lastIndexOf('user');
-  const requestId =
-    !user && !before.slice(requestIndex + 1).some((item) => item.role === 'assistant')
-      ? before[requestIndex]?.id
-      : undefined;
+  const indexed = useContext(MessagesContext).get(message.id);
+  const record = indexed?.record;
+  const requestId = indexed?.requestId;
   const taskIds = (record?.tools ?? []).flatMap((item) => {
     const result = item.result as { task?: { id?: string } } | undefined;
     return ['workspace_files', 'office_files'].includes(item.name ?? '') && result?.task?.id
@@ -159,7 +185,7 @@ function ChatMessage() {
             <MessageFileTasks
               requestId={requestId}
               taskIds={taskIds}
-              attachments={before[requestIndex]?.attachments ?? []}
+              attachments={(indexed?.attachments ?? []) as Attachment[]}
             />
           )}
           <ActionBarPrimitive.Root className="message-actions">
@@ -209,6 +235,9 @@ type Props = {
   onTaskStatus?: (status: string | null) => void;
   onTaskReply?: () => Promise<boolean>;
   onWork: () => void;
+  hasEarlier?: boolean;
+  loadingEarlier?: boolean;
+  onLoadEarlier?: () => Promise<void>;
 };
 
 export function ChatThread({
@@ -230,6 +259,9 @@ export function ChatThread({
   onTaskStatus,
   onTaskReply,
   onWork,
+  hasEarlier,
+  loadingEarlier,
+  onLoadEarlier,
 }: Props) {
   const audio = useCompanionAudio();
   const annotations = useAnnotations();
@@ -309,6 +341,32 @@ export function ChatThread({
     [messages, partial, tools, sources],
   );
   const viewport = useRef<HTMLDivElement>(null);
+  const previousBusy = useRef(busy);
+  const [announcement, setAnnouncement] = useState('');
+  useEffect(() => {
+    if (previousBusy.current && !busy) {
+      const last = messages.at(-1);
+      if (last?.role === 'assistant') setAnnouncement(visibleAssistantText(last.content));
+    }
+    if (busy) setAnnouncement('');
+    previousBusy.current = busy;
+  }, [busy, messages]);
+  const messageIndex = useMemo(
+    () =>
+      indexMessages<Message>([
+        ...messages,
+        {
+          id: 'current-stream',
+          role: 'assistant',
+          content: '',
+          status: 'running',
+          created_at: '',
+          tools,
+          sources,
+        },
+      ]),
+    [messages, tools, sources],
+  );
   const hasMessages = threadMessages.length > 0;
   useEffect(() => {
     if (!hasMessages && viewport.current) viewport.current.scrollTop = 0;
@@ -319,27 +377,7 @@ export function ChatThread({
     isRunning: busy,
     isLoading: loading,
     isDisabled: loading || uploading,
-    convertMessage: (message): ThreadMessageLike => ({
-      id: message.id,
-      role: message.role,
-      content: [
-        {
-          type: 'text',
-          text: message.role === 'assistant' ? visibleAssistantText(message.content) : message.content,
-        },
-      ],
-      createdAt: new Date(message.created_at),
-      ...(message.role === 'assistant'
-        ? {
-            status:
-              message.status === 'running'
-                ? { type: 'running' }
-                : message.status === 'complete'
-                  ? { type: 'complete', reason: 'stop' }
-                  : { type: 'incomplete', reason: message.status === 'interrupted' ? 'cancelled' : 'error' },
-          }
-        : {}),
-    }),
+    convertMessage,
     onNew: async (message) => {
       const text = message.content
         .filter((part) => part.type === 'text')
@@ -392,7 +430,7 @@ export function ChatThread({
     document.getElementById('chat-input')?.focus();
   }
   return (
-    <MessagesContext.Provider value={threadMessages}>
+    <MessagesContext.Provider value={messageIndex}>
       <HistoryContext.Provider value={history.current}>
         <AssistantRuntimeProvider runtime={runtime}>
           <FileTasksProvider
@@ -416,11 +454,31 @@ export function ChatThread({
             >
               <ThreadPrimitive.Viewport
                 ref={viewport}
+                role="log"
+                aria-label="对话消息"
+                aria-live="off"
                 className={`conversation-scroll ${hasMessages ? '' : 'welcome-scroll'}`}
                 autoScroll={hasMessages}
                 scrollToBottomOnInitialize={hasMessages}
                 scrollToBottomOnThreadSwitch={hasMessages}
               >
+                {hasEarlier && (
+                  <button
+                    className="text-link"
+                    disabled={busy || loadingEarlier}
+                    onClick={async () => {
+                      const node = viewport.current;
+                      const oldHeight = node?.scrollHeight ?? 0;
+                      const oldTop = node?.scrollTop ?? 0;
+                      await onLoadEarlier?.();
+                      requestAnimationFrame(() => {
+                        if (node) node.scrollTop = oldTop + node.scrollHeight - oldHeight;
+                      });
+                    }}
+                  >
+                    {loadingEarlier ? '正在读取…' : '加载更早的消息'}
+                  </button>
+                )}
                 {threadMessages.length === 0 ? (
                   <motion.div
                     className="welcome"
@@ -460,6 +518,9 @@ export function ChatThread({
                   </div>
                 )}
               </ThreadPrimitive.Viewport>
+              <div className="sr-only" role="status" aria-live="polite" aria-atomic="true">
+                {announcement}
+              </div>
               <div className="composer-area">
                 {hasMessages && (
                   <ThreadPrimitive.ScrollToBottom className="scroll-bottom" aria-label="回到最新消息">
@@ -538,7 +599,7 @@ export function ChatThread({
                     submitMode="enter"
                     unstable_insertNewlineOnTouchEnter
                     addAttachmentOnPaste={false}
-                    disabled={busy || uploading}
+                    disabled={uploading}
                   />
                   <div className="composer-bottom">
                     <div className="composer-tools">

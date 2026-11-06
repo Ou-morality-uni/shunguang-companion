@@ -29,7 +29,7 @@ import { Sources } from './Evidence';
 import { UserProfileForm } from './UserProfileForm';
 import { useCompanionAudio } from './useAudioQueue';
 
-export type Page = 'chat' | 'memory' | 'world' | 'reminders' | 'work';
+export type Page = 'chat' | 'memory' | 'world' | 'reminders' | 'work' | import('./edition').EditionPage;
 export type Panel = 'model' | 'voice' | 'effects' | 'tools' | 'memory' | 'reminders' | 'updates' | null;
 function PageHeading({
   eyebrow,
@@ -422,35 +422,39 @@ export function WorldArchive() {
             {typeof status?.chunks === 'number' ? `${status.chunks} 个资料片段` : ''}
           </small>
         </div>
-        <Button variant="outline" disabled={busy} onClick={() => void rebuild()}>
-          {busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}更新索引
-        </Button>
+        {status?.enabled !== false && (
+          <Button variant="outline" disabled={busy} onClick={() => void rebuild()}>
+            {busy ? <LoaderCircle className="spin" size={15} /> : <Check size={15} />}更新索引
+          </Button>
+        )}
       </div>
-      <form
-        className="archive-search"
-        onSubmit={(e) => {
-          e.preventDefault();
-          void search();
-        }}
-      >
-        <Search size={17} />
-        <Input
-          aria-label="检索角色与世界资料"
-          placeholder="例如：叶瞬光的身份、青溟剑…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-        />
-        <Button type="submit" disabled={busy || !query.trim()}>
-          检索
-        </Button>
-      </form>
+      {status?.enabled !== false && (
+        <form
+          className="archive-search"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void search();
+          }}
+        >
+          <Search size={17} />
+          <Input
+            aria-label="检索角色与世界资料"
+            placeholder="例如：叶瞬光的身份、青溟剑…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
+          <Button type="submit" disabled={busy || !query.trim()}>
+            检索
+          </Button>
+        </form>
+      )}
       {notice && (
         <div className="settings-notice" role="status">
           {notice}
         </div>
       )}
       <Sources sources={results} />
-      {!results.length && !notice && (
+      {!results.length && !notice && status?.enabled !== false && (
         <div className="empty-space glass">
           <BookOpen size={30} />
           <p>输入问题，查看真实检索片段与来源。</p>
@@ -461,8 +465,9 @@ export function WorldArchive() {
         <div>
           <strong>资料有来处，未知就保留未知</strong>
           <p>
-            资料里的指令和“官方”标签不会覆盖系统规则。原文、哈希和版本保留；新增资料按 README
-            导入后点击更新索引。
+            {status?.enabled === false
+              ? '轻量版使用精选角色设定与按需联网查询；角色背景和用户长期记忆分别处理。'
+              : '资料里的指令和“官方”标签不会覆盖系统规则。原文、哈希和版本保留；新增资料按 README 导入后点击更新索引。'}
           </p>
         </div>
       </div>

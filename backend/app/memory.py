@@ -92,6 +92,8 @@ def direct_facts(text):
         match = re.search(pattern, text)
         if match:
             value = match[1].strip()
+            if temporary_name(key, text):
+                continue
             if key == '年龄' and not 1 <= int(value) <= 120:
                 continue
             if key == '居住地' and temporary_residence(text):
@@ -102,6 +104,12 @@ def direct_facts(text):
                 continue
             result.append({'key': key, 'value': value, 'evidence': match[0]})
     return result
+
+
+def temporary_name(key, text):
+    return canonical_key(key, '') in ('名字', '对用户的称呼') and bool(
+        re.search(r'(本轮|这轮|这次|今天|暂时|临时).*?(叫我|我叫|称呼)', text)
+    )
 
 
 def forget_request(text):
@@ -162,6 +170,8 @@ def execute(name, args, store, message, settings, history):
         key, value, evidence = (args.get(k, '') for k in ('key', 'value', 'evidence'))
         if not all(isinstance(x, str) and x.strip() for x in (key, value, evidence)):
             return {'ok': False, 'message': '没有完整的用户事实与原话。'}
+        if temporary_name(key, message['content']):
+            return {'ok': False, 'message': '临时称呼仅用于本轮，不保存为长期事实。'}
         if len(key) > 40 or len(value) > 600 or len(evidence) > 1500:
             return {'ok': False, 'message': '记忆内容过长。'}
         roleplay = any(
@@ -261,6 +271,8 @@ def parse_candidates(data, source):
         ):
             continue
         if len(key) > 40 or len(value) > 600 or len(evidence) > 1500:
+            continue
+        if temporary_name(key, mapping[mid]):
             continue
         if re.search(r'假设|假如|如果|例如|比如|扮演|台词|角色设定|叶瞬光|api.?key|密钥|sk-', evidence, re.I):
             continue

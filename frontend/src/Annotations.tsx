@@ -52,9 +52,11 @@ function initialScope() {
 export function AnnotationProvider({
   conversationId,
   children,
+  enabled = true,
 }: {
   conversationId: string | null;
   children: ReactNode;
+  enabled?: boolean;
 }) {
   const [newScope, setNewScope] = useState(initialScope);
   const previous = useRef(conversationId);
@@ -87,6 +89,7 @@ export function AnnotationProvider({
     }
   }, [newScope]);
   useEffect(() => {
+    if (!enabled) return;
     const abort = new AbortController();
     const localChanges = new Map<string, AnnotationDraft | null>();
     changes.current = localChanges;
@@ -114,7 +117,7 @@ export function AnnotationProvider({
         if (!abort.signal.aborted) setError(failure.message);
       });
     return () => abort.abort();
-  }, [conversationId, newScope]);
+  }, [conversationId, newScope, enabled]);
   async function begin(prepare: () => Promise<AnnotationAnchor>, quote = '', view?: ViewAnchor) {
     const ticket = ++opening.current;
     const expected = scope;
