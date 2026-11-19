@@ -1,9 +1,10 @@
-# Shunguang Companion v0.7.3
+# Shunguang Companion v0.7.4
 
-[v0.7.3 release notes (Chinese)](versions/0.7.3/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
+[v0.7.4 release notes (Chinese)](versions/0.7.4/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.7.4](versions/0.7.4/README.md) improves QQ profile matching and character source selection, and explains how the latest message was processed.
 - [v0.7.3](versions/0.7.3/README.md): Add isolated QQ private/group/member profiles, per-entry visibility, filtered summaries and a compact control panel.
 - [v0.6.3](versions/0.6.3/README.md): Support standard CPython 3.11-3.14, discover installed interpreters, preserve project environments and data, and verify installation and retrieval across versions.
 - [v0.6.2](versions/0.6.2/README.md): Add continuous original-layout previews, positioned comments and on-demand local OCR; simplify chat tasks, model choices and the workbench, and filter low-value recall.

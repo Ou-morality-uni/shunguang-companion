@@ -96,6 +96,7 @@ export function QQChats({ chat }: { chat?: Chat } = {}) {
       if (timer) window.clearInterval(timer);
     };
   }, [selected, cursor, revision]);
+  const latest = page?.items.at(-1);
   return (
     <div className="qq-chat-layout">
       {!chat && (
@@ -192,10 +193,31 @@ export function QQChats({ chat }: { chat?: Chat } = {}) {
             </label>
           )}
           {switchNotice && <p role="status">{switchNotice}</p>}
+          {!cursor && page && (
+            <section aria-label="最近一条消息的处理状态" className="qq-chat-reply">
+              <strong>最近一条消息的处理状态</strong>
+              <div role="status">
+                {latest ? (
+                  <>
+                    <p>
+                      {latest.state === 'processing' && latest.reply
+                        ? '已生成，正在投递'
+                        : labels[latest.state] || latest.state}{' '}
+                      · {time(latest.stamp)}
+                    </p>
+                    {latest.error && <p>{latest.error}</p>}
+                  </>
+                ) : (
+                  <p>还没有已采集的消息，请检查 QQ 连接及此聊天的采集设置。</p>
+                )}
+              </div>
+            </section>
+          )}
           <div className="qq-actions">
             <Button
               variant="outline"
               onClick={() => {
+                if (cursor) setPage(null);
                 setCursor('');
                 setRevision((v) => v + 1);
               }}

@@ -1,6 +1,6 @@
 {
-  "version": "0.7.3",
-  "published_at": "2026-11-05",
-  "summary": "QQ独立手动档案、群成员逐条资料范围与摘要隔离，精简聊天管理面板。",
-  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.3/README.md"
+  "version": "0.7.4",
+  "published_at": "2026-11-16",
+  "summary": "修复QQ群成员档案误匹配和角色资料漏检，QQ聊天可查看最近消息的处理状态与原因。",
+  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.4/README.md"
 }

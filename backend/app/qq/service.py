@@ -358,7 +358,13 @@ class QQService:
             await fetch_images(self.repo, event)
         reply, natural = self.can_reply(event, policy)
         if not reply:
-            self.repo.event_state(event['id'], 'collected')
+            if not policy.collect:
+                reason = '该聊天的消息采集已关闭。'
+            elif policy.chat == 'off':
+                reason = '该聊天未开启聊天回复。'
+            else:
+                reason = '这条消息未 @ 机器人或使用指令。'
+            self.repo.event_state(event['id'], 'collected', reason)
             return
         now = time.time()
         # Natural replies coalesce for five seconds; only the newest queued event is considered.
@@ -367,7 +373,7 @@ class QQService:
                 await asyncio.sleep(5 - (now - event['stamp']))
             newer = self.repo.messages(event['bot'], event['kind'], event['target'], event['stamp'], now + 10)
             if newer and newer[-1]['id'] != event['id']:
-                self.repo.event_state(event['id'], 'collected')
+                self.repo.event_state(event['id'], 'collected', '短时间内收到更新的消息，这条仅保留采集记录。')
                 return
         policy = self.repo.policy(event['kind'], event['target'])
         if not self.can_reply(event, policy)[0]:
@@ -392,11 +398,6 @@ class QQService:
             jobs = self.jobs[key]
         image_text = await describe(self.repo, event, policy)
         profile_revision = profiles.stamp(self.repo, event['bot'], event['kind'], event['target'])
-        mentions = ' '.join(
-            str(item.get('data', {}).get('qq', ''))
-            for item in json.loads(event['segments'])
-            if item.get('type') == 'at'
-        )
         manual = await asyncio.to_thread(
             profiles.context,
             self.repo,
@@ -404,7 +405,8 @@ class QQService:
             event['kind'],
             event['target'],
             event['author'],
-            event['text'] + ' ' + mentions,
+            event['text'],
+            related_ids=profiles.mentions(event),
         )
         text = event['text'].removeprefix('/瞬光 ').strip()
         context = (
@@ -445,6 +447,7 @@ class QQService:
             reference=context_data + image_text + manual,
         )
         answer, failed = '', False
+        failure_message = ''
         sticker = {}
         async for chunk in response.body_iterator:
             for block in chunk.split('\n\n'):
@@ -455,8 +458,11 @@ class QQService:
                     failed = record.get('status') != 'complete'
                 elif block.startswith('event: error\n'):
                     failed = True
+                    failure_message = json.loads(block.split('data: ', 1)[1]).get('message', '')
         if failed or not answer.strip():
-            self.repo.event_state(event['id'], 'failed', '模型未完成回复，请检查模型连接', conversation=conversation)
+            self.repo.event_state(
+                event['id'], 'failed', failure_message or '模型未完成回复，请检查模型连接', conversation=conversation
+            )
             return
         if natural and '<保持安静>' in answer:
             self.repo.event_state(event['id'], 'quiet', conversation=conversation)

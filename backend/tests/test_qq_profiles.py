@@ -109,6 +109,26 @@ def test_group_reply_uses_only_eligible_manual_profiles(tmp_path, monkeypatch, e
         '90001',
         ProfileUpdate(revision=0, entries=[{'key': 'aliases', 'value': '摄影阿明', 'visibility': 'group'}]),
     )
+    for subject, name, public_fact in [
+        ('90002', '林', '短称呼成员资料'),
+        ('90003', '同名成员', '明确提及的成员资料'),
+        ('90004', '同名成员', '未提及的同名成员资料'),
+        ('90005', '另一个同名', '歧义成员甲资料'),
+        ('90006', '另一个同名', '歧义成员乙资料'),
+    ]:
+        write(
+            repo,
+            'group',
+            '20001',
+            subject,
+            ProfileUpdate(
+                revision=0,
+                entries=[
+                    {'key': 'name', 'value': name},
+                    {'key': 'identity', 'value': public_fact, 'visibility': 'group'},
+                ],
+            ),
+        )
     config.save_config(config.ModelConfig(llm_model='offline', llm_api_key='synthetic'))
     prompts = []
 
@@ -144,7 +164,13 @@ def test_group_reply_uses_only_eligible_manual_profiles(tmp_path, monkeypatch, e
             'user_id': 30001,
             'time': int(time.time()),
             'message_id': 1,
-            'message': [{'type': 'text', 'data': {'text': '/瞬光 这次我叫阿林，我和40001及摄影阿明聊聊摄影'}}],
+            'message': [
+                {
+                    'type': 'text',
+                    'data': {'text': '/瞬光 这次我叫阿林，我和40001及摄影阿明聊聊森林摄影。另一个同名也在。'},
+                },
+                {'type': 'at', 'data': {'qq': '90003'}},
+            ],
         }
     )
 
@@ -157,14 +183,22 @@ def test_group_reply_uses_only_eligible_manual_profiles(tmp_path, monkeypatch, e
     asyncio.run(run())
     combined = ''.join(prompts)
     assert '"subject": "90001"' in combined
-    for value in ['本群摄影交流', '摄影小林', '本人独有项目', '群内阿周', '摄影阿明']:
+    for value in ['本群摄影交流', '摄影小林', '本人独有项目', '群内阿周', '摄影阿明', '明确提及的成员资料']:
         assert value in combined
-    for value in ['其他成员受限资料', '其他群称呼', '私聊专属称呼']:
+    for value in [
+        '其他成员受限资料',
+        '其他群称呼',
+        '私聊专属称呼',
+        '短称呼成员资料',
+        '未提及的同名成员资料',
+        '歧义成员甲资料',
+        '歧义成员乙资料',
+    ]:
         assert value not in combined
     assert bool(sent) is not edit_during
     store, conversation, _ = service.scope('10001', 'group', '20001', '30001')
     users = [m['content'] for m in store.messages(conversation) if m['role'] == 'user']
-    assert users == ['这次我叫阿林，我和40001及摄影阿明聊聊摄影']
+    assert users == ['这次我叫阿林，我和40001及摄影阿明聊聊森林摄影。另一个同名也在。']
     assert store.list_memories() == []
 
 
@@ -199,6 +233,21 @@ def test_summary_filters_profiles_in_every_stage_and_revokes_stale_delivery(tmp_
             revision=0, entries=[{'key': 'name', 'value': '公开小林'}, {'key': 'ongoing', 'value': '受限长期事项'}]
         ),
     )
+    for subject, name, value in [
+        ('30002', '林', '仅森林误匹配'),
+        ('30003', '被点名成员', '明确提及背景'),
+        ('30004', '虚构提及成员', '模型虚构污染'),
+    ]:
+        write(
+            repo,
+            'group',
+            '20001',
+            subject,
+            ProfileUpdate(
+                revision=0,
+                entries=[{'key': 'name', 'value': name}, {'key': 'identity', 'value': value, 'visibility': 'group'}],
+            ),
+        )
     now = int(time.time())
     for i in range(40):
         repo.capture(
@@ -210,7 +259,10 @@ def test_summary_filters_profiles_in_every_stage_and_revokes_stale_delivery(tmp_
                 'user_id': 30001,
                 'message_id': i,
                 'time': now - 2,
-                'message': [{'type': 'text', 'data': {'text': '讨论实际事项。' * 70}}],
+                'message': [
+                    {'type': 'text', 'data': {'text': '讨论森林事项。' * 70}},
+                    {'type': 'at', 'data': {'qq': '30003'}},
+                ],
             }
         )
     config.save_config(config.ModelConfig(llm_model='offline', llm_api_key='synthetic'))
@@ -221,7 +273,7 @@ def test_summary_filters_profiles_in_every_stage_and_revokes_stale_delivery(tmp_
             prompts.append(str(messages))
             if edit == 'generating' and len(prompts) == 1:
                 write(repo, 'group', '20001', '30001', ProfileUpdate(revision=1, entries=[]))
-            return AIMessage(content='30001 的讨论摘要')
+            return AIMessage(content='30001 的讨论摘要，30004 也来了。')
 
     class Bridge:
         async def call(self, *args, **kwargs):
@@ -239,7 +291,10 @@ def test_summary_filters_profiles_in_every_stage_and_revokes_stale_delivery(tmp_
     assert prompts
     for prompt in prompts:
         assert '关注最终决定' in prompt
+        assert '明确提及背景' in prompt
         assert '受限长期事项' not in prompt
+        assert '仅森林误匹配' not in prompt
+        assert '模型虚构污染' not in prompt
     if edit == 'none':
         assert len(prompts) > 2  # Includes the merge stage.
         assert '公开小林' in prompts[0]

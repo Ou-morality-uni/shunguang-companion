@@ -10,7 +10,7 @@
 .\.venv\Scripts\python.exe scripts/package-server.py --output 服务器部署
 ```
 
-得到 `ye-shunguang-server-lite-0.7.3-linux.zip` 与 `.zip.sha256`，包内有已构建前端，无需服务器安装 Node。包不含个人密钥、聊天、模型权重，也不是离线镜像包；初次构建需要 Docker Hub 和 PyPI 网络。
+得到 `ye-shunguang-server-lite-0.7.4-linux.zip` 与 `.zip.sha256`，包内有已构建前端，无需服务器安装 Node。包不含个人密钥、聊天、模型权重，也不是离线镜像包；初次构建需要 Docker Hub 和 PyPI 网络。
 
 下载者如只取得 GitHub 源码，同样需要先构建前端并打包。不能将源码 ZIP 当成已经构建的服务器部署包。已有维护者提供的部署包可直接使用。
 
@@ -18,7 +18,7 @@
 
 1. 使用自己的 SSH 登录方式连接服务器，核对 `cat /etc/os-release`、`uname -m`、`free -h`、`df -h /`、`sudo ss -lntp`。检查已有业务，不为部署重装系统或强杀进程。
 2. 按 [Docker 官方 Ubuntu 安装指南](https://docs.docker.com/engine/install/ubuntu/) 准备 Docker Engine 28+ 和 Compose 插件；已有合格版本直接复用。至少留约 10 GB 初始磁盘余量，后续关注图片和备份增长。
-3. 上传部署包和校验文件，执行 `sha256sum -c ye-shunguang-server-lite-0.7.3-linux.zip.sha256`，解压到新的空目录，例如 `/opt/shunguang-0.7.3`，进入包内目录，运行 `sudo python3 manage.py verify`。
+3. 上传部署包和校验文件，执行 `sha256sum -c ye-shunguang-server-lite-0.7.4-linux.zip.sha256`，解压到新的空目录，例如 `/opt/shunguang-0.7.4`，进入包内目录，运行 `sudo python3 manage.py verify`。
 4. 默认只安装 Web：
 
    ```bash

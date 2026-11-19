@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, expect, test, vi } from 'vitest';
 import { request } from './api';
 import { QQSpace } from './QQSpace';
@@ -148,7 +148,61 @@ test('QQ chat shows received images, reply sticker and delivery state in its own
   expect(await screen.findByText('一只猫')).toBeTruthy();
   expect(screen.getByAltText('QQ 收到的图片')).toBeTruthy();
   expect(screen.getByAltText('叶瞬光：在呢')).toBeTruthy();
-  expect(screen.getByText(/发送结果待确认/)).toBeTruthy();
+  expect(
+    within(screen.getByRole('region', { name: '最近一条消息的处理状态' })).getByText(/发送结果待确认/),
+  ).toBeTruthy();
+});
+
+test('latest QQ status is tied to the current chat and the newest page', async () => {
+  vi.mocked(request).mockImplementation((path) => {
+    if (path.startsWith('/qq/chats?')) {
+      return Promise.resolve({
+        items: [
+          { kind: 'group', target: '20001', name: '测试群甲', count: 2, stamp: 2 },
+          { kind: 'group', target: '20002', name: '测试群乙', count: 0, stamp: 0 },
+        ],
+        total: 2,
+      });
+    }
+    const latest = path.endsWith('before=');
+    const error = latest ? '这条消息未 @ 机器人或使用指令。' : '旧的超时记录';
+    return Promise.resolve({
+      items: path.includes('20002')
+        ? []
+        : [
+            {
+              id: latest ? 'new' : 'old',
+              author: '30001',
+              name: '测试成员',
+              stamp: latest ? 2 : 1,
+              text: latest ? '新消息' : '旧消息',
+              reply: '',
+              state: latest ? 'collected' : 'failed',
+              error,
+              images: [],
+            },
+          ],
+      has_more: latest,
+      next_cursor: latest ? 'new' : '',
+    });
+  });
+  render(<QQChats />);
+  fireEvent.change(screen.getByRole('textbox', { name: '搜索 QQ 聊天名称或号码' }), {
+    target: { value: '测试群' },
+  });
+  fireEvent.click(await screen.findByRole('button', { name: /测试群甲/ }));
+  const status = () => screen.getByRole('region', { name: '最近一条消息的处理状态' });
+  await screen.findByText('新消息');
+  expect(within(status()).getByText(/未 @ 机器人/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: '更早消息' }));
+  await screen.findByText('旧消息');
+  expect(screen.queryByRole('region', { name: '最近一条消息的处理状态' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: '最新消息' }));
+  await screen.findByText('新消息');
+  expect(within(status()).getByText(/未 @ 机器人/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: /测试群乙/ }));
+  expect(await screen.findByText(/检查 QQ 连接及此聊天的采集设置/)).toBeTruthy();
+  expect(screen.queryByText(/未 @ 机器人/)).toBeNull();
 });
 
 test('QQ panel shows safe defaults and explains browser independent background processing', async () => {

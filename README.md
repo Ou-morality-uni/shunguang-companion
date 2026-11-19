@@ -1,9 +1,10 @@
-# 瞬光伴行 v0.7.3
+# 瞬光伴行 v0.7.4
 
-[v0.7.3 更新说明](versions/0.7.3/README.md) · [QQ 接入](docs/qq-setup.md) · [服务器部署](docs/server-deployment.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md)
+[v0.7.4 更新说明](versions/0.7.4/README.md) · [QQ 接入](docs/qq-setup.md) · [服务器部署](docs/server-deployment.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md)
 
 [English README](README.en.md) · [安装与下载清单](INSTALL_LIST.md) · [BGE-M3 模型 Release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 
+- [v0.7.4](versions/0.7.4/README.md)：修复 QQ 成员档案误匹配和角色资料漏检，新增最近一条 QQ 消息的处理状态和原因。
 - [v0.7.3](versions/0.7.3/README.md)：QQ私聊／群／成员手动档案、逐条使用范围、摘要隔离和精简控制面板。
 - [v0.7.2](versions/0.7.2/README.md)：统一安装启动入口、完整／轻量选择、可选 QQ 公开接入及服务器部署，包含0.7.1质量改进。
 - [v0.6.6](versions/0.6.6/README.md)：阅读总结直接回到聊天，移除内部工具卡与重复任务面板，精简超时重试，沿用后台自动记忆，上传记录显示时分。
@@ -108,7 +109,7 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File .\scripts\install.ps1 -M
 
 工程进度、交付清单、验收报告、私人日志和原开发Git历史不在公开仓库；README与安装清单是面向使用者的操作文档。安装不会替你填写API、购买服务、训练声音或上传参考音频。
 
-## 开始使用 0.7.2
+## 开始使用
 
 - **模型选择**：在设置中保存可用的 API 连接后，可从输入区按服务切换模型及支持的思考强度；每个聊天独立记住选择，新聊天使用默认配置。
 - **文件阅读与修改**：在聊天中拖入或上传文件，再发送自然语言要求。普通阅读的总结直接出现在聊天正文，不默认生成文件，也不展示内部工具卡或“状态与操作”面板；明确要求修改、保存或制作文件时才交付成果。修改生成新副本，默认沿用对应文件类型，不自动额外导出 PDF。PDF 无法可靠保留原版式时会简短说明并停止，不会静默转为 Word。读取超时后可点击“再试一次”，复用已读内容继续总结。

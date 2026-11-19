@@ -111,6 +111,56 @@ def test_qq_chat_view_is_paginated_and_serves_only_cached_images(tmp_path, monke
         assert client.get('/api/qq/chats/private/30001?limit=10000').status_code == 422
 
 
+@pytest.mark.parametrize(
+    ('mode', 'text', 'state', 'reason'),
+    [
+        ('off', '只是采集', 'collected', '未开启聊天回复'),
+        ('mention', '普通群消息', 'collected', '未 @ 机器人或使用指令'),
+        ('mention', '/瞬光 测试模型', 'failed', '模型响应超时'),
+    ],
+)
+def test_qq_chat_records_explain_why_a_message_did_not_get_a_reply(monkeypatch, mode, text, state, reason):
+    import time
+
+    from fastapi.testclient import TestClient
+
+    from backend.app.main import app
+    from backend.app.qq.models import Connection, Policy
+
+    class TimedOut:
+        def bind_tools(self, _):
+            return self
+
+        async def astream(self, _):
+            await asyncio.sleep(0)
+            raise TimeoutError('private upstream error')
+            yield  # Streaming protocol.
+
+    config.save_config(config.ModelConfig(llm_model='offline', llm_api_key='synthetic'))
+    monkeypatch.setattr('backend.app.routes.chat.build_model', lambda _: TimedOut())
+    with TestClient(app) as client:
+        repo = runtime.qq.repo
+        repo.save_connection(Connection(bot_id='10001'))
+        repo.save_policy('group', '20001', Policy(collect=True, chat=mode))
+        event = repo.capture(
+            {
+                'post_type': 'message',
+                'message_type': 'group',
+                'self_id': 10001,
+                'group_id': 20001,
+                'user_id': 30001,
+                'time': int(time.time()),
+                'message_id': 1,
+                'message': [{'type': 'text', 'data': {'text': text}}],
+            }
+        )
+        client.portal.call(runtime.qq.process, event)
+        record = client.get('/api/qq/chats/group/20001').json()['items'][0]
+        assert record['state'] == state
+        assert reason in record['error']
+        assert 'private upstream error' not in record['error']
+
+
 def test_qq_image_reading_reaches_shared_chat_and_keeps_the_selected_sticker(tmp_path, monkeypatch):
     import time
 

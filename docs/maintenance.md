@@ -39,7 +39,7 @@
 
 ## 开发检查
 
-使用 Python 3.11+、Node.js 22。在项目根目录、激活虚拟环境后运行：
+使用 Python 3.11～3.14 和 Node.js 24。在项目根目录、激活虚拟环境后运行：
 
 ```sh
 python -m pip install -r backend/requirements-dev.txt

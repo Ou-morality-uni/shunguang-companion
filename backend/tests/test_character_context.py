@@ -136,7 +136,10 @@ def test_chat_background_has_facts_with_and_without_rag(rag_ready, tmp_path, mon
 
     def search(query, limit, allow_spoilers):
         searches.append((query, allow_spoilers))
-        return [{'title': '叶瞬光 · 拜师', 'text': '般岳把兄妹送往云岿山，拜仪玄为师。'}]
+        return [
+            {'title': '叶瞬光 · 武器', 'text': '使用青溟剑。'},
+            {'title': '剧情记录', 'text': '般岳把叶瞬光兄妹送往云岿山，拜仪玄为师。'},
+        ]
 
     monkeypatch.setattr(rag, 'search', search)
     seen = []
@@ -152,9 +155,20 @@ def test_chat_background_has_facts_with_and_without_rag(rag_ready, tmp_path, mon
         assert 'event: done' in response.text and 'event: error' not in response.text
         conversation = client.get('/api/conversations').json()[0]
         reply = client.get(f'/api/conversations/{conversation["id"]}/messages').json()[-1]
+        follow_up = client.post(
+            '/api/chat', json={'conversation_id': conversation['id'], 'content': '那你拜师的时候多大？'}
+        )
+        assert 'event: done' in follow_up.text
+        follow_up_reply = client.get(f'/api/conversations/{conversation["id"]}/messages').json()[-1]
     assert '我的师父是仪玄' in seen[0].content
-    assert searches == ([('叶瞬光 你拜师的经过是什么', False)] if rag_ready else [])
+    assert searches == (
+        [('叶瞬光 你拜师的经过是什么', False), ('叶瞬光 那你拜师的时候多大？', False)] if rag_ready else []
+    )
     assert len(reply['context_sources']) == len(reply['sources']) == int(rag_ready)
+    assert follow_up_reply['sources'] == reply['sources']
+    if rag_ready:
+        assert reply['sources'][0]['title'] == '剧情记录'
+        assert any('般岳把叶瞬光兄妹送往云岿山' in message.content for message in seen)
     assert runtime.store.list_memories() == []
 
 

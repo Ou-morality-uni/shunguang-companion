@@ -1468,7 +1468,7 @@ export function CompanionSettings({
                     onChange={(e) => setTools({ daily_limit: Number(e.target.value) })}
                   />
                   <span className="field-hint">
-                    今日已用 {tools.usage?.used ?? 0} 次。失败请求也计数；这是次数限制，不是账单金额保证。0
+                    今日已用 {tools.usage?.used ?? 0} 次。失败请求也计数；这是次数限制，不是账单金额保证。
                     表示禁止付费搜索。
                   </span>
                 </label>

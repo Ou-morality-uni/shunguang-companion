@@ -116,47 +116,65 @@ def stamp(repo, bot, kind, target):
     return int(repo.get(f'profiles_revision:{bot}:{kind}:{target}', 0))
 
 
-def named(entries, text):
-    return any(
-        name.strip() and name.strip() in text
+def mentions(event):
+    return {
+        segment['data']['qq']
+        for segment in json.loads(event['segments'])
+        if segment['type'] == 'at' and re.fullmatch(r'[0-9]{5,20}', segment['data']['qq'])
+    }
+
+
+def matched_names(entries, text):
+    names = {
+        name.strip().casefold()
         for entry in entries
         if entry['visibility'] == 'group' and entry['key'] in ('name', 'aliases')
         for name in re.split(r'[,，、\n;；]', entry['value'])
-    )
+        if name.strip()
+    }
+    for name in names:
+        escaped = re.escape(name)
+        if len(name) <= 2:
+            if re.search(rf'[@＠][ \t]*{escaped}(?!\w)', text) or f'「{name}」' in text or f'“{name}”' in text:
+                yield name
+        elif name.isascii():
+            if re.search(rf'(?<![a-z0-9_]){escaped}(?![a-z0-9_])', text):
+                yield name
+        elif name in text:
+            yield name
 
 
-def context(repo, bot, kind, target, author='', text='', *, summary=False):
+def context(repo, bot, kind, target, author='', text='', *, related_ids=(), summary=False):
     """Select before serializing: restricted fields never enter another member's request."""
-    mentioned = set(re.findall(r'(?<!\d)\d{5,20}(?!\d)', text))
-    requested = list(dict.fromkeys(['', author, *sorted(mentioned)]))[:34]
+    related = set(sorted(set(related_ids))[:32])
+    numbers = set(re.findall(r'(?<!\d)[0-9]{5,20}(?!\d)', text))
+    related.update(sorted(numbers - related)[: 32 - len(related)])
+    requested = related | {'', author} if kind == 'group' else {''}
+    text = text.casefold()
+    selected_profiles = {}
+    name_owners = {}
+    named_profiles = {}
     with repo.connect() as db:
-        rows = db.execute(
-            'SELECT subject,value FROM manual_profiles WHERE bot=? AND kind=? AND target=? AND subject IN ('
-            + ','.join('?' for _ in requested)
-            + ')',
-            (bot, kind, target, *requested),
-        ).fetchall()
-        candidates = []
-        if kind == 'group':
-            # Stream profiles until 32 named matches; don't limit to the first members in a large group.
-            for row in db.execute(
-                'SELECT subject,value FROM manual_profiles WHERE bot=? AND kind=? AND target=? ORDER BY subject',
-                (bot, kind, target),
-            ):
-                if row['subject'] not in requested and named(json.loads(row['value']), text):
-                    candidates.append(row)
-                    if len(candidates) == 32:
-                        break
-    by_subject = {r['subject']: r for r in [*candidates, *rows]}
-    if kind == 'private':
-        by_subject = {'': by_subject['']} if '' in by_subject else {}
+        for row in db.execute(
+            'SELECT subject,value FROM manual_profiles WHERE bot=? AND kind=? AND target=? ORDER BY subject',
+            (bot, kind, target),
+        ):
+            subject, entries = row['subject'], json.loads(row['value'])
+            if subject in requested:
+                selected_profiles[subject] = entries
+            if kind == 'group' and subject:
+                for name in matched_names(entries, text):
+                    name_owners.setdefault(name, set()).add(subject)
+                    named_profiles[subject] = entries
+    unambiguous = {next(iter(owners)) for owners in name_owners.values() if len(owners) == 1}
+    for subject in sorted(unambiguous - requested)[:32]:
+        selected_profiles[subject] = named_profiles[subject]
     records, budget = [], 6000
-    for subject, row in sorted(by_subject.items(), key=lambda pair: (pair[0] != author, pair[0] != '', pair[0])):
-        entries = json.loads(row['value'])
+    for subject in sorted(
+        selected_profiles, key=lambda item: (item != author, item != '', item not in requested, item)
+    ):
+        entries = selected_profiles[subject]
         public = [e for e in entries if e['visibility'] == 'group']
-        related = subject in mentioned or named(entries, text)
-        if kind == 'group' and subject and subject != author and not related:
-            continue
         selected = entries if kind == 'private' or (subject == author and not summary) else public
         for entry in sorted(selected, key=lambda e: (e['key'] != 'name', e['key'] != 'communication')):
             if not summary and entry['key'] == 'summary_focus':

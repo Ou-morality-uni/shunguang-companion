@@ -108,9 +108,6 @@ def relevant_sources(query, sources, limit=4):
     mentioned = {word for word in entities() if word in query and word != '绝区零'}
     if len(mentioned) > 1:
         mentioned.discard('叶瞬光')
-    title_matches = [source for source in sources if any(word in str(source.get('title', '')) for word in mentioned)]
-    if title_matches:
-        sources = title_matches
     topic_terms = {
         '阵营': ('阵营', '门派', '云岿山', '所属'),
         '武器': ('武器', '剑', '刀', '兵器'),
@@ -122,22 +119,25 @@ def relevant_sources(query, sources, limit=4):
         '身世': ('身世', '父母', '童年', '般岳', '旧都陷落'),
         '秘境': ('秘境', '古阵', '矿区旧址', '幻境'),
     }
-    result = []
-    seen = set()
+    titled, body = [], []
     for source in sources:
         text = str(source.get('text', ''))
         heading = str(source.get('title', ''))
-        if mentioned and not any(word in heading or word in text for word in mentioned):
+        title_match = any(word in heading for word in mentioned)
+        if mentioned and not title_match and not any(word in text for word in mentioned):
             continue
-        if any(
-            topic in query and not any(term in heading + text for term in terms) for topic, terms in topic_terms.items()
-        ):
+        # An unrelated section heading cannot supply the topic for a passing mention in its body.
+        evidence = heading + '\n' + text if title_match or not mentioned else text
+        if any(topic in query and not any(term in evidence for term in terms) for topic, terms in topic_terms.items()):
             continue
         if not mentioned:
             terms = re.findall(r'[\u4e00-\u9fff]{2,}|[a-zA-Z]{3,}', query)
             grams = {term[i : i + 2] for term in terms for i in range(len(term) - 1)}
             if not grams or sum(term in heading + text for term in grams) / len(grams) < 0.3:
                 continue
+        (titled if title_match else body).append((text, source))
+    result, seen = [], set()
+    for text, source in titled + body:
         if text in seen:
             continue
         seen.add(text)
