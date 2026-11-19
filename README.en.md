@@ -1,6 +1,8 @@
-# Shunguang Companion v0.7.4
+# Shunguang Companion v0.7.5
 
-[v0.7.4 release notes (Chinese)](versions/0.7.4/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
+[v0.7.5 release notes (Chinese)](versions/0.7.5/README.md) · [TTS setup (Chinese)](docs/tts.md) · [LibreOffice installation (Chinese)](versions/0.6.1/LibreOffice-install.md)
+
+> **Windows change in v0.7.5:** Run `Install.bat` for first-time setup, updates, or repairs, then run `Start_up.bat`. Use `Install.bat -Setup` to change the install mode. This replaces the automatic install/update steps shown below.
 
 [中文 README](README.md) · [Install list](INSTALL_LIST.md) · [BGE-M3 model release](https://github.com/Ou-morality-uni/shunguang-companion/releases/tag/bge-m3-5617a9f)
 

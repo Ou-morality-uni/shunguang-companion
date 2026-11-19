@@ -27,7 +27,7 @@
 
 ## 0.7.2 安装与共同源码边界
 
-`Start_up.bat` → `start-console.ps1` 管理首次选择和前台服务；`prepare-launch.ps1` 管理非敏感安装选择与输入变更检测，`windows-runtime.ps1` 只准备官方校验运行时，`install-project.py` 负责所选依赖和安装清单。`project_lock.py` 让安装器与桌面／LAN前台服务互斥；不依赖已弃用的健康字段来替代进程互斥。
+`Install.bat` → `install.ps1` 管理首装、更新和修复，`Install.bat -Setup` 重新选择安装模式和可选指南。`windows-runtime.ps1` 准备经过官方校验的运行时，`install-project.py` 负责所选依赖和安装清单。`Start_up.bat` → `start-console.ps1` 只检查就绪条件和启动前台服务，遇到不完整或过期的安装时提示运行 `Install.bat`。`prepare-launch.ps1` 提供共用检查与安装选择读取；桌面入口保留启动锁，`project_lock.py` 继续让安装器与桌面／LAN 前台服务互斥。
 
 本地与公开源码共用 `edition.py`／`edition.tsx` 的QQ装配点，不再在公开导出时剔除QQ。后端 `turn.py`、`turn_stream.py`、`turn_lifecycle.py` 承担共同回合，HTTP路由不重复维护第二套编排；QQ权限与独立库仍由QQ模块管理。只有禁用的后台服务不应进行高频轮询。
 

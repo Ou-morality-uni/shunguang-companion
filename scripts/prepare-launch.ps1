@@ -21,7 +21,7 @@ function Read-InstallPreferences {
         $value = Get-Content -LiteralPath 'data/install/preferences.json' -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($value.mode -notin @('full','lite') -or $value.qq -isnot [bool]) { throw 'Invalid preferences' }
         return $value
-    } catch { throw '安装选择记录损坏。保留 data，使用 Start_up.bat -Setup 重新选择。' }
+    } catch { throw '安装选择记录损坏。保留 data，运行 Install.bat -Setup 重新选择。' }
 }
 
 function Test-FrontendBuild {
@@ -58,37 +58,21 @@ function Show-InstallChoices {
     return [PSCustomObject]@{ mode = $(if ($choice -eq '1') { 'full' } else { 'lite' }); qq = ($qq -eq '2'); office_guide = ($office -eq '2') }
 }
 
-function Initialize-LaunchEnvironment([switch]$Setup, [int]$Port) {
-    $preferences = if ($Setup) { $null } else { Read-InstallPreferences }
-    $freshChoices = $Setup -or -not $preferences
-    if ($freshChoices) { $preferences = Show-InstallChoices }
-    $fingerprint = Get-InstallFingerprint
-    $requiresInstall = $freshChoices -or -not (Test-Path -LiteralPath '.venv/Scripts/python.exe') -or -not (Test-FrontendBuild)
-    if (-not $freshChoices) {
-        $requiresInstall = $requiresInstall -or $preferences.fingerprint -ne $fingerprint
-        if (-not $requiresInstall) {
-            & '.\.venv\Scripts\python.exe' -I -c 'import fastapi,uvicorn,langchain_openai,imageio_ffmpeg' 2>$null
-            $requiresInstall = $LASTEXITCODE -ne 0
-        }
-        if ($requiresInstall) {
-            Write-Host '依赖或前端输入已变更／环境不完整，需要更新；已有 data 保留。'
-            if ((Read-Host '输入 Y 更新，其他输入退出') -notmatch '^[yY]$') { throw '尚未更新，请准备好后重新启动。' }
-        }
+function Assert-LaunchEnvironment {
+    $preferences = Read-InstallPreferences
+    if (-not $preferences) { throw '尚未完成安装。请先运行 Install.bat。' }
+    if (-not (Test-Path -LiteralPath '.venv/Scripts/python.exe' -PathType Leaf)) {
+        throw '缺少项目的 Python 虚拟环境。请运行 Install.bat 修复。'
     }
-    if ($requiresInstall) {
-        $installArgs = @('-NoProfile','-ExecutionPolicy','Bypass','-File',(Join-Path $PSScriptRoot 'install.ps1'),'-Bootstrap','-Port', $Port)
-        if ($preferences.mode -eq 'lite') { $installArgs += '-Lite' } else { $installArgs += '-Full' }
-        & powershell.exe @installArgs
-        if ($LASTEXITCODE -ne 0) { throw '安装未完成，请修复窗口显示的问题后重试；安装选择尚未覆盖。' }
-        $preferences | Add-Member -NotePropertyName fingerprint -NotePropertyValue $fingerprint -Force
-        New-Item -ItemType Directory -Path 'data/install' -Force | Out-Null
-        $temporary = Join-Path 'data/install' ('preferences-' + [guid]::NewGuid().ToString('N') + '.tmp')
-        [IO.File]::WriteAllText((Join-Path (Get-Location) $temporary), ($preferences | ConvertTo-Json), [Text.UTF8Encoding]::new($false))
-        Move-Item -LiteralPath $temporary -Destination 'data/install/preferences.json' -Force
+    if (-not (Test-FrontendBuild)) { throw '前端构建产物缺失或不完整。请运行 Install.bat。' }
+    try { $fingerprint = Get-InstallFingerprint }
+    catch { throw ('无法验证安装输入，请检查项目文件并运行 Install.bat。' + $_.Exception.Message) }
+    if ($preferences.fingerprint -ne $fingerprint) {
+        throw '安装未完成或依赖／前端输入已变更。请运行 Install.bat 更新。'
     }
-    if ($freshChoices -and -not $preferences.qq) {
-        & '.\.venv\Scripts\python.exe' 'scripts/disable-local-qq.py'
-        if ($LASTEXITCODE -ne 0) { throw 'QQ 关闭设置未完成，请在网页检查连接开关后重试。' }
-    }
-    if ($preferences.qq) { Write-Host 'QQ：按 docs/qq-setup.md 安装桥接后，在网页“QQ 接入”配置。' }
+    try {
+        & '.\.venv\Scripts\python.exe' -I -c 'import fastapi,uvicorn,langchain_openai,imageio_ffmpeg' 2>$null
+        $ready = $LASTEXITCODE -eq 0
+    } catch { $ready = $false }
+    if (-not $ready) { throw '项目 Python 环境无法运行或缺少依赖。请运行 Install.bat 修复。' }
 }

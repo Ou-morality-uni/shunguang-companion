@@ -499,7 +499,7 @@ def main():
         if args.rag_only:
             print('[5/5] Retrieval installation ' + receipt['status'] + '.', flush=True)
         else:
-            print('[5/5] Installation ' + receipt['status'] + '. Run Start_up.bat to open the app.', flush=True)
+            print('[5/5] Installation ' + receipt['status'] + '.', flush=True)
         return 0
     return 1
 

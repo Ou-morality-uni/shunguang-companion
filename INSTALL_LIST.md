@@ -2,14 +2,14 @@
 
 完整与轻量的步骤有所区别，以下检索组件仅在完整安装时处理。实际结果以每次安装生成的清单为准。
 
-统一入口：根目录 `Start_up.bat`，首次进入安装向导，之后快速启动。`Install.bat` 保留为明确安装／修复入口。
+先双击根目录的 `Install.bat` 安装、更新或修复；成功后再双击 `Start_up.bat` 启动。启动入口不下载或安装依赖。
 
 本文件列出默认完整安装涉及的组件。每次安装的实际包名、版本、处理状态和模型文件SHA256会写入 **`data/install-list.md`**；详细阶段记录在 `data/install/result.json`。这些本机记录不上传GitHub。
 
 ## 基础条件与首次选择
 
 - Windows10/11 x64；联网访问官方运行时、PyPI、npm和完整模式的模型源。
-- Start_up.bat向导选择完整／轻量、QQ与LibreOffice指南。完整至少12GiB，轻量至少3GiB可用磁盘。
+- `Install.bat` 首装向导提供完整／轻量、QQ 与 LibreOffice 指南选项，`Install.bat -Setup` 可重新选择。完整至少 12 GiB，轻量至少 3 GiB 可用磁盘。
 - 优先复用兼容标准64位CPython3.11～3.14及Node24；缺失时自动准备Python3.13.12和Node24.22.2到当前用户专用目录，使用锁定SHA-256；Python安装器另验PSF签名。不修改系统PATH。
 - 轻量跳过torch、transformers、Qdrant依赖和BGE-M3；共享依赖仍安装。QQ桥接和LibreOffice由用户按指南安装，不由项目自动下载。
 - GPU驱动由用户管理，不自动安装。首次VC++运行库安装可能需要系统授权。
@@ -61,7 +61,7 @@
 
 ## English
 
-Double-click `Install.bat`. Standard 64-bit CPython 3.11-3.14 and Node.js24 are prerequisites, not downloads. Existing project environments are reused; a new installation selects an available supported interpreter. If missing, it downloads the signed Microsoft Visual C++ runtime from Microsoft. The installer installs the pinned backend/frontend dependencies, FFmpeg bundled with its Python wheel, PyTorch, Transformers, Qdrant's local Python runtime, and the full verified BGE-M3 release. It creates an empty SQLite database, builds the bundled knowledge index, and builds the frontend. No MySQL, Docker, CUDA Toolkit, or separate Qdrant service is needed.
+Double-click `Install.bat`, then double-click `Start_up.bat` after installation succeeds. The installer reuses compatible 64-bit CPython 3.11–3.14 and Node.js 24, or prepares verified official copies if needed. It prepares the signed Microsoft Visual C++ runtime if required, installs pinned dependencies, and builds the frontend. Full installation also installs retrieval dependencies and the verified BGE-M3 model and builds a local index. No MySQL, Docker, CUDA Toolkit, or separate Qdrant service is needed.
 
 LibreOffice is a separate, manually installed dependency for 0.6.1 Office previews, PDF export, and formula recalculation. Neither installation nor startup downloads it. See the [installation guide (Chinese)](versions/0.6.1/LibreOffice-install.md); 0.6.1 detects the recommended project-local `tools/LibreOffice/program` directory automatically. Other custom locations can use PATH. It is not required for chat or Markdown summaries.
 

@@ -271,6 +271,7 @@ def test_install_entry_accepts_explicit_python_without_installing(entry, install
     )
     assert result.returncode == 0, result.stdout + result.stderr
     assert json.loads(result.stdout)['version'][:2] == list(sys.version_info[:2])
+    assert not (installer_entry_scripts.parent / 'data').exists()
 
 
 @pytest.fixture

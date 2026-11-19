@@ -14,8 +14,8 @@ function Test-AppReady {
 }
 
 try {
+    if ($Setup) { throw '重新配置已移至 Install.bat -Setup。请先正常停止后端。' }
     if (Test-AppReady) {
-        if ($Setup) { throw '请先正常停止原后端，再重新进入安装向导。' }
         Write-Host '瞬光伴行已运行，正在打开页面。'
         Write-Host '日志在原来的后端窗口中。停止服务请关闭原后端窗口。'
         if (-not $NoBrowser) { Start-Process $url }
@@ -32,7 +32,7 @@ try {
     try { $launchLock = [IO.File]::Open((Join-Path $projectRoot 'data/install/launcher.lock'), 'OpenOrCreate', 'ReadWrite', 'None') }
     catch { throw '另一个窗口正在安装或运行本项目，请回到原窗口。' }
     . (Join-Path $PSScriptRoot 'prepare-launch.ps1')
-    Initialize-LaunchEnvironment -Setup:$Setup -Port $Port
+    Assert-LaunchEnvironment
     if (-not (Test-Path -LiteralPath 'scripts/run-console.py')) {
         throw '缺少 scripts/run-console.py，请将本脚本放在完整项目的根目录。'
     }

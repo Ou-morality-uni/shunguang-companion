@@ -1,6 +1,6 @@
 {
-  "version": "0.7.4",
-  "published_at": "2026-11-16",
-  "summary": "修复QQ群成员档案误匹配和角色资料漏检，QQ聊天可查看最近消息的处理状态与原因。",
-  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.4/README.md"
+  "version": "0.7.5",
+  "published_at": "2026-11-19",
+  "summary": "Windows 安装与启动分离：先运行 Install.bat，再运行 Start_up.bat；修复 Node.js 24 探测失败。",
+  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.5/README.md"
 }

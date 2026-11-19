@@ -39,7 +39,7 @@ function Initialize-ProjectPython([string]$PythonPath) {
     }
     $target = Split-Path -Parent $cached
     $setup = Start-Process -FilePath $installer -ArgumentList @('/quiet', 'InstallAllUsers=0', "TargetDir=`"$target`"", 'PrependPath=0', 'Include_launcher=0', 'Include_test=0', 'Include_doc=0', 'Shortcuts=0') -Wait -PassThru -WindowStyle Hidden
-    if ($setup.ExitCode -in @(1641, 3010)) { throw 'Restart Windows, then rerun Start_up.bat.' }
+    if ($setup.ExitCode -in @(1641, 3010)) { throw 'Restart Windows, then rerun Install.bat.' }
     if ($setup.ExitCode -ne 0) { throw "Python installation failed (exit $($setup.ExitCode))." }
     return Select-ProjectPython -PythonPath $cached
 }
@@ -48,7 +48,7 @@ function Test-ProjectNode([string]$Executable) {
     if (-not $Executable -or -not (Test-Path -LiteralPath $Executable -PathType Leaf)) { return $false }
     if (-not (Test-Path -LiteralPath (Join-Path (Split-Path -Parent $Executable) 'npm.cmd') -PathType Leaf)) { return $false }
     try {
-        $probe = & $Executable -p 'process.platform + ":" + process.arch + ":" + process.version' 2>$null
+        $probe = & $Executable -p "[process.platform,process.arch,process.version].join(':')" 2>$null
         return $LASTEXITCODE -eq 0 -and $probe -match '^win32:x64:v24\.'
     } catch { return $false }
 }
@@ -75,7 +75,14 @@ function Initialize-ProjectNode {
     Add-Type -AssemblyName System.IO.Compression.FileSystem
     [IO.Compression.ZipFile]::ExtractToDirectory($archive, $stage)
     $extracted = Join-Path $stage $name
-    if (-not (Test-ProjectNode (Join-Path $extracted 'node.exe'))) { throw 'Official Node.js archive is incomplete.' }
+    foreach ($file in @('node.exe','npm.cmd')) {
+        if (-not (Test-Path -LiteralPath (Join-Path $extracted $file) -PathType Leaf)) {
+            throw "Verified Node.js archive did not extract $file."
+        }
+    }
+    if (-not (Test-ProjectNode (Join-Path $extracted 'node.exe'))) {
+        throw 'Extracted node.exe could not run or did not report Windows x64 Node.js 24.'
+    }
     Move-Item -LiteralPath $extracted -Destination $target
     Remove-Item -LiteralPath $stage
     $env:PATH = "$target;$env:PATH"
