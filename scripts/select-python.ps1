@@ -20,7 +20,7 @@ function Select-ProjectPython {
         $executable = Join-Path $folder 'Scripts/python.exe'
         $info = Get-ProjectPythonInfo $executable
         if (-not $info) {
-            throw "$name is incomplete or unsupported. Preserve your data and move this environment aside before retrying. Supported: standard CPython 3.11-3.14, Windows x64."
+            throw "$name is incomplete or unsupported. Preserve data and move only the affected environment aside before retrying. Use standalone CPython 3.11-3.14 (Windows x64), not LibreOffice's bundled Python."
         }
         $existing += [PSCustomObject]@{ Path = $executable; Info = $info }
     }
@@ -31,7 +31,7 @@ function Select-ProjectPython {
         $resolved = Get-Command $PythonPath -CommandType Application -ErrorAction SilentlyContinue
         if (-not $resolved) { throw 'The requested Python executable was not found.' }
         $info = Get-ProjectPythonInfo $resolved.Source
-        if (-not $info) { throw 'The requested interpreter is unsupported. Use stable standard CPython 3.11-3.14, Windows x64 (not free-threaded).' }
+        if (-not $info) { throw "The requested interpreter is unsupported. Use standalone CPython 3.11-3.14 (Windows x64, not free-threaded), not LibreOffice's bundled Python." }
         if ($existing.Count -and (($existing[0].Info.version[0..1] -join '.') -ne ($info.version[0..1] -join '.'))) {
             throw 'The requested Python conflicts with an existing environment. Preserve data and move the old environments aside before selecting another version.'
         }

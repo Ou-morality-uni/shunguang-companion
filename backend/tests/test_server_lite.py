@@ -24,8 +24,10 @@ def test_server_installer_exposes_explicit_package_source_selection():
         text=True,
         encoding='utf-8',
         errors='replace',
+        env={**os.environ, 'PYTHONIOENCODING': 'cp1252'} if sys.platform == 'win32' else None,
     )
-    assert result.returncode == 0
+    assert result.returncode == 0, result.stderr
+    assert '叶瞬光 Linux 服务器部署与维护' in result.stdout
     assert '--pip-source' in result.stdout
     assert 'official,tencent,aliyun' in result.stdout
 

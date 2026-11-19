@@ -236,6 +236,27 @@ def test_installer_can_probe_python_without_installing(tmp_path):
     assert not (tmp_path / 'data').exists()
 
 
+@pytest.mark.skipif(sys.platform != 'win32', reason='Windows runtime probe')
+def test_windows_installer_probe_rejects_python_bundled_with_libreoffice(tmp_path):
+    office = tmp_path / 'Office renamed' / 'program'
+    base = office / 'python-core-3.13.15'
+    base.mkdir(parents=True)
+    (office / 'soffice.exe').touch()
+    launcher = (
+        'import runpy, sys; sys.base_prefix = sys.argv.pop(1); runpy.run_path(sys.argv.pop(1), run_name="__main__")'
+    )
+    result = subprocess.run(
+        [sys.executable, '-I', '-c', launcher, str(base), str(ROOT / 'scripts/install-project.py'), '--python-info'],
+        cwd=tmp_path,
+        capture_output=True,
+        encoding='utf-8',
+        timeout=15,
+    )
+    assert result.returncode == 1, result.stdout + result.stderr
+    assert json.loads(result.stdout)['supported'] is False
+    assert not (tmp_path / 'data').exists()
+
+
 @pytest.mark.parametrize('minor', [11, 12, 13, 14])
 def test_install_preflight_accepts_supported_python(minor, tmp_path, monkeypatch):
     version_type = type('Version', (tuple,), {'releaselevel': 'final'})

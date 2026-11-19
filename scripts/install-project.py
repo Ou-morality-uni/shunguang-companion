@@ -38,6 +38,8 @@ def python_info():
     bits = struct.calcsize('P') * 8
     machine = platform.machine().lower()
     free_threaded = bool(sysconfig.get_config_var('Py_GIL_DISABLED'))
+    base = Path(sys.base_prefix)
+    bundled_with_libreoffice = base.name.lower().startswith('python-core-') and (base.parent / 'soffice.exe').is_file()
     supported = (
         os.name == 'nt'
         and implementation == 'cpython'
@@ -46,6 +48,7 @@ def python_info():
         and (3, 11) <= tuple(version[:2]) <= (3, 14)
         and sys.version_info.releaselevel == 'final'
         and not free_threaded
+        and not bundled_with_libreoffice
     )
     return {
         'version': version,

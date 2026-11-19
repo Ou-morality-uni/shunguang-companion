@@ -451,6 +451,9 @@ def main():
 
 
 if __name__ == '__main__':
+    if os.name == 'nt':
+        sys.stdout.reconfigure(encoding='utf-8')
+        sys.stderr.reconfigure(encoding='utf-8')
     try:
         main()
     except (ValueError, OSError, RuntimeError, subprocess.CalledProcessError) as error:
