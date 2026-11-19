@@ -10,7 +10,7 @@
 
 - Windows10/11 x64；联网访问官方运行时、PyPI、npm和完整模式的模型源。
 - `Install.bat` 首装向导提供完整／轻量、QQ 与 LibreOffice 指南选项，`Install.bat -Setup` 可重新选择。完整至少 12 GiB，轻量至少 3 GiB 可用磁盘。
-- 优先复用兼容标准64位CPython3.11～3.14及Node24；缺失时自动准备Python3.13.12和Node24.22.2到当前用户专用目录，使用锁定SHA-256；Python安装器另验PSF签名。不修改系统PATH。
+- 优先复用兼容的标准 64 位 CPython 3.11～3.14 和 Node.js 24。找不到兼容 Python 时才准备官方 Python 3.14.10，缺少 Node.js 时准备 Node.js 24.22.2。运行时放在当前用户专用目录，使用锁定的 SHA-256；Python 安装器另验 PSF 签名。不修改系统 PATH。安装窗口会显示实际选中的 Python 版本和路径。
 - 轻量跳过torch、transformers、Qdrant依赖和BGE-M3；共享依赖仍安装。QQ桥接和LibreOffice由用户按指南安装，不由项目自动下载。
 - GPU驱动由用户管理，不自动安装。首次VC++运行库安装可能需要系统授权。
 

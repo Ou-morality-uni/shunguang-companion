@@ -1,6 +1,6 @@
-# 瞬光伴行 v0.7.5
+# 瞬光伴行 v0.7.6
 
-[v0.7.5 更新说明](versions/0.7.5/README.md) · [QQ 接入](docs/qq-setup.md) · [服务器部署](docs/server-deployment.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md)
+[v0.7.6 更新说明](versions/0.7.6/README.md) · [QQ 接入](docs/qq-setup.md) · [服务器部署](docs/server-deployment.md) · [语音配置与选型](docs/tts.md) · [LibreOffice 安装指南](versions/0.6.1/LibreOffice-install.md)
 
 > **v0.7.5 Windows 入口变更：**首次安装、更新或修复先双击 `Install.bat`，成功后再双击 `Start_up.bat`。重新选择安装模式请用 `Install.bat -Setup`。下文涉及启动入口自动安装或更新的旧步骤，以 [新版说明](versions/0.7.5/README.md) 为准。
 

@@ -249,6 +249,131 @@ catch {{ if (Test-Path -LiteralPath $target) {{ exit 3 }}; if ($_.Exception.Mess
     assert not (tmp_path / 'node.zip').exists()
 
 
+@pytest.mark.parametrize(
+    'discover',
+    ['registered', 'missing', 'cached', 'bad-hash', 'bad-signature', 'install-fails', 'check-missing'],
+)
+def test_install_entry_python_selection(tmp_path, discover):
+    scripts = tmp_path / 'scripts'
+    scripts.mkdir()
+    shutil.copyfile(ROOT / 'scripts/select-python.ps1', scripts / 'select-python.ps1')
+    runtime = (ROOT / 'scripts/windows-runtime.ps1').read_text(encoding='utf-8-sig')
+    (scripts / 'windows-runtime.ps1').write_text(
+        runtime
+        + r"""
+function Get-Command {
+    param($Name, $CommandType, [switch]$All, $ErrorAction)
+    if ($Name -eq 'py.exe' -and $env:TEST_DISCOVERY -eq 'registered') {
+        return @{ Source = 'Get-TestPythonListing' }
+    }
+    if ($Name -like '*\python.exe' -and (Test-Path -LiteralPath $Name -PathType Leaf)) {
+        return @{ Source = $env:TEST_PYTHON }
+    }
+}
+function Get-TestPythonListing {
+    ' -V:3.12 * Get-TestPython312.exe'
+    ' -V:3.11   Get-TestPython311.exe'
+    ' -V:3.15   Get-TestPython315.exe'
+}
+function Get-TestPython312.exe {
+    $global:LASTEXITCODE = 0
+    if ($args -contains '--python-info') { '{"supported":true,"version":[3,12,10]}' }
+}
+function Get-TestPython311.exe {
+    $global:LASTEXITCODE = 0
+    if ($args -contains '--python-info') { '{"supported":true,"version":[3,11,9]}' }
+}
+function Get-TestPython315.exe {
+    $global:LASTEXITCODE = 0
+    '{"supported":false,"version":[3,15,0]}'
+}
+function Invoke-WebRequest {
+    param($Uri, [switch]$UseBasicParsing, $TimeoutSec, $OutFile)
+    Write-Host "Download: $Uri"
+    [IO.File]::WriteAllText($OutFile, 'fixture')
+}
+function Get-FileSha256 {
+    param($Path)
+    return $env:TEST_SHA256
+}
+function Get-AuthenticodeSignature {
+    param($LiteralPath)
+    $status = if ($env:TEST_DISCOVERY -eq 'bad-signature') { 'NotSigned' } else { 'Valid' }
+    return @{ Status = $status; SignerCertificate = @{ Subject = 'CN=Python Software Foundation' } }
+}
+function Start-Process {
+    param($FilePath, $ArgumentList, [switch]$Wait, [switch]$PassThru, $WindowStyle)
+    Write-Host "Executing installer: $FilePath"
+    if ($env:TEST_DISCOVERY -eq 'install-fails') { return @{ ExitCode = 1603 } }
+    $target = ($ArgumentList | Where-Object { $_ -like 'TargetDir=*' }).Split('=', 2)[1].Trim('"')
+    New-Item -ItemType Directory -Path $target -Force | Out-Null
+    New-Item -ItemType File -Path (Join-Path $target 'python.exe') | Out-Null
+    return @{ ExitCode = 0 }
+}
+""",
+        encoding='utf-8-sig',
+    )
+    (scripts / 'install-project.py').write_text(
+        """import sys
+if '--python-info' in sys.argv:
+    print('{"supported":true,"version":[3,14,10]}')
+""",
+        encoding='utf-8',
+    )
+    local_app_data = tmp_path / 'local'
+    cached = local_app_data / 'ShunguangCompanion/runtimes/python-3.14.10/python.exe'
+    if discover == 'cached':
+        cached.parent.mkdir(parents=True)
+        cached.touch()
+    env = {
+        'LOCALAPPDATA': str(local_app_data),
+        'TEST_DISCOVERY': discover,
+        'TEST_PYTHON': sys.executable,
+        'TEST_SHA256': (
+            '0' * 64 if discover == 'bad-hash' else '92480239264744fe0386a1bd8275786fefa126e3129e56a68e22b52c73329965'
+        ),
+    }
+    arguments = ('-CheckPython',) if discover == 'check-missing' else ('-Lite', '-SkipFrontend')
+    if discover == 'check-missing':
+        (scripts / 'select-python.ps1').write_text(
+            'function Get-Command { param($Name, $CommandType, [switch]$All, $ErrorAction) }\n'
+            + (scripts / 'select-python.ps1').read_text(encoding='utf-8-sig'),
+            encoding='utf-8-sig',
+        )
+    result = run_entry(tmp_path, 'Install.bat', *arguments, env=env)
+    if discover == 'check-missing':
+        assert result.returncode == 1
+        assert 'No supported Python found.' in result.stdout
+        assert 'Download:' not in result.stdout
+        assert not local_app_data.exists()
+        return
+    if discover == 'registered':
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert 'Using CPython 3.12.10' in result.stdout
+        assert 'Get-TestPython312.exe' in result.stdout
+        assert 'Download:' not in result.stdout
+        return
+    if discover != 'cached':
+        assert 'Download: https://www.python.org/ftp/python/3.14.10/python-3.14.10-amd64.exe' in result.stdout
+    else:
+        assert 'Download:' not in result.stdout
+    if discover == 'bad-hash':
+        assert result.returncode == 1
+        assert 'SHA-256 verification failed' in result.stdout
+        assert 'Executing installer:' not in result.stdout
+    elif discover == 'bad-signature':
+        assert result.returncode == 1
+        assert 'signature could not be verified' in result.stdout
+        assert 'Executing installer:' not in result.stdout
+    elif discover == 'install-fails':
+        assert result.returncode == 1
+        assert 'exit 1603' in result.stdout
+    else:
+        assert result.returncode == 0, result.stdout + result.stderr
+        assert 'Using CPython 3.14.10' in result.stdout
+        assert cached.is_file()
+
+
 def test_compatible_node_is_detected_by_windows_powershell(tmp_path):
     node = shutil.which('node.exe')
     if not node or not Path(node).with_name('npm.cmd').is_file():

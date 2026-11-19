@@ -49,6 +49,7 @@ try {
     if ($SkipFrontend) { $installArgs += '--skip-frontend' }
     if ($Lite) { $installArgs += '--lite' }
     Write-Host ('Using CPython ' + ($python.Info.version -join '.') + ' for the project environments.')
+    Write-Host ('Python executable: ' + $python.Path)
     & $python.Path @installArgs
     $result = $LASTEXITCODE
     if ($result -eq 0) {

@@ -1,6 +1,6 @@
 {
-  "version": "0.7.5",
+  "version": "0.7.6",
   "published_at": "2026-11-19",
-  "summary": "Windows 安装与启动分离：先运行 Install.bat，再运行 Start_up.bat；修复 Node.js 24 探测失败。",
-  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.5/README.md"
+  "summary": "Windows 安装优先复用兼容 Python；未找到时自动准备 3.14.10，并显示实际使用的解释器路径。",
+  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.6/README.md"
 }
