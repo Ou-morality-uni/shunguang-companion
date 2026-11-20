@@ -19,8 +19,14 @@ PRESETS = [
     {'id': 'anthropic', 'name': 'Anthropic', 'base_url': 'https://api.anthropic.com', 'protocol': 'anthropic'},
     {
         'id': 'qwen',
-        'name': '阿里百炼 · 中国大陆',
+        'name': '阿里云百炼 · 中国站北京',
         'base_url': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+        'protocol': 'openai',
+    },
+    {
+        'id': 'qwen-intl',
+        'name': '阿里云百炼 · 国际站新加坡',
+        'base_url': 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1',
         'protocol': 'openai',
     },
     {'id': 'siliconflow', 'name': '硅基流动', 'base_url': 'https://api.siliconflow.cn/v1', 'protocol': 'openai'},

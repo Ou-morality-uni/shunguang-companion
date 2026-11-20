@@ -1,6 +1,6 @@
-# 瞬光伴行 v0.7.7
+# 瞬光伴行 v0.7.8
 
-[v0.7.7 更新说明](versions/0.7.7/README.md) · [QQ 接入](docs/qq-setup.md) · [服务器部署](docs/server-deployment.md) · [语音配置与选型](docs/tts.md)
+[v0.7.8 更新说明](versions/0.7.8/README.md) · [QQ 接入](docs/qq-setup.md) · [服务器部署](docs/server-deployment.md) · [语音配置与选型](docs/tts.md)
 
 > **v0.7.7：**首次双击 `Install.bat`，只安装基础并打开网页；日常双击 `Start_up.bat`。知识库在「陪伴设置 → 服务管理」按需安装；附件只读，历史成果可下载。下文旧版安装或办公步骤以 [新版说明](versions/0.7.7/README.md) 为准。
 

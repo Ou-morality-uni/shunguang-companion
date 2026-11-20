@@ -41,7 +41,7 @@ def fake_http(monkeypatch, handler):
 
 def test_removed_volcengine_cannot_synthesize_or_be_selected():
     assert 'volcengine' not in tts.PROVIDERS
-    assert {x['id'] for x in voice.PRESETS} == {'mimo', 'aliyun'}
+    assert all((item.get('provider') or item['id']) != 'volcengine' for item in voice.PRESETS)
     with pytest.raises(voice.VoiceError):
         asyncio.run(voice.synthesize(settings('volcengine'), '你好'))
 

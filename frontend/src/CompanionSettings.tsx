@@ -485,6 +485,12 @@ export function CompanionSettings({
   const cloneProviders = ttsProviders.filter(
     (item) => item.id === 'mimo' || item.reference_audio || item.reference_supported,
   );
+  const ttsAddress = tts?.base_url?.trim().replace(/\/+$/, '') || '';
+  const singaporeTts =
+    tts?.provider === 'aliyun' &&
+    (ttsAddress === 'https://dashscope-intl.aliyuncs.com' ||
+      /^https:\/\/[a-z\d-]+\.ap-southeast-1\.maas\.aliyuncs\.com$/i.test(ttsAddress));
+  const ttsPresetId = singaporeTts ? 'aliyun-intl' : tts?.provider || 'mimo';
   const voiceDirty =
     voiceSignature(tts) !== voiceSignature(features?.tts) || !!voiceKey.trim() || clearVoiceKey;
   const savedCloneReady = !!features?.tts.enabled && !!features.tts.configured;
@@ -667,7 +673,10 @@ export function CompanionSettings({
                       ]}
                     />
                   </label>
-                  <details className="reference-panel" open={draft.provider === 'custom' || undefined}>
+                  <details
+                    className="reference-panel"
+                    open={['custom', 'qwen', 'qwen-intl'].includes(draft.provider || '') || undefined}
+                  >
                     <summary>接口地址与协议</summary>
                     <label className="field">
                       接口协议
@@ -697,18 +706,44 @@ export function CompanionSettings({
                         type="url"
                         required
                         value={draft.base_url}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const base_url = e.target.value;
+                          const normalize = (url: string) => url.trim().replace(/\/+$/, '');
+                          const changed = normalize(base_url) !== normalize(draft.base_url);
+                          if (changed) {
+                            setModelKey('');
+                            setClearModelKey(false);
+                            setModels([]);
+                          }
+                          const stored = profiles.find(
+                            (value) =>
+                              normalize(value.base_url) === normalize(base_url) &&
+                              (value.protocol || 'openai') === (draft.protocol || 'openai'),
+                          );
                           setDraft({
                             ...draft,
-                            base_url: e.target.value,
-                            vision: 'unknown',
-                            effort: 'default',
-                            efforts: ['default'],
-                            has_api_key: e.target.value === settings?.base_url && !!settings.has_api_key,
-                          })
-                        }
+                            base_url,
+                            ...(changed
+                              ? {
+                                  model: stored?.model || draft.model,
+                                  vision: stored?.vision ?? 'unknown',
+                                  effort: stored?.effort ?? 'default',
+                                  efforts: stored?.efforts ?? ['default'],
+                                  has_api_key: !!stored?.has_api_key,
+                                }
+                              : {}),
+                          });
+                        }}
                         maxLength={500}
                       />
+                      {(draft.provider === 'qwen' || draft.provider === 'qwen-intl') && (
+                        <span className="field-hint">
+                          {draft.provider === 'qwen-intl'
+                            ? '新加坡工作空间专属地址格式为 https://<工作空间ID>.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1。'
+                            : '北京工作空间专属地址格式为 https://<工作空间ID>.cn-beijing.maas.aliyuncs.com/compatible-mode/v1。'}
+                          请使用该地址对应的 API Key。
+                        </span>
+                      )}
                     </label>
                   </details>
                   <label className="field">
@@ -990,19 +1025,20 @@ export function CompanionSettings({
                     语音提供商
                     <GlideSelect
                       label="语音提供商"
-                      value={tts.provider}
+                      value={ttsPresetId}
                       disabled={busy || referenceBusy}
                       onValueChange={(id) => {
                         const item = cloneProviders.find((value) => value.id === id);
                         if (!item) return;
+                        const provider = item.provider || item.id;
                         setBusy(true);
                         void request<{ tts: Features['tts'] | null }>(
-                          `/tts/profile?provider=${encodeURIComponent(id)}&base_url=${encodeURIComponent(item.base_url)}`,
+                          `/tts/profile?provider=${encodeURIComponent(provider)}&base_url=${encodeURIComponent(item.base_url)}`,
                         )
                           .then((stored) => {
                             setTts(
                               stored.tts || {
-                                provider: id,
+                                provider,
                                 base_url: item.base_url,
                                 model: item.model || '',
                                 voice: '',
@@ -1016,7 +1052,7 @@ export function CompanionSettings({
                             setTtsModels([]);
                             setNotice(
                               stored.tts?.has_api_key
-                                ? '已恢复此厂商的配置，留空保留对应密钥；请保存后使用。'
+                                ? '已恢复此地址的配置，留空保留对应密钥。请保存后使用。'
                                 : item.notice || '请填写该厂商的密钥。',
                             );
                           })
@@ -1028,15 +1064,13 @@ export function CompanionSettings({
                         ...(!cloneProviders.some((item) => item.id === 'mimo')
                           ? [{ value: 'mimo', label: '小米 MiMo · 参考音频克隆' }]
                           : []),
-                        ...(tts.provider !== 'mimo' &&
-                        !cloneProviders.some((item) => item.id === tts.provider)
-                          ? [{ value: tts.provider, label: `${tts.provider}（须支持本项目的参考克隆）` }]
+                        ...(ttsPresetId !== 'mimo' && !cloneProviders.some((item) => item.id === ttsPresetId)
+                          ? [{ value: ttsPresetId, label: `${ttsPresetId}（当前配置）` }]
                           : []),
                       ]}
                     />
                     <span className="field-hint">
-                      百炼使用云端音色实时合成；小米引用原 MP3
-                      并合并短句合成。切换厂商后请使用对应密钥和音色。
+                      百炼使用云端音色实时合成，小米使用参考 MP3 合成。请使用所选地域和地址对应的密钥与音色。
                     </span>
                   </label>
                   <label className="field">
@@ -1045,15 +1079,34 @@ export function CompanionSettings({
                       aria-label="语音 API 地址"
                       type="url"
                       required
+                      disabled={busy || referenceBusy}
                       value={tts.base_url}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const base_url = e.target.value;
+                        const changed = base_url.trim().replace(/\/+$/, '') !== ttsAddress;
+                        if (changed) {
+                          setVoiceKey('');
+                          setClearVoiceKey(false);
+                          setTtsModels([]);
+                        }
                         setTts({
-                          base_url: e.target.value,
+                          base_url,
+                          ...(changed ? { voice: '', external_reference_enabled: false } : {}),
                           has_api_key:
-                            e.target.value === features?.tts.base_url && !!features?.tts.has_api_key,
-                        })
-                      }
+                            base_url === features?.tts.base_url &&
+                            tts.provider === features.tts.provider &&
+                            !!features.tts.has_api_key,
+                        });
+                      }}
                     />
+                    {tts.provider === 'aliyun' && (
+                      <span className="field-hint">
+                        {singaporeTts
+                          ? '新加坡工作空间专属地址格式为 https://<工作空间ID>.ap-southeast-1.maas.aliyuncs.com。'
+                          : '北京工作空间专属地址格式为 https://<工作空间ID>.cn-beijing.maas.aliyuncs.com。'}
+                        填写根地址即可。
+                      </span>
+                    )}
                   </label>
                   {tts.provider === 'mimo' && (
                     <Toggle
@@ -1107,7 +1160,7 @@ export function CompanionSettings({
                   )}
                   <label className="field">
                     TTS 克隆模型 ID
-                    {tts.provider === 'aliyun' ? (
+                    {tts.provider === 'aliyun' && !singaporeTts ? (
                       <GlideSelect
                         label="TTS 克隆模型 ID"
                         value={tts.model}
@@ -1129,7 +1182,7 @@ export function CompanionSettings({
                       <Input
                         aria-label="TTS 克隆模型 ID"
                         readOnly={tts.provider === 'mimo'}
-                        onChange={(e) => setTts({ model: e.target.value })}
+                        onChange={(e) => setTts({ model: e.target.value, voice: '' })}
                         value={tts.provider === 'mimo' ? cloneModel : tts.model}
                       />
                     )}

@@ -42,6 +42,7 @@ export interface Candidate extends Memory {
 }
 export interface Provider {
   id: string;
+  provider?: string;
   name: string;
   base_url: string;
   protocol?: 'openai' | 'anthropic';

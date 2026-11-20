@@ -1,6 +1,6 @@
-# Shunguang Companion v0.7.7
+# Shunguang Companion v0.7.8
 
-[v0.7.7 release notes (Chinese)](versions/0.7.7/README.md) · [TTS setup (Chinese)](docs/tts.md)
+[v0.7.8 release notes (Chinese)](versions/0.7.8/README.md) · [TTS setup (Chinese)](docs/tts.md)
 
 > **v0.7.7:** Run `Install.bat` to install the base and open the app, or `Start_up.bat` for normal launches. Optional retrieval is installed from Service Management. Attachments are read-only; historical files remain downloadable. These changes replace the older setup and document editing instructions below.
 

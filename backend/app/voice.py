@@ -27,6 +27,8 @@ MAX_AUDIO_BYTES = 20_000_000
 MAX_REFERENCE_BYTES = 6_000_000
 REFERENCE_LOCK = RLock()
 REFERENCE_CACHE: dict = {}
+ALIYUN_BEIJING = 'https://dashscope.aliyuncs.com'
+ALIYUN_SINGAPORE = 'https://dashscope-intl.aliyuncs.com'
 PRESETS = [
     {
         'id': 'mimo',
@@ -41,8 +43,8 @@ PRESETS = [
     },
     {
         'id': 'aliyun',
-        'name': '阿里云百炼 · 云端声音复刻',
-        'base_url': 'https://dashscope.aliyuncs.com',
+        'name': '阿里云百炼 · 中国站北京',
+        'base_url': ALIYUN_BEIJING,
         'model': 'qwen-audio-3.1-tts-flash',
         'voice': '',
         'models': [
@@ -53,6 +55,17 @@ PRESETS = [
         ],
         'reference_supported': True,
         'notice': '一次创建音色，之后使用音色 ID 实时合成。音色与模型、地域及账号必须匹配。',
+    },
+    {
+        'id': 'aliyun-intl',
+        'provider': 'aliyun',
+        'name': '阿里云百炼 · 国际站新加坡',
+        'base_url': ALIYUN_SINGAPORE,
+        'model': 'qwen-audio-3.1-tts-flash',
+        'voice': '',
+        'models': ['qwen-audio-3.1-tts-flash'],
+        'reference_supported': True,
+        'notice': '请填写新加坡工作空间对应的 API Key，并使用该地址下可用的音色。',
     },
 ]
 
@@ -86,7 +99,7 @@ async def validate_origin(base_url: str, provider: str):
     if provider == 'volcengine':
         raise VoiceError('火山语音已移除，请选择小米或百炼。', 422)
     if provider == 'aliyun':
-        allowed = base_url in ('https://dashscope.aliyuncs.com', 'https://dashscope-intl.aliyuncs.com') or bool(
+        allowed = base_url in (ALIYUN_BEIJING, ALIYUN_SINGAPORE) or bool(
             re.fullmatch(r'https://[a-zA-Z0-9-]+\.(?:cn-beijing|ap-southeast-1)\.maas\.aliyuncs\.com', base_url)
         )
         if not allowed:
@@ -200,14 +213,19 @@ async def upstream(settings, secret, method, path, payload=None, maximum=MAX_AUD
 
 async def discover(settings: TTSConfig):
     if settings.provider == 'aliyun':
-        preset = next(item for item in PRESETS if item['id'] == settings.provider)
+        await validate_origin(settings.base_url, settings.provider)
+        singapore = settings.base_url == ALIYUN_SINGAPORE or settings.base_url.endswith(
+            '.ap-southeast-1.maas.aliyuncs.com'
+        )
+        preset_id = 'aliyun-intl' if singapore else 'aliyun'
+        preset = next(item for item in PRESETS if item['id'] == preset_id)
         return {
             'models': [{'id': model} for model in preset['models']],
             'voices': [],
             'model_discovery': 'documented_presets',
             'voice_discovery': 'manual_voice_id',
             'capabilities': capabilities(settings),
-            'notice': '以下是已适配的文档预设，不代表密钥权限验证。请填写本账号已创建的克隆音色 ID。',
+            'notice': f'{preset["name"]}的文档预设。请用连接检查验证权限，并填写当前地址下已创建的克隆音色 ID。',
         }
     secret = tts_secret(settings)
     if not secret:

@@ -150,6 +150,113 @@ it('uses a keyboard accessible sliding search selector and one compact saved-ser
   );
 });
 
+it('can manually configure a Singapore chat workspace when model discovery fails', async () => {
+  const singapore = 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1';
+  const workspace = 'https://demo.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1';
+  const preset = { id: 'qwen-intl', name: '百炼新加坡', base_url: singapore, protocol: 'openai' };
+  const fallback = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (url.endsWith('/providers/presets')) return Response.json([preset]);
+    if (url.endsWith('/providers/discover'))
+      return Response.json({ detail: '测试工作空间未返回模型。' }, { status: 502 });
+    if (url.endsWith('/settings') && init?.method === 'PATCH') {
+      const { api_key, ...saved } = JSON.parse(String(init.body));
+      expect(api_key).toBe('workspace-only-key');
+      expect(saved).toMatchObject({ provider: 'qwen-intl', base_url: workspace, model: 'qwen-plus' });
+      return Response.json({ ...saved, has_api_key: true, configured: true });
+    }
+    if (url.endsWith('/providers/test')) return Response.json({ message: '测试连接已建立' });
+    return fallback(input, init);
+  });
+
+  render(<App />);
+  await screen.findByLabelText('给瞬光伴行发送消息');
+  fireEvent.click(screen.getByRole('button', { name: '陪伴设置' }));
+  fireEvent.click(await screen.findByRole('tab', { name: '模型连接' }));
+  fireEvent.keyDown(screen.getByRole('combobox', { name: '提供商' }), { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: '百炼新加坡' }));
+  const address = screen.getByLabelText('模型 API 地址') as HTMLInputElement;
+  const key = screen.getByLabelText('模型 API 密钥') as HTMLInputElement;
+  expect(address.value).toBe(singapore);
+  fireEvent.change(key, { target: { value: 'public-endpoint-key' } });
+  fireEvent.change(address, { target: { value: workspace } });
+  expect(key.value).toBe('');
+  fireEvent.change(key, { target: { value: 'workspace-only-key' } });
+  fireEvent.click(screen.getByRole('button', { name: '读取可用模型' }));
+  await screen.findByText(/测试工作空间未返回模型/);
+  fireEvent.change(screen.getByLabelText('模型 ID'), { target: { value: 'qwen-plus' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存并测试连接' }));
+  await screen.findByText(/真实连接测试成功/);
+});
+
+it('saves a Singapore voice workspace without carrying the Beijing or public endpoint key', async () => {
+  const beijing = 'https://dashscope.aliyuncs.com';
+  const singapore = 'https://dashscope-intl.aliyuncs.com';
+  const workspace = 'https://demo.ap-southeast-1.maas.aliyuncs.com';
+  const model = 'qwen-audio-3.1-tts-flash';
+  let tts = { provider: 'aliyun', base_url: beijing, model, voice: 'beijing-voice', has_api_key: true };
+  const fallback = vi.mocked(fetch).getMockImplementation()!;
+  vi.mocked(fetch).mockImplementation(async (input, init) => {
+    const url = String(input);
+    if (url.endsWith('/tts/presets')) {
+      return Response.json([
+        { id: 'aliyun', name: '百炼北京', base_url: beijing, model, reference_supported: true },
+        {
+          id: 'aliyun-intl',
+          provider: 'aliyun',
+          name: '百炼新加坡',
+          base_url: singapore,
+          model,
+          reference_supported: true,
+        },
+      ]);
+    }
+    if (url.includes('/tts/profile?')) return Response.json({ tts: null });
+    if (url.endsWith('/features')) {
+      if (init?.method === 'PATCH') {
+        const { api_key, ...saved } = JSON.parse(String(init.body)).tts;
+        expect(api_key).toBe('workspace-only-key');
+        expect(saved).toMatchObject({ provider: 'aliyun', base_url: workspace, model, voice: '' });
+        tts = { ...saved, has_api_key: true };
+      }
+      return Response.json({ tts, tools: {}, reminders: {}, memory: {} });
+    }
+    return fallback(input, init);
+  });
+
+  render(<App />);
+  await screen.findByLabelText('给瞬光伴行发送消息');
+  fireEvent.click(screen.getByRole('button', { name: '陪伴设置' }));
+  fireEvent.click(await screen.findByRole('tab', { name: '声音与播放' }));
+  const selector = await screen.findByRole('combobox', { name: '语音提供商' });
+  const address = screen.getByLabelText('语音 API 地址') as HTMLInputElement;
+  const key = screen.getByLabelText('语音 API 密钥') as HTMLInputElement;
+  fireEvent.change(key, { target: { value: 'beijing-only-key' } });
+  fireEvent.keyDown(selector, { key: 'ArrowDown' });
+  fireEvent.click(await screen.findByRole('option', { name: '百炼新加坡' }));
+  await waitFor(() => expect(address.value).toBe(singapore));
+  expect(key.value).toBe('');
+  expect(fetch).toHaveBeenCalledWith(
+    '/api/tts/profile?provider=aliyun&base_url=https%3A%2F%2Fdashscope-intl.aliyuncs.com',
+    expect.anything(),
+  );
+  fireEvent.change(key, { target: { value: 'public-endpoint-key' } });
+  fireEvent.change(address, { target: { value: workspace } });
+  expect(key.value).toBe('');
+  fireEvent.change(key, { target: { value: 'workspace-only-key' } });
+  fireEvent.click(screen.getByRole('button', { name: '保存克隆声音配置' }));
+  await screen.findByText(/声音配置已保存/);
+  fireEvent.keyDown(document.activeElement || document.body, { key: 'Escape' });
+  await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+  fireEvent.click(screen.getByRole('button', { name: '陪伴设置' }));
+  fireEvent.click(await screen.findByRole('tab', { name: '声音与播放' }));
+  expect(((await screen.findByLabelText('语音 API 地址')) as HTMLInputElement).value).toBe(workspace);
+  await waitFor(() =>
+    expect(screen.getByRole('combobox', { name: '语音提供商' }).textContent).toContain('百炼新加坡'),
+  );
+});
+
 it('shows service management without allowing filesystem grants or starting repairs', async () => {
   render(<App />);
   await screen.findByLabelText('给瞬光伴行发送消息');

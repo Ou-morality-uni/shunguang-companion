@@ -1,6 +1,6 @@
 {
-  "version": "0.7.7",
+  "version": "0.7.8",
   "published_at": "2026-11-20",
-  "summary": "办公能力精简为附件阅读与总结，Windows 基础安装后打开网页，本地知识库可在服务管理按需安装。",
-  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.7/README.md"
+  "summary": "聊天和 TTS 新增阿里云百炼国际站新加坡预设，支持工作空间专属地址。",
+  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.8/README.md"
 }

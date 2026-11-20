@@ -25,6 +25,7 @@ from fastapi.responses import JSONResponse
 from fastapi.testclient import TestClient
 
 from backend.app import config, feature_config, reminders, services, tools, voice
+from backend.app.routes.settings import router as settings_router
 
 
 @pytest.fixture
@@ -33,12 +34,13 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setattr(config, 'ROOT', tmp_path)
     application = FastAPI()
     application.include_router(services.router)
+    application.include_router(settings_router)
 
     @application.exception_handler(RequestValidationError)
     async def validation_handler(request, error):
         return JSONResponse(status_code=422, content={'detail': '输入格式不正确。'})
 
-    with TestClient(application) as test_client:
+    with TestClient(application, client=('127.0.0.1', 50000)) as test_client:
         yield test_client
 
 
@@ -130,6 +132,80 @@ def test_key_does_not_follow_provider_or_origin_change(client):
     )
     assert changed.status_code == 200 and changed.json()['tts']['has_api_key'] is False
     assert not feature_config.load().tts.api_key.get_secret_value()
+
+
+def test_chat_presets_offer_beijing_and_singapore(client):
+    presets = {item['id']: item for item in client.get('/api/providers/presets').json()}
+    assert presets['qwen']['base_url'] == 'https://dashscope.aliyuncs.com/compatible-mode/v1'
+    assert presets['qwen-intl']['base_url'] == 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'
+    assert presets['qwen-intl']['protocol'] == 'openai'
+
+
+def test_singapore_voice_preset_and_workspace_offer_the_same_models(client):
+    presets = {item['id']: item for item in client.get('/api/tts/presets').json()}
+    assert presets['aliyun']['base_url'] == 'https://dashscope.aliyuncs.com'
+    singapore = presets['aliyun-intl']
+    assert singapore['provider'] == 'aliyun'
+    assert singapore['base_url'] == 'https://dashscope-intl.aliyuncs.com'
+    for base_url in (singapore['base_url'], 'https://workspace-123.ap-southeast-1.maas.aliyuncs.com'):
+        response = client.post('/api/tts/discover', json={'provider': 'aliyun', 'base_url': base_url})
+        assert response.status_code == 200
+        assert response.json()['models'] == [{'id': 'qwen-audio-3.1-tts-flash'}]
+    invalid = client.post('/api/tts/discover', json={'provider': 'aliyun', 'base_url': 'https://untrusted.example'})
+    assert invalid.status_code == 422
+
+
+def test_chat_discovery_uses_the_exact_saved_aliyun_address_and_key(client, monkeypatch):
+    addresses = {
+        'https://dashscope.aliyuncs.com/compatible-mode/v1': 'beijing-only',
+        'https://dashscope-intl.aliyuncs.com/compatible-mode/v1': 'singapore-only',
+        'https://workspace-123.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1': 'workspace-only',
+    }
+    for base_url, key in addresses.items():
+        saved = client.patch(
+            '/api/settings',
+            json={'base_url': base_url, 'api_key': key, 'model': 'qwen-plus', 'temperature': 0.7, 'timeout': 20},
+        )
+        assert saved.status_code == 200 and key not in saved.text
+
+    calls = []
+
+    def handler(request):
+        assert request.url.path == '/compatible-mode/v1/models'
+        base_url = str(request.url).removesuffix('/models')
+        assert request.headers['authorization'] == f'Bearer {addresses[base_url]}'
+        calls.append(base_url)
+        return httpx.Response(200, json={'data': [{'id': 'qwen-plus'}]})
+
+    fake_http(monkeypatch, handler)
+    for base_url in addresses:
+        discovered = client.post('/api/providers/discover', json={'base_url': base_url})
+        assert discovered.status_code == 200 and discovered.json()['models'] == [{'id': 'qwen-plus'}]
+    missing = client.post(
+        '/api/providers/discover',
+        json={'base_url': 'https://other.ap-southeast-1.maas.aliyuncs.com/compatible-mode/v1'},
+    )
+    assert missing.status_code == 422
+    assert calls == list(addresses)
+
+
+def test_aliyun_voice_profiles_restore_only_the_selected_address(client):
+    beijing = 'https://dashscope.aliyuncs.com'
+    singapore = 'https://dashscope-intl.aliyuncs.com'
+    workspace = 'https://workspace-123.ap-southeast-1.maas.aliyuncs.com'
+    for index, address in enumerate((beijing, singapore, workspace)):
+        empty = client.patch('/api/features', json={'tts': {'provider': 'aliyun', 'base_url': address, 'voice': ''}})
+        assert empty.status_code == 200 and not empty.json()['tts']['has_api_key']
+        key = f'voice-test-secret-{index}'
+        saved = client.patch('/api/features', json={'tts': {'api_key': key, 'voice': f'voice-{index}'}})
+        assert saved.status_code == 200 and saved.json()['tts']['has_api_key']
+        assert key not in saved.text
+    for index, address in enumerate((beijing, singapore, workspace)):
+        profile = client.get('/api/tts/profile', params={'provider': 'aliyun', 'base_url': address})
+        assert profile.status_code == 200
+        assert profile.json()['tts']['voice'] == f'voice-{index}'
+        assert profile.json()['tts']['has_api_key']
+        assert 'voice-test-secret' not in profile.text
 
 
 def test_invalid_config_is_sanitized_atomic(client, monkeypatch):
