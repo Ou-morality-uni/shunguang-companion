@@ -93,7 +93,7 @@ export function UpdateSettings({
             在项目根目录执行 <code>git pull --ff-only</code>，或在 GitHub Desktop 点击 Fetch origin，再点击
             Pull origin。
           </li>
-          <li>运行 Install.bat，等待出现 Installation success，再运行 Start_up.bat，启动后刷新网页。</li>
+          <li>运行 Install.bat。基础环境修复成功后会启动项目并打开网页。</li>
         </ol>
         <p>更新前备份并保留自己的 data/。源码存在修改冲突时先处理，不要强制覆盖。</p>
         <p>ZIP 用户请按 README 下载新代码并保留个人数据。检查按钮不会下载安装或重启服务。</p>

@@ -1,17 +1,13 @@
 import asyncio
 import json
 import os
-from threading import Event
 
 import pytest
-from fastapi.testclient import TestClient
-from langchain_core.messages import AIMessageChunk, ToolMessage
 
-from backend.app import config, feature_config, main, runtime
+from backend.app import config
 from backend.app.filework import FileTaskRequest, FileWork, WorkError
 from backend.app.routes import chat
 from backend.app.store import Store
-from backend.app.tool_registry import ToolRegistry
 
 
 @pytest.fixture
@@ -258,145 +254,9 @@ def test_replaced_root_needs_new_authorization(work):
     assert not (folder / 'file.txt').exists()
 
 
-def test_local_routes_contract_and_lan_denial(work, monkeypatch):
-    service, _, folder = work
-    monkeypatch.setattr(runtime, 'store', service.store)
-    with TestClient(main.app) as client:
-        grant = client.post('/api/work/workspaces', json={'path': str(folder)})
-        assert grant.status_code == 201 and 'identity' not in grant.json()
-        task = client.post('/api/work/tasks', json={'workspace_id': grant.json()['id'], 'steps': [{'action': 'list'}]})
-        assert task.status_code == 201
-        assert client.get('/api/work/tasks').status_code == 200
-        assert (
-            client.post(
-                '/api/work/tasks', json={'workspace_id': grant.json()['id'], 'steps': [{'action': 'shell'}]}
-            ).status_code
-            == 422
-        )
-    from backend.app import access
-
-    monkeypatch.setenv('SHUNGUANG_LAN_MODE', '1')
-    monkeypatch.setattr(access, 'authenticated', lambda _: True)
-    with TestClient(main.app, client=('192.168.1.9', 12345), base_url='http://127.0.0.1') as remote:
-        for url in ('/api/work/workspaces', '/api/work/tasks'):
-            assert remote.get(url).status_code == 403
-
-
-def test_registry_respects_enabled_tools_and_never_allows_model_approval(work):
-    service, _, _ = work
-    features = feature_config.FeatureConfig()
-    context = ({'id': 'm', 'conversation_id': 'c', 'content': 'hello'}, [])
-    registry = ToolRegistry(features, service.store, *context, work=service)
-    assert {
-        'weather',
-        'web_search',
-        'recall_conversations',
-        'workspace_files',
-        'workspace_task',
-        'office_guide',
-        'office_import',
-        'office_inspect',
-        'office_files',
-    } == set(registry.handlers)
-    assert not asyncio.run(registry.execute('approve_delete', {'approved': True}))['ok']
-    features.tools.weather_enabled = False
-    features.memory.auto_save = False
-    disabled = ToolRegistry(features, service.store, *context)
-    assert 'weather' not in disabled.handlers and 'remember_user_fact' not in disabled.handlers
-    assert 'workspace_files' not in disabled.handlers
-    assert {'office_guide', 'office_import', 'office_inspect', 'office_files'}.isdisjoint(disabled.handlers)
-
-
-def test_file_tool_schema_is_compatible_with_existing_provider_conversion(work):
-    from langchain_core.utils.function_calling import convert_to_openai_tool
-
-    service, _, _ = work
-    registry = ToolRegistry(feature_config.FeatureConfig(), service.store, {}, [], work=service)
-    tool = convert_to_openai_tool(registry.definitions[-1])['function']
-    step_schema = tool['parameters']['properties']['steps']['items']
-    assert tool['name'] == 'workspace_files'
-    assert step_schema['properties']['action']['enum'] == ['list', 'read', 'write', 'move', 'delete', 'read_document']
-
-
 def test_large_file_tool_result_stays_valid_json_with_explicit_partial_flag():
     result = {'ok': True, 'task': {'id': 't1', 'steps': [{'result': {'text': '资料' * 16000}}]}}
     text = chat.tool_content(result)
     parsed = json.loads(text)
     assert parsed['truncated'] and parsed['task_id'] == 't1'
     assert len(text) < 16000 and '只是部分预览' in parsed['message']
-
-
-def test_chat_dispatches_local_file_task_and_persists_actual_result(work, monkeypatch):
-    service, workspace_id, folder = work
-    (folder / 'file.txt').write_text('real file text')
-    monkeypatch.setattr(runtime, 'store', service.store)
-    config.save_config(config.ModelConfig(llm_model='test', llm_api_key='test-key'))
-    bound = []
-
-    class Model:
-        def bind_tools(self, definitions):
-            bound.append({item['name'] for item in definitions})
-            return self
-
-        async def astream(self, history):
-            if isinstance(history[-1], ToolMessage):
-                result = json.loads(history[-1].content)
-                assert result['ok'] and result['background'] and 'steps' not in result['task']
-                yield AIMessageChunk(content='任务已经安排好了，读取结果会显示在任务卡里。')
-            else:
-                yield AIMessageChunk(
-                    content='',
-                    tool_calls=[
-                        {
-                            'name': 'workspace_files',
-                            'id': 'file1',
-                            'args': {'workspace_id': workspace_id, 'steps': [{'action': 'read', 'path': 'file.txt'}]},
-                        }
-                    ],
-                )
-
-    monkeypatch.setattr(chat, 'build_model', lambda _: Model())
-    with TestClient(main.app) as client:
-        response = client.post('/api/chat', json={'content': '读取授权目录的 file.txt'})
-        assert 'event: done' in response.text and '任务卡' in response.text
-        assert 'workspace_files' in bound[0]
-        task = service.store.list_file_tasks()[0]
-        assert task['origin'] == 'chat' and task['conversation_id']
-        assert finished(runtime.work, task)['steps'][0]['result']['text'] == 'real file text'
-
-
-def test_registry_returns_before_background_work_and_task_cancellation_stops_later_steps(work, monkeypatch):
-    service, workspace_id, folder = work
-    entered, release = Event(), Event()
-    original = service.operate
-
-    def slow(root, step):
-        entered.set()
-        assert release.wait(5)
-        return original(root, step)
-
-    monkeypatch.setattr(service, 'operate', slow)
-    registry = ToolRegistry(feature_config.FeatureConfig(), service.store, {}, [], work=service)
-
-    async def run():
-        result = await asyncio.wait_for(
-            registry.execute(
-                'workspace_files',
-                {
-                    'workspace_id': workspace_id,
-                    'steps': [
-                        {'action': 'write', 'path': 'first.txt', 'content': 'one'},
-                        {'action': 'write', 'path': 'second.txt', 'content': 'two'},
-                    ],
-                },
-            ),
-            timeout=2,
-        )
-        assert await asyncio.to_thread(entered.wait, 5)
-        assert result['background'] and result['task']['status'] == 'queued'
-        service.cancel(result['task']['id'])
-        release.set()
-        assert (await service.wait(result['task']['id']))['status'] == 'cancelled'
-        assert not (folder / 'second.txt').exists()
-
-    asyncio.run(run())

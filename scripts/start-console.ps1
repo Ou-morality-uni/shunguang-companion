@@ -14,7 +14,7 @@ function Test-AppReady {
 }
 
 try {
-    if ($Setup) { throw '重新配置已移至 Install.bat -Setup。请先正常停止后端。' }
+    if ($Setup) { throw '请先正常停止后端，再运行 Install.bat -Setup 修复安装记录。' }
     if (Test-AppReady) {
         Write-Host '瞬光伴行已运行，正在打开页面。'
         Write-Host '日志在原来的后端窗口中。停止服务请关闭原后端窗口。'

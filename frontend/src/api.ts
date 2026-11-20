@@ -13,15 +13,8 @@ export type ModelChoiceOut = Schemas['ModelChoiceOut'];
 export type ConnectionOptions = Schemas['ConnectionOptions'];
 export type CloudVoice = Schemas['CloudVoiceOut'];
 export type Sticker = Schemas['StickerOut'];
-export type Workspace = Schemas['WorkspaceOut'];
 export type FileTask = Schemas['FileTaskOut'];
-type FileStepInput = Omit<Schemas['FileStep'], 'start' | 'limit' | 'visual' | 'scope' | 'query'> &
-  Partial<Pick<Schemas['FileStep'], 'start' | 'limit' | 'visual' | 'scope' | 'query'>>;
 export type Attachment = { id: string; name: string; workspace_id: string; path: string; bytes: number };
-export type FileTaskInput = Omit<Schemas['FileTaskRequest'], 'steps' | 'instruction'> & {
-  steps: FileStepInput[];
-  instruction?: string;
-};
 export type Conversation = Schemas['ConversationOut'];
 export type Source = OptionalFields<Schemas['SourceOut']>;
 export type ToolEvent = OptionalFields<Schemas['ToolEventOut']>;

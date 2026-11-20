@@ -35,8 +35,7 @@ import { backgroundStyles, type BackgroundStyle } from './Atmosphere';
 import { GlideSelect } from './components/ui/glide-select';
 import { effortLabels } from './ModelPicker';
 import { ASRSettings } from './ASRSettings';
-import { OfficeCapabilities } from './OfficeCapabilities';
-import { FilePermissions } from './WorkSpace';
+import { ServiceManagement } from './ServiceManagement';
 import { UpdateSettings } from './UpdateSettings';
 
 const categories = [
@@ -44,6 +43,7 @@ const categories = [
   { id: 'voice', label: '声音与播放', icon: AudioLines },
   { id: 'effects', label: '沉浸光效', icon: WandSparkles },
   { id: 'tools', label: '工具服务', icon: Wrench },
+  { id: 'services', label: '服务管理', icon: Wrench },
   { id: 'memory', label: '长期记忆', icon: Heart },
   { id: 'reminders', label: '关怀提醒', icon: Bell },
   { id: 'updates', label: '关于与更新', icon: Info },
@@ -105,6 +105,7 @@ type Props = {
   active: string | null;
   onMemoryChanged: () => void;
   onTestReminder: () => void;
+  onQQ?: () => void;
 };
 function Toggle({
   label,
@@ -147,6 +148,7 @@ export function CompanionSettings({
   active,
   onMemoryChanged,
   onTestReminder,
+  onQQ,
 }: Props) {
   const [draft, setDraft] = useState<ModelSettings | null>(settings),
     [featureDraft, setFeatureDraft] = useState<Features | null>(features),
@@ -1352,7 +1354,7 @@ export function CompanionSettings({
                 </div>
               </>
             )}
-            {panel === 'tools' && <FilePermissions />}
+            {panel === 'services' && <ServiceManagement onVision={() => setPanel('model')} onQQ={onQQ} />}
             {panel === 'tools' && tools && (
               <form
                 onSubmit={(e) => {
@@ -1361,7 +1363,6 @@ export function CompanionSettings({
                 }}
               >
                 <h2>工具服务</h2>
-                <OfficeCapabilities />
                 <Toggle
                   label="天气查询"
                   description="真实天气服务；请在对话中写明城市，缺失或存在歧义时会澄清。"

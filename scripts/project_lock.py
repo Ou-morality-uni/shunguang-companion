@@ -3,10 +3,10 @@
 import os
 
 
-def environment_lock(root):
+def environment_lock(root, name='environment'):
     directory = root / 'data/install'
     directory.mkdir(parents=True, exist_ok=True)
-    stream = (directory / 'environment.lock').open('a+b')
+    stream = (directory / (name + '.lock')).open('a+b')
     try:
         if os.name == 'nt':
             import msvcrt

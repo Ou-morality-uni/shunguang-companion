@@ -3,6 +3,7 @@
 
 function Get-InstallFingerprint {
     $inputs = @('backend/requirements.lock.txt', 'frontend/package.json', 'frontend/package-lock.json', 'frontend/index.html', 'scripts/install-project.py', 'scripts/windows-runtime.ps1', 'scripts/setup-project.py')
+    if (Test-Path -LiteralPath 'frontend/runtime-assets.ts') { $inputs += 'frontend/runtime-assets.ts' }
     $inputs += @(Get-ChildItem -LiteralPath 'frontend/src' -Recurse -File | ForEach-Object { $_.FullName })
     if (Test-Path -LiteralPath 'frontend/scripts') {
         $inputs += @(Get-ChildItem -LiteralPath 'frontend/scripts' -Recurse -File | ForEach-Object { $_.FullName })
@@ -21,7 +22,7 @@ function Read-InstallPreferences {
         $value = Get-Content -LiteralPath 'data/install/preferences.json' -Raw -Encoding UTF8 | ConvertFrom-Json
         if ($value.mode -notin @('full','lite') -or $value.qq -isnot [bool]) { throw 'Invalid preferences' }
         return $value
-    } catch { throw '安装选择记录损坏。保留 data，运行 Install.bat -Setup 重新选择。' }
+    } catch { throw '安装记录损坏。保留 data，运行 Install.bat -Setup 修复记录。' }
 }
 
 function Test-FrontendBuild {
@@ -35,27 +36,6 @@ function Test-FrontendBuild {
         if (-not (Test-Path -LiteralPath $asset -PathType Leaf)) { return $false }
     }
     return $true
-}
-
-function Show-InstallChoices {
-    Write-Host '首次安装 / 重新配置：所有模型服务仍需你填写自己的 API。'
-    Write-Host '1 完整安装：包含本地知识检索，需下载数 GB，至少 12 GiB 磁盘空间。'
-    Write-Host '2 轻量安装：保留聊天、记忆、云端模型与可选 QQ，不下载向量模型，至少 3 GiB 空间。'
-    do { $choice = Read-Host '选择安装模式 [1/2]' } while ($choice -notin @('1','2'))
-    Write-Host 'QQ 接入使用第三方桥接，可能受协议变化或账号风控影响，不保证持续可用。'
-    Write-Host '需自行安装 NapCat、登录本人账号，按联系人/群授权；模型/识图/摘要可能产生费用。'
-    do { $qq = Read-Host '1 暂不接入 QQ（关闭已有连接，保留记录，不下载桥接） / 2 查看 QQ 接入指南' } while ($qq -notin @('1','2'))
-    if ($qq -eq '2') {
-        Write-Host 'QQ 指南：docs/qq-setup.md'
-        Write-Host '官方桥接入口：https://napneko.github.io/guide/boot/Shell'
-    }
-    Write-Host 'LibreOffice 仅用于 Office 页面预览、转 PDF 和公式重算；普通聊天与 QQ 无需安装。'
-    do { $office = Read-Host '1 暂不安装 / 2 查看官方安装指南' } while ($office -notin @('1','2'))
-    if ($office -eq '2') {
-        Write-Host '指南：versions/0.6.1/LibreOffice-install.md'
-        Write-Host '官方下载：https://www.libreoffice.org/download/download-libreoffice/'
-    }
-    return [PSCustomObject]@{ mode = $(if ($choice -eq '1') { 'full' } else { 'lite' }); qq = ($qq -eq '2'); office_guide = ($office -eq '2') }
 }
 
 function Assert-LaunchEnvironment {

@@ -43,7 +43,7 @@ def local_knowledge_enabled() -> bool:
         return True  # Existing desktop installations retain their knowledge base.
     try:
         value = json.loads(path.read_text(encoding='utf-8-sig'))
-        return isinstance(value, dict) and value.get('mode') == 'full'
+        return isinstance(value, dict) and (value.get('knowledge_enabled') is True or value.get('mode') == 'full')
     except (OSError, ValueError):
         return False  # Corrupt preferences must not launch a heavy model unexpectedly.
 

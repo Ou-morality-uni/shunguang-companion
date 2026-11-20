@@ -150,15 +150,14 @@ it('uses a keyboard accessible sliding search selector and one compact saved-ser
   );
 });
 
-it('grants a file folder from settings without also saving unrelated tool settings', async () => {
+it('shows service management without allowing filesystem grants or starting repairs', async () => {
   render(<App />);
   await screen.findByLabelText('给瞬光伴行发送消息');
   fireEvent.click(screen.getByRole('button', { name: '陪伴设置' }));
-  fireEvent.click(await screen.findByRole('tab', { name: '工具服务' }));
-  fireEvent.click(await screen.findByText('本机文件夹授权', { exact: true }));
-  fireEvent.change(screen.getByLabelText('本机文件夹完整路径'), { target: { value: 'D:\\work' } });
-  fireEvent.click(screen.getByRole('button', { name: '授权此文件夹' }));
-  await screen.findByText('工作文件夹已授权。');
+  fireEvent.click(await screen.findByRole('tab', { name: '服务管理' }));
+  fireEvent.click(await screen.findByRole('button', { name: '修复基础' }));
+  await screen.findByText(/先正常关闭后端/);
+  expect(screen.queryByText('本机文件夹授权')).toBeNull();
   expect(
     vi
       .mocked(fetch)
@@ -227,7 +226,7 @@ it('keeps navigation accessible when collapsed and restores the choice after reo
   await screen.findByLabelText('给瞬光伴行发送消息');
   fireEvent.click(screen.getByRole('button', { name: '收起侧栏' }));
   expect(screen.getByRole('button', { name: '展开侧栏' }).getAttribute('aria-expanded')).toBe('false');
-  expect(screen.getByRole('button', { name: '工作台' })).toBeTruthy();
+  expect(screen.getByRole('button', { name: '历史成果' })).toBeTruthy();
   view.unmount();
   render(<App />);
   await waitFor(() => expect(screen.getByRole('button', { name: '展开侧栏' })).toBeTruthy());

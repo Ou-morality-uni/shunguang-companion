@@ -76,7 +76,7 @@ def run(arguments, *, capture=False, check=True, timeout=None):
     return result
 
 
-def preflight(rag_only=False, lite=False, port=8000):
+def preflight(rag_only=False, lite=False, port=8000, online_rag=False):
     if not python_info()['supported']:
         raise RuntimeError(
             'Use Windows x64 and standard CPython 3.11-3.14 (stable, with GIL). '
@@ -90,7 +90,7 @@ def preflight(rag_only=False, lite=False, port=8000):
             raise RuntimeError('Node.js 24 and npm are required; reopen the terminal after installing them.')
         if not run(['node', '--version'], capture=True).stdout.strip().startswith('v24.'):
             raise RuntimeError('Node.js 24 is required.')
-    if (ROOT / 'data/companion.sqlite3').exists():
+    if not online_rag and (ROOT / 'data/companion.sqlite3').exists():
         try:
             with urllib.request.urlopen(f'http://127.0.0.1:{port}/api/health', timeout=1) as response:
                 health = json.load(response)
@@ -211,6 +211,7 @@ def gpu_candidate():
 
 
 def install_rag(args, receipt):
+    print('RAG_STAGE: dependencies', flush=True)
     python = create_environment('.venv-rag')
     gpu = not args.cpu and gpu_candidate()
     index = 'https://download.pytorch.org/whl/cu128' if gpu else 'https://download.pytorch.org/whl/cpu'
@@ -256,6 +257,10 @@ def install_rag(args, receipt):
     if imported.returncode and any(
         marker in imported.stderr.lower() for marker in ('dll', 'winerror 126', 'winerror 127')
     ):
+        if getattr(args, 'online_rag', False):
+            raise RuntimeError(
+                'PyTorch could not load a Windows runtime. Stop the app and repair the base installation.'
+            )
         print('[RAG] PyTorch reported a DLL error; updating the signed Microsoft runtime once.', flush=True)
         ensure_vc_runtime(receipt, force=True)
         imported = run([python, '-c', 'import torch; print(torch.__version__)'], capture=True, check=False)
@@ -299,8 +304,10 @@ def install_rag(args, receipt):
         receipt['retrieval'] = 'dependencies_only; model and index skipped'
         return
     receipt['stage'] = 'model_download'
+    print('RAG_STAGE: model_download', flush=True)
     run([python, 'scripts/download-rag-model.py', '--source', args.model_source])
     receipt['stage'] = 'model_inference_and_index'
+    print('RAG_STAGE: indexing', flush=True)
     run([python, 'scripts/setup-project.py', 'retrieval', '--report', STATE / 'retrieval.json'])
     receipt['retrieval'] = json.loads((STATE / 'retrieval.json').read_text(encoding='utf-8'))
 
@@ -399,6 +406,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--cpu', action='store_true')
     parser.add_argument('--rag-only', action='store_true')
+    parser.add_argument('--online-rag', action='store_true', help=argparse.SUPPRESS)
     parser.add_argument('--skip-frontend', action='store_true')
     parser.add_argument('--skip-model', action='store_true')
     parser.add_argument('--lite', action='store_true', help='Skip vector dependencies, model and index.')
@@ -407,6 +415,8 @@ def main():
     parser.add_argument('--model-source', choices=('release', 'official'), default='release')
     parser.add_argument('--python-info', action='store_true', help='Probe runtime support without installing anything.')
     args = parser.parse_args()
+    if args.online_rag and (not args.rag_only or args.skip_model or args.model_source != 'release'):
+        parser.error('--online-rag requires a complete retrieval-only installation from the pinned release')
     if args.lite and args.rag_only:
         parser.error('--lite and --rag-only cannot be combined')
     if not 1 <= args.port <= 65535:
@@ -438,11 +448,19 @@ def main():
     }
     lease = None
     try:
-        lease = environment_lock(ROOT)
-        preflight(args.rag_only, args.lite, args.port)
+        lease = environment_lock(ROOT, 'rag-install' if args.online_rag else 'environment')
+        if args.online_rag:
+            from backend.app import rag
+
+            if rag.status()['ready']:
+                return 0
+            preflight(rag_only=True, online_rag=True)
+        else:
+            preflight(args.rag_only, args.lite, args.port)
         STATE.mkdir(parents=True, exist_ok=True)
         receipt['stage'] = 'system_runtime'
-        ensure_vc_runtime(receipt)
+        if not args.online_rag:
+            ensure_vc_runtime(receipt)
         if not args.rag_only:
             receipt['stage'] = 'backend_dependencies'
             print('[1/5] Installing backend dependencies.', flush=True)
@@ -486,13 +504,15 @@ def main():
     except (RuntimeError, OSError, subprocess.SubprocessError) as exc:
         receipt['error_type'] = type(exc).__name__
         print('Installation failed at ' + receipt['stage'] + ': ' + str(exc), flush=True)
-        print('Fix the reported problem, then rerun Install.bat. Existing personal data is preserved.', flush=True)
+        if not args.online_rag:
+            print('Fix the reported problem, then rerun Install.bat. Existing personal data is preserved.', flush=True)
     finally:
         if lease is None:
             return 1
         try:
-            write_receipt(receipt)
-            print('Install list: data/install-list.md', flush=True)
+            if not args.online_rag:
+                write_receipt(receipt)
+                print('Install list: data/install-list.md', flush=True)
         except (OSError, ValueError, subprocess.SubprocessError):
             receipt['status'] = 'failed'
             print('Installation failed: could not write the required install list.', flush=True)
@@ -504,6 +524,8 @@ def main():
         else:
             print('[5/5] Installation ' + receipt['status'] + '.', flush=True)
         return 0
+    if args.online_rag:
+        print('RAG_FAILED: ' + receipt['stage'], flush=True)
     return 1
 
 

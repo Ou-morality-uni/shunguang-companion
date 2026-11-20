@@ -1,32 +1,12 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, expect, it, vi } from 'vitest';
 import { request } from './api';
-import { UploadDocuments, VisionApproval } from './DocumentControls';
+import { VisionApproval } from './DocumentControls';
 
 vi.mock('./api', () => ({ request: vi.fn() }));
 afterEach(() => {
   cleanup();
   vi.resetAllMocks();
-});
-
-it('uploads a local copy and prepares document reading without silently starting recognition', async () => {
-  const onUploaded = vi.fn();
-  const workspace = { id: 'attachments', path: 'local attachments', enabled: true };
-  vi.mocked(request).mockResolvedValue({ workspace, path: 'copy-example.pdf' });
-  render(<UploadDocuments onUploaded={onUploaded} />);
-  const file = new File(['pdf sample'], 'example.pdf', { type: 'application/pdf' });
-  fireEvent.change(screen.getByLabelText('选择上传文件'), { target: { files: [file] } });
-  await waitFor(() =>
-    expect(onUploaded).toHaveBeenCalledWith(workspace, [
-      { action: 'read_document', path: 'copy-example.pdf', start: 1, limit: 20 },
-    ]),
-  );
-  expect(request).toHaveBeenCalledTimes(1);
-  expect(request).toHaveBeenCalledWith('/work/upload?name=example.pdf', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/octet-stream' },
-    body: file,
-  });
 });
 
 it('shows the destination, file, locations and cost before binding a selected vision service', async () => {

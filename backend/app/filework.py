@@ -106,6 +106,7 @@ class FileWork(PathAccess):
 
         recover(self)
         store.interrupt_file_tasks()
+        self.retire_legacy_tasks()
 
     def close(self):
         with self.gate:
@@ -138,6 +139,33 @@ class FileWork(PathAccess):
         if record is None:
             raise WorkError('任务不存在。', 404)
         return record
+
+    def read_only_task(self, task):
+        workspace = self.store.get_workspace(task['workspace_id'])
+        return (
+            bool(workspace)
+            and Path(workspace['path']) == self.upload_root
+            and not task['context'].get('save_result', True)
+            and all(
+                step['action'] in ('read_document', 'summarize')
+                and step.get('workspace_id', task['workspace_id']) == task['workspace_id']
+                for step in task['steps']
+            )
+        )
+
+    def retire_legacy_tasks(self):
+        with self.store.connect() as db:
+            waiting = [
+                row['id']
+                for row in db.execute(
+                    "SELECT id FROM file_tasks WHERE status IN ('waiting_approval','waiting_vision','waiting_limit','waiting_output')"
+                )
+            ]
+        for identity in waiting:
+            task = self.task(identity)
+            if not self.read_only_task(task) or task['status'] in ('waiting_approval', 'waiting_output'):
+                task.update(status='interrupted', error='旧版办公任务已停用，历史文件仍保留。')
+                self.store.save_file_task(task)
 
     def submit(self, payload, origin='workbench', conversation_id=None, model_choice=None, source_message_id=None):
         with self.gate:

@@ -78,7 +78,7 @@ def test_uninstalled_start_exits_without_calling_install(tmp_path, arguments):
 @pytest.mark.parametrize(
     ('state', 'message'),
     [
-        ('corrupt', '安装选择记录损坏'),
+        ('corrupt', '安装记录损坏'),
         ('no-python', '缺少项目的 Python 虚拟环境'),
         ('no-bundle', '前端构建产物缺失'),
         ('outdated', '输入已变更'),
@@ -176,21 +176,27 @@ def test_start_does_not_replace_a_listening_service(tmp_path, project):
     assert not (tmp_path / 'data').exists()
 
 
-def test_install_entry_owns_first_run_and_setup_choices(tmp_path):
+def test_install_entry_installs_only_base_and_launches_after_releasing_lock(tmp_path):
     scripts = tmp_path / 'scripts'
     scripts.mkdir()
     helper = (ROOT / 'scripts/prepare-launch.ps1').read_text(encoding='utf-8-sig')
     (scripts / 'prepare-launch.ps1').write_text(
         helper
         + """
-$script:answers = [Collections.Generic.Queue[string]]::new()
-@('2','2','1') | ForEach-Object { $script:answers.Enqueue($_) }
-function Read-Host { param($Prompt) return $script:answers.Dequeue() }
+function Read-Host { throw 'Unexpected setup prompt' }
 function Get-InstallFingerprint { return 'fixture-fingerprint' }
 """,
         encoding='utf-8-sig',
     )
     (scripts / 'select-python.ps1').touch()
+    (scripts / 'start-console.ps1').write_text(
+        """param([int]$Port)
+$lock = [IO.File]::Open((Join-Path (Get-Location) 'data/install/launcher.lock'), 'Open', 'ReadWrite', 'None')
+$lock.Dispose()
+Set-Content 'launched' $Port
+exit 0
+"""
+    )
     (scripts / 'windows-runtime.ps1').write_text(
         """
 function Initialize-ProjectPython {
@@ -208,24 +214,30 @@ function Initialize-ProjectNode {}
     preferences = tmp_path / 'data/install/preferences.json'
     preferences.parent.mkdir(parents=True)
     env = {'TEST_PYTHON': sys.executable}
-    first = run_entry(tmp_path, 'Install.bat', env=env)
+    first = run_entry(tmp_path, 'Install.bat', '-Port', '8123', env=env)
     assert first.returncode == 0, first.stdout + first.stderr
     assert (tmp_path / 'installed-mode').read_text() == 'lite'
-    assert 'Start_up.bat' in first.stdout
+    assert (tmp_path / 'launched').read_text().strip() == '8123'
     assert json.loads(preferences.read_text()) == {
         'mode': 'lite',
-        'qq': True,
+        'qq': False,
         'office_guide': False,
         'fingerprint': 'fixture-fingerprint',
     }
     first_preferences = preferences.read_bytes()
+    (tmp_path / 'launched').unlink()
     failed = run_entry(tmp_path, 'Install.bat', '-Full', env={**env, 'TEST_INSTALL_FAILURE': '1'})
     assert failed.returncode == 1
     assert preferences.read_bytes() == first_preferences
+    assert not (tmp_path / 'launched').exists()
+    installed = json.loads(first_preferences)
+    installed.update(mode='full', qq=True, knowledge_enabled=True)
+    preferences.write_text(json.dumps(installed))
     repaired = run_entry(tmp_path, 'Install.bat', env=env)
     assert repaired.returncode == 0, repaired.stdout + repaired.stderr
     assert '选择安装模式' not in repaired.stdout
     assert (tmp_path / 'installed-mode').read_text() == 'lite'
+    assert json.loads(preferences.read_text()) == installed
     preferences.write_text('bad-record')
     setup = run_entry(tmp_path, 'Install.bat', '-Setup', env=env)
     assert setup.returncode == 0, setup.stdout + setup.stderr
@@ -316,12 +328,12 @@ function Start-Process {
     (scripts / 'install-project.py').write_text(
         """import sys
 if '--python-info' in sys.argv:
-    print('{"supported":true,"version":[3,14,10]}')
+    print('{"supported":true,"version":[3,13,17]}')
 """,
         encoding='utf-8',
     )
     local_app_data = tmp_path / 'local'
-    cached = local_app_data / 'ShunguangCompanion/runtimes/python-3.14.10/python.exe'
+    cached = local_app_data / 'ShunguangCompanion/runtimes/python-3.13.17/python.exe'
     if discover == 'cached':
         cached.parent.mkdir(parents=True)
         cached.touch()
@@ -330,7 +342,7 @@ if '--python-info' in sys.argv:
         'TEST_DISCOVERY': discover,
         'TEST_PYTHON': sys.executable,
         'TEST_SHA256': (
-            '0' * 64 if discover == 'bad-hash' else '92480239264744fe0386a1bd8275786fefa126e3129e56a68e22b52c73329965'
+            '0' * 64 if discover == 'bad-hash' else '5da012101ba2e17113a9a1cd901e9ce1441086f2b7ecb5de06ec94163899a190'
         ),
     }
     arguments = ('-CheckPython',) if discover == 'check-missing' else ('-Lite', '-SkipFrontend')
@@ -354,7 +366,7 @@ if '--python-info' in sys.argv:
         assert 'Download:' not in result.stdout
         return
     if discover != 'cached':
-        assert 'Download: https://www.python.org/ftp/python/3.14.10/python-3.14.10-amd64.exe' in result.stdout
+        assert 'Download: https://www.python.org/ftp/python/3.13.17/python-3.13.17-amd64.exe' in result.stdout
     else:
         assert 'Download:' not in result.stdout
     if discover == 'bad-hash':
@@ -370,7 +382,7 @@ if '--python-info' in sys.argv:
         assert 'exit 1603' in result.stdout
     else:
         assert result.returncode == 0, result.stdout + result.stderr
-        assert 'Using CPython 3.14.10' in result.stdout
+        assert 'Using CPython 3.13.17' in result.stdout
         assert cached.is_file()
 
 
@@ -423,24 +435,6 @@ Initialize-ProjectNode
     assert result.returncode != 0
     assert message in result.stderr
     assert not (tmp_path / 'ShunguangCompanion/runtimes/node-v24.22.2-win-x64').exists()
-
-
-def test_wizard_keeps_install_mode_qq_and_office_choices_independent(tmp_path):
-    helper = str(ROOT / 'scripts/prepare-launch.ps1').replace("'", "''")
-    result = powershell(
-        tmp_path,
-        f"""
-. '{helper}'
-$script:answers = [Collections.Generic.Queue[string]]::new()
-@('2','1','2') | ForEach-Object {{ $script:answers.Enqueue($_) }}
-function Read-Host {{ param($Prompt) return $script:answers.Dequeue() }}
-$chosen = Show-InstallChoices
-Write-Output ('RESULT:' + ($chosen | ConvertTo-Json -Compress))
-""",
-    )
-    assert result.returncode == 0, result.stderr
-    record = next(line.removeprefix('RESULT:') for line in result.stdout.splitlines() if line.startswith('RESULT:'))
-    assert json.loads(record) == {'mode': 'lite', 'qq': False, 'office_guide': True}
 
 
 def test_windows_entry_scripts_parse_without_running_installation(tmp_path):

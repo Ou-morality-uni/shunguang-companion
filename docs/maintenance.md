@@ -25,9 +25,9 @@
 
 `services.py` 的语音、工具和提醒路由继续复用公共访问保护。检索继续使用现有模型；语音新增多厂商适配，见 [TTS 接入与选型](tts.md)。
 
-## 0.7.2 安装与共同源码边界
+## 安装与共同源码边界
 
-`Install.bat` → `install.ps1` 管理首装、更新和修复，`Install.bat -Setup` 重新选择安装模式和可选指南。`windows-runtime.ps1` 准备经过官方校验的运行时，`install-project.py` 负责所选依赖和安装清单。`Start_up.bat` → `start-console.ps1` 只检查就绪条件和启动前台服务，遇到不完整或过期的安装时提示运行 `Install.bat`。`prepare-launch.ps1` 提供共用检查与安装选择读取；桌面入口保留启动锁，`project_lock.py` 继续让安装器与桌面／LAN 前台服务互斥。
+`Install.bat` 仅准备基础环境，成功释放安装锁后交给 `start-console.ps1` 启动。`Start_up.bat` 只检查并启动既有环境。知识库安装从 Windows 本机网页触发，使用固定的独立安装流程和检索锁，验收通过后更新启用状态，不替换运行中的基础环境。Linux 与 LAN 不提供网页安装入口。
 
 本地与公开源码共用 `edition.py`／`edition.tsx` 的QQ装配点，不再在公开导出时剔除QQ。后端 `turn.py`、`turn_stream.py`、`turn_lifecycle.py` 承担共同回合，HTTP路由不重复维护第二套编排；QQ权限与独立库仍由QQ模块管理。只有禁用的后台服务不应进行高频轮询。
 

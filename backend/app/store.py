@@ -136,14 +136,21 @@ class Store:
             ]
             return record
 
-    def list_file_tasks(self, limit=50, conversation_id=None):
+    def list_file_tasks(self, limit=50, conversation_id=None, *, artifacts_only=False, offset=0):
         with self.connect() as db:
             query = 'SELECT * FROM file_tasks'
             params = []
+            filters = []
             if conversation_id is not None:
-                query += ' WHERE conversation_id=?'
+                filters.append('conversation_id=?')
                 params.append(conversation_id)
-            rows = db.execute(query + ' ORDER BY created_at DESC LIMIT ?', (*params, limit))
+            if artifacts_only:
+                filters.append(
+                    "(json_array_length(context, '$.artifacts') > 0 OR json_type(context, '$.artifact') = 'object')"
+                )
+            if filters:
+                query += ' WHERE ' + ' AND '.join(filters)
+            rows = db.execute(query + ' ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?', (*params, limit, offset))
             records = [
                 {
                     **dict(row),
@@ -227,7 +234,7 @@ class Store:
         with self.connect() as db:
             db.execute(
                 "UPDATE file_tasks SET status='interrupted',error=?,updated_at=? WHERE status IN ('queued','running','restoring')",
-                ('服务已重启。请检查操作记录，按需恢复；不会自动重放文件操作。', now()),
+                ('服务已重启，未完成任务不会自动重跑。历史文件仍保留。', now()),
             )
 
     def add_work_event(self, task_id, kind, text):

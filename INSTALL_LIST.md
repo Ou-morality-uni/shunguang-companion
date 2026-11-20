@@ -2,15 +2,15 @@
 
 完整与轻量的步骤有所区别，以下检索组件仅在完整安装时处理。实际结果以每次安装生成的清单为准。
 
-先双击根目录的 `Install.bat` 安装、更新或修复；成功后再双击 `Start_up.bat` 启动。启动入口不下载或安装依赖。
+先双击根目录的 `Install.bat` 安装、更新或修复基础环境；成功后自动启动并打开网页。日常双击 `Start_up.bat`，启动入口不下载或安装依赖。以下旧版组件说明与当前使用流程冲突时，以 [v0.7.7 说明](versions/0.7.7/README.md) 为准。
 
 本文件列出默认完整安装涉及的组件。每次安装的实际包名、版本、处理状态和模型文件SHA256会写入 **`data/install-list.md`**；详细阶段记录在 `data/install/result.json`。这些本机记录不上传GitHub。
 
 ## 基础条件与首次选择
 
 - Windows10/11 x64；联网访问官方运行时、PyPI、npm和完整模式的模型源。
-- `Install.bat` 首装向导提供完整／轻量、QQ 与 LibreOffice 指南选项，`Install.bat -Setup` 可重新选择。完整至少 12 GiB，轻量至少 3 GiB 可用磁盘。
-- 优先复用兼容的标准 64 位 CPython 3.11～3.14 和 Node.js 24。找不到兼容 Python 时才准备官方 Python 3.14.10，缺少 Node.js 时准备 Node.js 24.22.2。运行时放在当前用户专用目录，使用锁定的 SHA-256；Python 安装器另验 PSF 签名。不修改系统 PATH。安装窗口会显示实际选中的 Python 版本和路径。
+- 基础环境无需下载本地知识库；安装知识库请在 Windows 主机的「陪伴设置 → 服务管理」确认，至少预留 12 GiB 磁盘空间。
+- 优先复用兼容的标准 64 位 CPython 3.11～3.14 和 Node.js 24。找不到兼容 Python 时准备官方 Python 3.13.17，缺少 Node.js 时准备 Node.js 24.22.2。运行时放在当前用户专用目录，使用锁定的 SHA-256；Python 安装器另验 PSF 签名。不修改系统 PATH。
 - 轻量跳过torch、transformers、Qdrant依赖和BGE-M3；共享依赖仍安装。QQ桥接和LibreOffice由用户按指南安装，不由项目自动下载。
 - GPU驱动由用户管理，不自动安装。首次VC++运行库安装可能需要系统授权。
 

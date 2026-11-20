@@ -97,6 +97,7 @@ def read(work, task, step, check):
             step.get('limit', 20),
             check,
             force_visual=step.get('visual', False),
+            text_only=work.read_only_task(task),
             **(
                 {
                     'full': True,
@@ -110,6 +111,16 @@ def read(work, task, step, check):
         )
     except document_readers.DocumentError as error:
         raise WorkError(str(error), 422)
+    if (
+        work.read_only_task(task)
+        and not result['blocks']
+        and not result['next_start']
+        and not step.get('result', {}).get('blocks')
+        and any(
+            '扫描版 PDF' in warning for warning in [*result['warnings'], *step.get('result', {}).get('warnings', [])]
+        )
+    ):
+        raise WorkError('此 PDF 没有可提取的文字，扫描版 PDF 暂不支持。', 422)
     recognized = step.setdefault('recognized', [])
     locations = {image['location'] for image in images}
     result['blocks'].extend(block for block in recognized if block['location'] in locations)
@@ -133,9 +144,12 @@ def read(work, task, step, check):
             step.pop('vision_approval')
             return pending(work, task, step, images, '授权后模型配置发生变化，需要重新核对服务并授权。')
     elif images and (
-        value.llm_vision != 'supported' or step.get('vision_request') or not config.public_config(value)['configured']
+        work.read_only_task(task)
+        or value.llm_vision != 'supported'
+        or step.get('vision_request')
+        or not config.public_config(value)['configured']
     ):
-        return pending(work, task, step, images, '当前模型尚未确认具备所需视觉能力，或接口不接受本次图像输入。')
+        return pending(work, task, step, images, '请确认将聊天图片发送给所选视觉模型。')
     for image in images:
         check()
         work.cues.stage(task, 'recognizing')

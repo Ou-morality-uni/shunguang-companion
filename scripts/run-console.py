@@ -114,6 +114,7 @@ def main():
     os.chdir(ROOT)
     sys.path.insert(0, str(ROOT))
     os.environ['SHUNGUANG_LAN_MODE'] = '1' if args.lan else '0'
+    os.environ['SHUNGUANG_INTERACTIVE_DESKTOP'] = '0' if args.lan else '1'
     bind_console_lifetime()
 
     from scripts.project_lock import environment_lock
@@ -137,6 +138,7 @@ def main():
             log_level='info',
             log_config=logs,
             access_log=True,
+            proxy_headers=False,
             timeout_graceful_shutdown=5,
         )
     finally:

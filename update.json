@@ -1,6 +1,6 @@
 {
-  "version": "0.7.6",
-  "published_at": "2026-11-19",
-  "summary": "Windows 安装优先复用兼容 Python；未找到时自动准备 3.14.10，并显示实际使用的解释器路径。",
-  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.6/README.md"
+  "version": "0.7.7",
+  "published_at": "2026-11-20",
+  "summary": "办公能力精简为附件阅读与总结，Windows 基础安装后打开网页，本地知识库可在服务管理按需安装。",
+  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.7/README.md"
 }

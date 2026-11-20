@@ -50,6 +50,7 @@ class Extraction:
         self.start, self.limit, self.check = start, limit, check
         self.size = 0
         self.force_visual = force_visual
+        self.text_only = False
         self.full, self.offset, self.image_start, self.row_start = full, offset, image_start, row_start
         self.seen, self.image_count = 0, 0
 
@@ -98,6 +99,8 @@ class Extraction:
             )
 
     def image(self, location, data, strict=False):
+        if self.text_only:
+            return
         self.check()
         self.image_count += 1
         if self.full and self.image_count <= self.image_start:
@@ -135,6 +138,10 @@ def pdf(data, extraction):
                     raise DocumentError('单页文字过多，请使用较小的文档副本。')
                 text = textpage.get_text_bounded()
                 extraction.add(location, text)
+                if extraction.text_only:
+                    if not text.strip():
+                        extraction.warn('部分 PDF 页面没有可提取的文字，扫描版 PDF 暂不支持。')
+                    continue
                 has_image = next(page.get_objects(filter=[pdfium.raw.FPDF_PAGEOBJ_IMAGE]), None) is not None
                 if extraction.force_visual or not text.strip() or has_image:
                     width, height = page.get_size()
@@ -150,6 +157,8 @@ def pdf(data, extraction):
             finally:
                 textpage.close()
                 page.close()
+        if extraction.text_only:
+            return
         extraction.warn(
             'PDF 的文字顺序可能与视觉排版不同；视觉识别结果也应结合原页核对。'
             if extraction.force_visual
@@ -291,11 +300,22 @@ def extract(
     offset=0,
     image_start=0,
     row_start=1,
+    text_only=False,
 ):
     extraction = Extraction(
         name, start, limit, check, force_visual, full=full, offset=offset, image_start=image_start, row_start=row_start
     )
     suffix = Path(name).suffix.lower()
+    extraction.text_only = text_only and suffix not in (
+        '.png',
+        '.jpg',
+        '.jpeg',
+        '.webp',
+        '.bmp',
+        '.tif',
+        '.tiff',
+        '.gif',
+    )
     try:
         if suffix == '.pdf':
             pdf(data, extraction)

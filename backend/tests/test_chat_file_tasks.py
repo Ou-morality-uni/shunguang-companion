@@ -49,10 +49,14 @@ def test_file_tool_explains_invalid_fields_so_the_model_can_correct_and_retry(se
     from backend.app import feature_config
     from backend.app.tool_registry import ToolRegistry
 
-    work, workspace_id, source, _, cid, _ = setup
-    (source / 'source.txt').write_text('known source', encoding='utf-8')
+    work, _, _, _, cid, _ = setup
+    source = attachment(work, work.upload('source.txt', b'known source')['task']['id'])
+    work.store.add_message(cid, 'user', 'read', metadata={'attachments': [source]})
     registry = ToolRegistry(feature_config.load(), work.store, {'conversation_id': cid}, [], work)
-    args = {'workspace_id': workspace_id, 'steps': [{'action': 'read_document', 'path': 'source.txt', 'limit': 100}]}
+    args = {
+        'workspace_id': source['workspace_id'],
+        'steps': [{'action': 'read_document', 'path': source['path'], 'limit': 100}],
+    }
     failed = asyncio.run(registry.execute('workspace_files', args))
     assert failed['ok'] is False
     assert failed['validation_errors'][0]['field'] == 'steps.0.limit'
@@ -77,7 +81,7 @@ def submit(setup, filename, scope='full', **kwargs):
     )
 
 
-def test_office_tool_reports_missing_fields_without_submitting_a_task(setup):
+def test_office_tools_and_legacy_write_routes_no_longer_create_tasks(setup, monkeypatch):
     from backend.app import feature_config
     from backend.app.tool_registry import ToolRegistry
 
@@ -85,7 +89,12 @@ def test_office_tool_reports_missing_fields_without_submitting_a_task(setup):
     registry = ToolRegistry(feature_config.load(), work.store, {'conversation_id': cid}, [], work)
     result = asyncio.run(registry.execute('office_files', {'operation': 'edit', 'spec': {'edits': []}}))
     assert result['ok'] is False
-    assert {item['field'] for item in result['validation_errors']} >= {'format', 'name'}
+    assert 'office_files' not in registry.handlers
+    monkeypatch.setattr(runtime, 'store', work.store)
+    with TestClient(main.app) as client:
+        assert client.post('/api/work/office/tasks', json={}).status_code == 404
+        assert client.post('/api/work/workspaces', json={'path': str(work.upload_root)}).status_code == 404
+        assert client.post('/api/work/tasks', json={}).status_code == 405
     assert work.store.list_file_tasks(conversation_id=cid) == []
 
 
@@ -134,8 +143,8 @@ def test_summary_retry_rejects_changed_source_or_revoked_authorization(setup, mo
 
 
 def test_retry_summary_endpoint_requires_an_explicit_local_request(setup, monkeypatch):
-    work, _, source, _, _, _ = setup
-    (source / 'source.txt').write_text('Material', encoding='utf-8')
+    work, _, _, _, conversation_id, _ = setup
+    uploaded = attachment(work, work.upload('source.txt', b'Material')['task']['id'])
     attempts = []
 
     async def model(value, *args):
@@ -145,7 +154,18 @@ def test_retry_summary_endpoint_requires_an_explicit_local_request(setup, monkey
         return 'Recovered'
 
     monkeypatch.setattr(document_models, 'invoke', model)
-    failed = wait(work, submit(setup, 'source.txt'))
+    failed = wait(
+        work,
+        work.submit(
+            FileTaskRequest(
+                workspace_id=uploaded['workspace_id'],
+                instruction='总结资料',
+                steps=[{'action': 'read_document', 'path': uploaded['path'], 'scope': 'full'}],
+            ),
+            'chat',
+            conversation_id,
+        ),
+    )
     monkeypatch.setattr(runtime, 'store', work.store)
     with TestClient(main.app) as client:
         response = client.post('/api/work/tasks/' + failed['id'] + '/retry-summary', json={'extend_timeout': True})
@@ -543,12 +563,57 @@ def test_attachment_preview_and_download_are_local_only_and_do_not_invoke_models
         uploaded = client.post('/api/work/upload?name=example.png', content=output.getvalue()).json()
         task_id = uploaded['task']['id']
         assert client.get(f'/api/work/files/{task_id}').content == output.getvalue()
-        assert client.get(f'/api/work/files/{task_id}/preview').status_code == 200
-        preview = client.get(f'/api/work/files/{task_id}/image')
-        assert preview.headers['content-type'] == 'image/jpeg' and calls == []
+        assert client.get(f'/api/work/files/{task_id}/preview').status_code == 404
+        assert calls == []
     with TestClient(main.app, client=('192.168.1.5', 123)) as client:
         assert client.get(f'/api/work/files/{task_id}').status_code == 403
         assert client.post('/api/chat', json={'content': 'read', 'attachments': [task_id]}).status_code == 403
+
+
+def test_history_lists_existing_artifact_and_serves_its_bytes(setup, monkeypatch):
+    from backend.app.work_artifacts import save_file
+
+    work, workspace_id, _, _, cid, _ = setup
+    historical = work.store.create_file_task(workspace_id, '旧版成果', [], 'complete', 'workbench', cid)
+    save_file(work, historical, '旧版报告.md', b'previously saved', {})
+    monkeypatch.setattr(runtime, 'store', work.store)
+    with TestClient(main.app) as client:
+        found = client.get('/api/work/tasks?compact=true&artifacts_only=true')
+        assert found.status_code == 200
+        assert [task['id'] for task in found.json()] == [historical['id']]
+        response = client.get('/api/work/artifacts/' + historical['id'])
+        assert response.status_code == 200
+        assert response.content == b'previously saved'
+
+
+def test_scanned_pdf_upload_does_not_fall_back_to_external_vision(setup, monkeypatch):
+    from reportlab.pdfgen.canvas import Canvas
+
+    work, _, _, _, cid, calls = setup
+    stream = io.BytesIO()
+    canvas = Canvas(stream)
+    canvas.rect(20, 20, 100, 100, fill=1)
+    canvas.showPage()
+    canvas.save()
+    uploaded = attachment(work, work.upload('scanned.pdf', stream.getvalue())['task']['id'])
+
+    async def no_vision(*args):
+        pytest.fail('Scanned pages must not be sent to an external model')
+
+    monkeypatch.setattr(document_models, 'recognize', no_vision)
+    task = work.submit(
+        FileTaskRequest(
+            workspace_id=uploaded['workspace_id'],
+            instruction='总结资料',
+            steps=[{'action': 'read_document', 'path': uploaded['path'], 'scope': 'full'}],
+        ),
+        'chat',
+        cid,
+    )
+    completed = wait(work, task)
+    assert completed['status'] == 'failed'
+    assert '扫描版 PDF 暂不支持' in completed['error']
+    assert not calls
 
 
 def test_visual_overflow_can_be_paged_without_losing_text_or_images():

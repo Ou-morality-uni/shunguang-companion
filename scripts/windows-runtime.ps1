@@ -1,6 +1,6 @@
 ﻿# Reuse compatible runtimes; fall back to verified official user-local copies.
 $script:runtimeRoot = Join-Path $env:LOCALAPPDATA 'ShunguangCompanion\runtimes'
-$script:pythonVersion = '3.14.10'
+$script:pythonVersion = '3.13.17'
 $script:nodeVersion = '24.22.2'
 
 function Get-FileSha256([string]$Path) {
@@ -32,7 +32,7 @@ function Initialize-ProjectPython([string]$PythonPath) {
     $name = "python-$script:pythonVersion-amd64.exe"
     $installer = Join-Path $script:runtimeRoot $name
     Write-Host "Preparing Python $script:pythonVersion for the current user."
-    Get-VerifiedDownload "https://www.python.org/ftp/python/$script:pythonVersion/$name" $installer '92480239264744fe0386a1bd8275786fefa126e3129e56a68e22b52c73329965'
+    Get-VerifiedDownload "https://www.python.org/ftp/python/$script:pythonVersion/$name" $installer '5da012101ba2e17113a9a1cd901e9ce1441086f2b7ecb5de06ec94163899a190'
     $signature = Get-AuthenticodeSignature -LiteralPath $installer
     if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notmatch 'CN=Python Software Foundation(?:,|$)') {
         throw 'Python installer signature could not be verified.'

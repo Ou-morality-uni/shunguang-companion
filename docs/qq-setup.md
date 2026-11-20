@@ -1,6 +1,6 @@
 # QQ 可选接入指南
 
-普通 Web 聊天无需 QQ。首次运行 `Install.bat` 可选“暂不接入”，不会下载 NapCat；以后停止后端，运行 `Install.bat -Setup` 可重新查看接入指南。完整／轻量安装均可接 QQ。
+普通 Web 聊天无需 QQ。基础安装不会下载 NapCat，也不会重置已有 QQ 连接。可以在「陪伴设置 → 服务管理 → QQ 接入」查看状态、官方安装指南和连接入口。
 
 ## 使用前说明
 
@@ -8,7 +8,7 @@ NapCat 是第三方桥接，并非腾讯官方机器人接入；协议变化、�
 
 ## Windows
 
-1. 双击 `Install.bat` 完成安装，再双击 `Start_up.bat`。在网页配置自己的模型连接，确认 Web 能正常回复。
+1. 双击 `Install.bat`，等待基础安装成功并打开网页。之后日常用 `Start_up.bat`。在网页配置自己的模型连接，确认 Web 能正常回复。
 2. 阅读 [NapCat 官方 Shell 指南](https://napneko.github.io/guide/boot/Shell)，从官方发布入口选择 Windows 安装方式，解压到独立目录并按官方步骤运行、扫码登录。已有可用桥接可复用，不要重复安装或覆盖登录目录。Framework 用于已有相应桌面插件环境的使用者，不是新手必需项。
 3. 在 NapCat 的网络配置中添加 **WebSocket 服务端（正向）**：监听 `127.0.0.1`，端口 `3001`，消息格式 `array`，启用；设置独立 Access Token，关闭自身消息上报。不要把 WebUI 登录 Token 误当 OneBot Token。
 4. 打开叶瞬光“QQ 接入 → 连接”，填写机器人 QQ 号、`ws://127.0.0.1:3001`、相同 OneBot Token，选择回复模型，勾选启用并保存。查看连接状态；桥接未安装或离线不影响 Web 使用。

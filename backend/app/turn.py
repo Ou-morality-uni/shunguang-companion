@@ -55,32 +55,11 @@ async def generate_chat(
 
         for attachment_id in dict.fromkeys(payload.attachments):
             attachments.append(await asyncio.to_thread(invoke, attachment, runtime.work, attachment_id))
+    if payload.annotations:
+        raise HTTPException(422, '本版不再接收新批注。请直接在聊天中描述要阅读的内容。')
     # Reserve before yielding to I/O. Deletion shares the gate; never discard a live lock.
     async with runtime.mutation_lock:
         annotation_items = []
-        if payload.annotations:
-            from . import annotations
-            from .work_artifacts import attachment
-            from .work_models import WorkError
-
-            if not is_local or runtime.work is None:
-                raise HTTPException(403, '本机批注仅能由本机对话使用。')
-            try:
-                annotation_items = await asyncio.to_thread(
-                    annotations.prepare,
-                    store,
-                    runtime.work,
-                    payload.annotations,
-                    payload.conversation_id,
-                    payload.annotation_scope,
-                )
-                for item in annotation_items:
-                    if item['source']['kind'] == 'attachment' and not any(
-                        reference['id'] == item['source']['id'] for reference in attachments
-                    ):
-                        attachments.append(await asyncio.to_thread(attachment, runtime.work, item['source']['id']))
-            except WorkError as error:
-                raise HTTPException(error.status, error.message)
         if payload.conversation_id:
             existing = await asyncio.to_thread(store.get_conversation, payload.conversation_id)
             if not existing:
@@ -239,10 +218,6 @@ async def generate_chat(
                             )
                         )
                     )
-            if annotation_items:
-                from .annotations import model_context
-
-                history.append(HumanMessage(content=await io(model_context, store, annotation_items)))
             if context:
                 history[0].content += '\n\n当前渠道规则：' + context
             if reference:

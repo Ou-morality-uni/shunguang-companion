@@ -1,7 +1,6 @@
 """Local dependency readiness without loading models or calling providers."""
 
 from . import config, runtime
-from .office_runtime import find_office
 
 
 def dependencies():
@@ -9,7 +8,6 @@ def dependencies():
         'storage': 'unavailable',
         'model': 'unconfigured',
         'rag': 'disabled' if not config.local_knowledge_enabled() else 'not_ready',
-        'office': 'available_on_demand' if find_office() else 'not_installed',
     }
     try:
         if runtime.store.path.is_file():
