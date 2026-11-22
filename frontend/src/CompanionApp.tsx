@@ -1,3 +1,5 @@
+import { updateValue } from './updateStorage';
+import { watchDesktopUpdate } from './UpdateSettings';
 import { Fragment, useEffect, useRef, useState } from 'react';
 import { AnimatePresence, motion, MotionConfig } from 'motion/react';
 import {
@@ -161,6 +163,14 @@ export default function App() {
       /* Main connection errors are shown independently. */
     }
   }
+  useEffect(() => {
+    const remember = () => {
+      if (chat.active) updateValue('update.conversation', chat.active);
+    };
+    window.addEventListener('companion-update-reload', remember);
+    void watchDesktopUpdate();
+    return () => window.removeEventListener('companion-update-reload', remember);
+  }, [chat.active]);
   async function refreshVersion() {
     try {
       const value = await request<{ version: string }>('/health');
@@ -190,7 +200,14 @@ export default function App() {
         const status = await request<{ required: boolean; authenticated: boolean }>('/auth/status');
         if (!live) return;
         setAuthRequired(status.required && !status.authenticated);
-        if (!status.required || status.authenticated) await refresh();
+        if (!status.required || status.authenticated) {
+          await refresh();
+          const previous = updateValue('update.conversation');
+          if (live && previous) {
+            updateValue('update.conversation', null);
+            chat.selectConversation(previous);
+          }
+        }
       } catch {
         if (live) setError('暂时连接不上本机服务，请确认后端已启动。');
       } finally {

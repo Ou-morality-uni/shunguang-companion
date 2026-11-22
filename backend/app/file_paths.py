@@ -59,7 +59,12 @@ class PathAccess:
             return
         if path == self.output_root or self.output_root in path.parents:
             return
-        protected = [config.DATA_DIR.resolve(), config.ROOT / '.git', config.ROOT / '.codex']
+        protected = [
+            config.DATA_DIR.resolve(),
+            config.ROOT / '.git',
+            config.ROOT / '.codex',
+            config.ROOT / '.shunguang-update',
+        ]
         if any(path == item or item in path.parents for item in protected):
             raise WorkError('应用数据、凭据和内部管理目录不属于工作文件范围。', 403)
 

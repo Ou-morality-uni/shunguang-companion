@@ -8,7 +8,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import access, edition, runtime, updates
+from . import access, edition, release_updates, runtime, updates
 from .config import ROOT, local_knowledge_enabled, server_mode
 from .constants import MAX_MESSAGE_LENGTH, VERSION
 from .filework import FileWork
@@ -70,6 +70,7 @@ def capabilities():
 
 for router in (
     settings.router,
+    release_updates.router,
     chat.router,
     memories.router,
     knowledge.router,

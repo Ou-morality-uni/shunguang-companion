@@ -32,7 +32,8 @@ try {
     try { $launchLock = [IO.File]::Open((Join-Path $projectRoot 'data/install/launcher.lock'), 'OpenOrCreate', 'ReadWrite', 'None') }
     catch { throw '另一个窗口正在安装或运行本项目，请回到原窗口。' }
     . (Join-Path $PSScriptRoot 'prepare-launch.ps1')
-    Assert-LaunchEnvironment
+    $supervisor = Join-Path $projectRoot '.shunguang-update/supervisor.py'
+    if (-not (Test-Path -LiteralPath '.shunguang-update/switch.json')) { Assert-LaunchEnvironment }
     if (-not (Test-Path -LiteralPath 'scripts/run-console.py')) {
         throw '缺少 scripts/run-console.py，请将本脚本放在完整项目的根目录。'
     }
@@ -55,7 +56,12 @@ try {
         Write-Output "未能自动打开页面。请查看服务错误，或手动打开 $address。"
     } }
     try {
-        & (Join-Path $projectRoot '.venv/Scripts/python.exe') -u (Join-Path $projectRoot 'scripts/run-console.py') --port $Port
+        if (Test-Path -LiteralPath $supervisor) {
+            $basePython = [IO.File]::ReadAllText((Join-Path $projectRoot '.shunguang-update/python.txt'))
+            & $basePython -u $supervisor supervise --port $Port
+        } else {
+            & (Join-Path $projectRoot '.venv/Scripts/python.exe') -u (Join-Path $projectRoot 'scripts/run-console.py') --port $Port
+        }
         $result = $LASTEXITCODE
     } finally {
         if ($browserJob) {

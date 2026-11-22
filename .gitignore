@@ -43,3 +43,6 @@ frontend/coverage/
 # Local Office engine and downloaded installers; distribute only as Release assets.
 /tools/LibreOffice/
 /tools/installers/
+
+# Local update transactions and private recovery copies.
+.shunguang-update/

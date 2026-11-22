@@ -130,17 +130,44 @@ def main():
     logs['formatters']['default'].update(fmt='%(asctime)s %(levelprefix)s %(message)s', datefmt='%H:%M:%S')
     paths = list(app.openapi()['paths']) + ['/', '/assets/{asset:path}', '/docs', '/openapi.json', '/redoc']
     logs['formatters']['access'] = {'()': SafeAccessFormatter, 'paths': paths}
-    try:
-        uvicorn.run(
-            app,
-            host='0.0.0.0' if args.lan else '127.0.0.1',
-            port=args.port,
-            log_level='info',
-            log_config=logs,
-            access_log=True,
-            proxy_headers=False,
-            timeout_graceful_shutdown=5,
+    supervised = os.environ.get('SHUNGUANG_UPDATE_SUPERVISED') == '1'
+    from backend.app import runtime, service_install
+    from scripts.desktop_update import read_json
+
+    if supervised:
+        app.state.update_draining = read_json(ROOT / '.shunguang-update/status.json', {}).get('phase') in (
+            'draining',
+            'switching',
         )
+
+    class DesktopServer(uvicorn.Server):
+        async def on_tick(self, counter):
+            if supervised and counter % 10 == 0:
+                phase = read_json(ROOT / '.shunguang-update/status.json', {}).get('phase')
+                app.state.update_draining = phase in ('draining', 'switching')
+                if phase == 'draining' and not runtime.busy and not self.server_state.tasks:
+                    jobs = tuple(runtime.work.jobs.values()) if runtime.work else ()
+                    if not any(not job[0].done() for job in jobs) and service_install.snapshot()['state'] != 'running':
+                        self.updating = True
+                        return True
+            return await super().on_tick(counter)
+
+    try:
+        server = DesktopServer(
+            uvicorn.Config(
+                app,
+                host='0.0.0.0' if args.lan else '127.0.0.1',
+                port=args.port,
+                log_level='info',
+                log_config=logs,
+                access_log=True,
+                proxy_headers=False,
+                timeout_graceful_shutdown=5,
+            )
+        )
+        server.run()
+        if getattr(server, 'updating', False):
+            raise SystemExit(75)
     finally:
         rag.close()
         lease.close()

@@ -29,9 +29,12 @@ it('checks only on click and shows the new version and manual update instruction
   expect(request).not.toHaveBeenCalled();
   fireEvent.click(screen.getByRole('button', { name: '检查更新' }));
   expect(await screen.findByText('发现新版本 v0.6.10')).toBeInTheDocument();
-  expect(request).toHaveBeenCalledWith('/updates/check', expect.objectContaining({ method: 'POST' }));
+  expect(request).toHaveBeenCalledWith(
+    '/updates/releases?channel=stable',
+    expect.objectContaining({ method: 'POST' }),
+  );
   expect(screen.getByRole('link', { name: '查看更新说明' })).toHaveAttribute('href', newer.release_notes_url);
-  expect(screen.getByText(/Install.bat/)).toBeInTheDocument();
+  expect(screen.getByText(/运行 Install\.bat/, { selector: 'li' })).toBeInTheDocument();
 });
 
 it('disables duplicate checks while waiting and allows retry after a network error', async () => {
@@ -90,4 +93,25 @@ it('renders the release summary as text and aborts a pending check when leaving'
   const options = vi.mocked(request).mock.calls.at(-1)![1];
   view.unmount();
   expect(options?.signal?.aborted).toBe(true);
+});
+
+it('installs the selected preview and displays the supervisor failure on the same page', async () => {
+  vi.mocked(request)
+    .mockResolvedValueOnce({ ...newer, can_install: true })
+    .mockResolvedValueOnce({ id: 'rollout' })
+    .mockResolvedValueOnce({ id: 'rollout', phase: 'failed', message: '更新包完整性校验失败' });
+  render(<UpdateSettings currentVersion="0.6.3" onRefreshVersion={vi.fn()} />);
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: 'preview' } });
+  fireEvent.click(screen.getByRole('button', { name: '检查更新' }));
+  fireEvent.click(await screen.findByRole('button', { name: '立即更新' }));
+  expect(await screen.findByRole('alert')).toHaveTextContent('更新包完整性校验失败');
+  expect(request).toHaveBeenCalledWith(
+    '/updates/install',
+    expect.objectContaining({
+      method: 'POST',
+      body: JSON.stringify({ channel: 'preview', version: newer.latest_version }),
+    }),
+  );
+  expect(sessionStorage.getItem('update.job')).toBeNull();
+  localStorage.removeItem('update.channel');
 });

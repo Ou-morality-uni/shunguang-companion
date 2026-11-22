@@ -499,6 +499,10 @@ def main():
             install_rag(args, receipt)
         else:
             receipt['retrieval'] = 'disabled_by_lite_install'
+        if receipt.get('frontend') is True:
+            from scripts.desktop_update import record_baseline
+
+            record_baseline(ROOT)
         receipt['stage'] = 'complete'
         receipt['status'] = 'partial' if args.skip_model or args.skip_frontend else 'success'
     except (RuntimeError, OSError, subprocess.SubprocessError) as exc:

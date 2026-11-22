@@ -1,6 +1,8 @@
-# Shunguang Companion v0.7.12
+# Shunguang Companion v0.7.13
 
-[v0.7.12 release notes (Chinese)](versions/0.7.12/README.md) · [TTS setup (Chinese)](docs/tts.md)
+[v0.7.13 release notes (Chinese)](versions/0.7.13/README.md) · [TTS setup (Chinese)](docs/tts.md)
+
+After installing this version on Windows, use Settings → About & Updates for future Releases. Earlier versions need one manual upgrade and Install.bat.
 
 Sent text and images appear immediately. Click a thumbnail to open the side preview, drag its edge to resize, scroll to zoom, or choose original size. Sending a chat image uses the conversation model. If recognition fails, retry from the original message. Find other spaces under Settings → Navigation, and choose a reference MP3 under Voice & Playback.
 

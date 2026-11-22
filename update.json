@@ -1,6 +1,6 @@
 {
-  "version": "0.7.12",
+  "version": "0.7.13",
   "published_at": "2026-11-22",
-  "summary": "静态截图按整张图片标注，只有多帧图片才提示仅读取首帧。",
-  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.12/README.md"
+  "summary": "Windows 本机可在设置中检查稳定版或抢先版并安装更新。",
+  "release_notes_url": "https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.13/README.md"
 }

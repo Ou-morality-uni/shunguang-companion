@@ -1,6 +1,8 @@
-# 瞬光伴行 v0.7.12
+# 瞬光伴行 v0.7.13
 
-[v0.7.12 更新说明](versions/0.7.12/README.md) · [QQ 接入](docs/qq-setup.md) · [服务器部署](docs/server-deployment.md) · [语音配置与选型](docs/tts.md)
+[v0.7.13 更新说明](versions/0.7.13/README.md) · [QQ 接入](docs/qq-setup.md) · [服务器部署](docs/server-deployment.md) · [语音配置与选型](docs/tts.md)
+
+Windows 本机安装本版后，可在「陪伴设置 → 关于与更新」选择渠道并安装后续 Release。早期版本用户先手动升级一次并运行 Install.bat。
 
 点击发送后，文字和图片会立即出现在对话里。点击缩略图进入右侧预览，可拖宽面板、滚轮缩放，或切回原始大小。发送聊天图片后会使用当前会话模型识图。识图失败时，可在原消息点击「重新识图」。历史会话位于左侧，其他功能可在「陪伴设置 → 功能导航」打开。在「声音与播放」选择服务及资源文件夹中的参考 MP3。
 

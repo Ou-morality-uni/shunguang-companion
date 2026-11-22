@@ -163,6 +163,8 @@ async def guard(request, call_next):
     ) or request.url.path.startswith('/assets/')
     if lan_mode() and not public and not authenticated(request):
         return JSONResponse({'detail': '请先输入局域网访问口令。', 'code': 'lan_auth_required'}, status_code=401)
+    if getattr(request.app.state, 'update_draining', False) and request.method not in ('GET', 'HEAD', 'OPTIONS'):
+        return JSONResponse({'detail': '正在切换版本，请稍后重试。'}, status_code=503)
     response = await call_next(request)
     response.headers['X-Content-Type-Options'] = 'nosniff'
     response.headers['Referrer-Policy'] = 'no-referrer'
