@@ -14,18 +14,24 @@ class DocumentError(Exception):
     pass
 
 
+def _jpeg_preview(image, full_size=False):
+    from PIL import ImageOps
+
+    if image.width * image.height > 16000000:
+        raise DocumentError('图片像素过大，最多支持 1600 万像素。')
+    preview = ImageOps.exif_transpose(image).convert('RGB')
+    if not full_size:
+        preview.thumbnail((1600, 1600))
+    output = io.BytesIO()
+    preview.save(output, format='JPEG', quality=85)
+    return output.getvalue()
+
+
 def image_bytes(data, *, full_size=False):
-    from PIL import Image, ImageOps
+    from PIL import Image
 
     with Image.open(io.BytesIO(data)) as image:
-        if image.width * image.height > 16000000:
-            raise DocumentError('图片像素过大，最多支持 1600 万像素。')
-        image = ImageOps.exif_transpose(image).convert('RGB')
-        if not full_size:
-            image.thumbnail((1600, 1600))
-        output = io.BytesIO()
-        image.save(output, format='JPEG', quality=85)
-        return output.getvalue()
+        return _jpeg_preview(image, full_size)
 
 
 def check_archive(data):
@@ -99,7 +105,9 @@ class Extraction:
                 {'location': location, 'kind': kind, 'text': text, **({'text_offset': position} if self.full else {})}
             )
 
-    def image(self, location, data, strict=False):
+    def image(self, location, data, standalone=False):
+        from PIL import Image
+
         if self.text_only:
             return
         self.check()
@@ -114,9 +122,18 @@ class Extraction:
                 self.warn('本次最多识别 8 幅图像，其余图像尚未识别。')
             return
         try:
-            encoded = image_bytes(data)
+            with Image.open(io.BytesIO(data)) as image:
+                encoded = _jpeg_preview(image)
+                if standalone:
+                    try:
+                        image.seek(1)
+                    except EOFError:
+                        pass
+                    else:
+                        location = '图片第 1 帧'
+                        self.warn('这张图片有多帧，本次只读取了第一帧。')
         except (OSError, DocumentError):
-            if strict:
+            if standalone:
                 raise DocumentError('图片格式、尺寸或内容不受支持。')
             self.result['truncated'] = True
             self.result['unsupported'] = True
@@ -325,8 +342,7 @@ def extract(
             {'.docx': word, '.xlsx': excel, '.pptx': powerpoint}[suffix](data, extraction)
         elif suffix in ('.png', '.jpg', '.jpeg', '.webp', '.bmp', '.tif', '.tiff', '.gif'):
             extraction.window(1, '图片')
-            extraction.image('图片第 1 帧', data, strict=True)
-            extraction.warn('多帧图片只处理第一帧。识字结果不等于完整理解所有图形。')
+            extraction.image('图片', data, standalone=True)
         elif suffix in ('.doc', '.xls', '.ppt', '.docm', '.xlsm', '.pptm'):
             raise DocumentError('请先另存为常规 docx／xlsx／pptx；本版不执行宏或自动转换旧格式。')
         else:

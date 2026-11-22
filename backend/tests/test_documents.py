@@ -33,6 +33,27 @@ def png():
     return output.getvalue()
 
 
+@pytest.mark.parametrize('fmt', ['PNG', 'JPEG', 'GIF'])
+def test_static_chat_image_reports_whole_image(fmt):
+    output = io.BytesIO()
+    Image.new('RGB', (80, 60), 'blue').save(output, format=fmt)
+    result, visuals = document_readers.extract(output.getvalue(), 'sample.' + fmt.lower(), text_only=True)
+    assert [image['location'] for image in visuals] == ['图片']
+    assert not result['warnings']
+
+
+def test_animated_chat_image_reports_first_frame_only():
+    output = io.BytesIO()
+    first = Image.new('RGB', (80, 60), 'blue')
+    first.save(output, format='GIF', save_all=True, append_images=[Image.new('RGB', first.size, 'red')])
+    result, visuals = document_readers.extract(output.getvalue(), 'animation.gif', text_only=True)
+    assert [image['location'] for image in visuals] == ['图片第 1 帧']
+    assert '只读取了第一帧' in result['warnings'][0]
+    with Image.open(io.BytesIO(visuals[0]['data'])) as preview:
+        r, g, b = preview.getpixel((40, 30))
+        assert b > 240 and max(r, g) < 10
+
+
 def text_pdf():
     stream = b'BT /F1 12 Tf 20 150 Td (Actual PDF text) Tj ET'
     objects = [
@@ -185,11 +206,11 @@ def test_declined_fallback_keeps_partial_results_and_never_sends_images(work, mo
     monkeypatch.setattr(document_models, 'recognize', lambda *args: pytest.fail('unapproved image transmission'))
     task = read(work, 'image.png')
     assert task['status'] == 'waiting_vision'
-    assert task['steps'][0]['vision_request']['locations'] == ['图片第 1 帧']
+    assert task['steps'][0]['vision_request']['locations'] == ['图片']
     assert 'complete' not in [event['kind'] for event in task['events']]
     task = done(service, service.approve_vision(task['id'], False))
     assert task['status'] == 'complete' and task['steps'][0]['result']['partial']
-    assert task['steps'][0]['result']['unrecognized'] == ['图片第 1 帧']
+    assert task['steps'][0]['result']['unrecognized'] == ['图片']
     assert task['events'][-1]['kind'] == 'partial'
 
 
@@ -348,7 +369,7 @@ def test_rejected_native_image_input_waits_for_consent_instead_of_retrying(work,
 
     monkeypatch.setattr(document_models, 'recognize', reject)
     task = read(work, 'image.png')
-    assert called == ['图片第 1 帧'] and task['status'] == 'waiting_vision'
+    assert called == ['图片'] and task['status'] == 'waiting_vision'
     assert '拒绝' in task['steps'][0]['vision_request']['reason']
 
 

@@ -804,6 +804,9 @@ def test_retry_vision_in_original_chat(setup, monkeypatch):
             started.set()
             assert release.wait(5)
             return '蓝色图片'
+        evidence = messages[-1].content
+        assert '图片第 1 帧' not in evidence and '多帧图片' not in evidence
+        assert '蓝色图片' in evidence
         return '这是一张蓝色图片。'
 
     monkeypatch.setattr(document_models, 'invoke', model)
