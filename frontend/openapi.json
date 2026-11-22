@@ -510,6 +510,11 @@
             "title": "Can Retry Summary",
             "type": "boolean"
           },
+          "can_retry_vision": {
+            "default": false,
+            "title": "Can Retry Vision",
+            "type": "boolean"
+          },
           "context": {
             "additionalProperties": true,
             "title": "Context",
@@ -2480,7 +2485,7 @@
   },
   "info": {
     "title": "瞬光伴行 API",
-    "version": "0.7.8"
+    "version": "0.7.11"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -5667,6 +5672,22 @@
         "summary": "Reference File"
       }
     },
+    "/api/voice/resource-audio": {
+      "get": {
+        "operationId": "resource_audio_api_voice_resource_audio_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Resource Audio"
+      }
+    },
     "/api/work/artifacts/{task_id}": {
       "get": {
         "operationId": "download_artifact_api_work_artifacts__task_id__get",
@@ -5784,6 +5805,53 @@
           }
         },
         "summary": "Download Attachment"
+      }
+    },
+    "/api/work/files/{attachment_id}/preview": {
+      "get": {
+        "operationId": "preview_attachment_api_work_files__attachment_id__preview_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "attachment_id",
+            "required": true,
+            "schema": {
+              "title": "Attachment Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "full_size",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Full Size",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Preview Attachment"
       }
     },
     "/api/work/tasks": {
@@ -6043,6 +6111,45 @@
           }
         },
         "summary": "Retry Summary"
+      }
+    },
+    "/api/work/tasks/{task_id}/retry-vision": {
+      "post": {
+        "operationId": "retry_vision_api_work_tasks__task_id__retry_vision_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FileTaskOut"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Retry Vision"
       }
     },
     "/api/work/tasks/{task_id}/vision": {

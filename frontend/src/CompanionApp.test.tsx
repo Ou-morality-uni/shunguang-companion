@@ -70,7 +70,7 @@ it('removes both permanent header bars and keeps all settings reachable from the
   expect(await screen.findByRole('tab', { name: '模型连接' })).toBeTruthy();
   expect(screen.getByRole('tab', { name: '工具服务' })).toBeTruthy();
   expect(screen.getByRole('tab', { name: '沉浸光效' })).toBeTruthy();
-  expect(screen.getByRole('tab', { name: '沉浸光效' }).getAttribute('aria-selected')).toBe('true');
+  expect(screen.getByRole('tab', { name: '功能导航' }).getAttribute('aria-selected')).toBe('true');
 });
 
 it('opens update settings without checking GitHub and uses the backend version', async () => {
@@ -333,7 +333,8 @@ it('keeps navigation accessible when collapsed and restores the choice after reo
   await screen.findByLabelText('给瞬光伴行发送消息');
   fireEvent.click(screen.getByRole('button', { name: '收起侧栏' }));
   expect(screen.getByRole('button', { name: '展开侧栏' }).getAttribute('aria-expanded')).toBe('false');
-  expect(screen.getByRole('button', { name: '历史成果' })).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: '陪伴设置' }));
+  expect(await screen.findByRole('button', { name: '历史成果' })).toBeTruthy();
   view.unmount();
   render(<App />);
   await waitFor(() => expect(screen.getByRole('button', { name: '展开侧栏' })).toBeTruthy());

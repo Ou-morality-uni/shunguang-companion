@@ -9,7 +9,7 @@ type Props = { dirty: boolean; features: Features; onSaved: (features: Features)
 export function CloudVoiceManager({ dirty, features, onSaved }: Props) {
   const [voices, setVoices] = useState<Voice[]>([]);
   const [name, setName] = useState('叶瞬光');
-  const [file, setFile] = useState<File | null>(null);
+
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState('');
   const [deleting, setDeleting] = useState<Voice | null>(null);
@@ -35,25 +35,14 @@ export function CloudVoiceManager({ dirty, features, onSaved }: Props) {
     }
   }
   async function create() {
-    let audio_base64: string | undefined;
-    if (file) {
-      if (!file.name.toLowerCase().endsWith('.mp3') || file.size > 6_000_000)
-        throw new Error('请选择不超过 6 MB 的 MP3。');
-      audio_base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(String(reader.result).split(',')[1]);
-        reader.onerror = () => reject(new Error('无法读取 MP3。'));
-        reader.readAsDataURL(file);
-      });
-    }
     const result = await request<{
       voice: string;
       features: Features;
       fallback_mode?: boolean;
       reused?: boolean;
-    }>('/tts/register', { method: 'POST', body: JSON.stringify({ name, audio_base64, format: 'mp3' }) });
+    }>('/tts/register', { method: 'POST', body: JSON.stringify({ name, format: 'mp3' }) });
     onSaved(result.features);
-    setFile(null);
+
     setNotice(
       `${result.reused ? '已复用' : '已创建'}并保存音色：${result.voice}。${result.fallback_mode ? '厂商提示降级复刻，请先试听效果。' : '后续对话直接使用该 ID，无需原 MP3。'}`,
     );
@@ -81,24 +70,6 @@ export function CloudVoiceManager({ dirty, features, onSaved }: Props) {
           onChange={(event) => setName(event.target.value)}
         />
       </label>
-      <label className="field">
-        临时选择 MP3（可选）
-        <input
-          type="file"
-          accept=".mp3,audio/mpeg"
-          disabled={busy}
-          onChange={(event) => {
-            setFile(event.target.files?.[0] || null);
-            event.target.value = '';
-          }}
-        />
-      </label>
-      <p>{file ? `待创建：${file.name}` : '未选择文件时，使用下方已保存的参考 MP3 路径。'}</p>
-      {file && (
-        <Button type="button" variant="outline" disabled={busy} onClick={() => setFile(null)}>
-          清除临时文件
-        </Button>
-      )}
       <Button
         type="button"
         variant="outline"

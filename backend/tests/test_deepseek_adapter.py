@@ -234,3 +234,10 @@ def test_fast_mode_serializer_keeps_text_and_tools_without_replaying_reasoning()
         [AIMessage(content='reply', additional_kwargs={'reasoning_content': 'private'})]
     )
     assert result == [{'role': 'assistant', 'content': 'reply'}]
+
+
+def test_chat_distinguishes_gateway_failure_from_an_unconfigured_model():
+    from backend.app.llm import friendly_error
+    from backend.app.providers import ProviderError
+
+    assert '502' in friendly_error(ProviderError(502))

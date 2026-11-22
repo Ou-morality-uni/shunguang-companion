@@ -39,6 +39,7 @@ import { ServiceManagement } from './ServiceManagement';
 import { UpdateSettings } from './UpdateSettings';
 
 const categories = [
+  { id: 'navigation', label: '功能导航', icon: ArrowUpRight },
   { id: 'model', label: '模型连接', icon: Cpu },
   { id: 'voice', label: '声音与播放', icon: AudioLines },
   { id: 'effects', label: '沉浸光效', icon: WandSparkles },
@@ -87,6 +88,7 @@ function voiceSignature(value: Features['tts'] | undefined) {
   );
 }
 type Props = {
+  navigation?: React.ReactNode;
   currentVersion: string | null;
   onRefreshVersion: () => Promise<void>;
   panel: Panel;
@@ -130,6 +132,7 @@ function Toggle({
 }
 
 export function CompanionSettings({
+  navigation,
   currentVersion,
   onRefreshVersion,
   panel,
@@ -156,8 +159,7 @@ export function CompanionSettings({
     [ttsProviders, setTtsProviders] = useState<Provider[]>([]),
     [models, setModels] = useState<Array<{ id: string }>>([]),
     [ttsModels, setTtsModels] = useState<Array<{ id: string }>>([]),
-    [referenceInfo, setReferenceInfo] = useState<InspectedVoiceReference | null>(null),
-    [referenceBusy, setReferenceBusy] = useState(false);
+    [audioFiles, setAudioFiles] = useState<string[]>([]);
   const [modelKey, setModelKey] = useState(''),
     [voiceKey, setVoiceKey] = useState(''),
     [toolKey, setToolKey] = useState(''),
@@ -173,7 +175,7 @@ export function CompanionSettings({
   const returningFocus = useRef<HTMLElement | null>(null),
     mobileCategory = useRef<HTMLButtonElement | null>(null),
     requestLock = useRef(false);
-  const referenceLock = useRef(false);
+
   const panelRef = useRef(panel);
   panelRef.current = panel;
   const [profiles, setProfiles] = useState<Array<ModelSettings & { id: string }>>([]);
@@ -240,8 +242,9 @@ export function CompanionSettings({
       setClearVoiceKey(false);
       setClearToolKey(false);
       setNotice('');
-      setReferenceInfo(null);
+
       const calls = [
+        request<string[]>('/voice/resource-audio').then(setAudioFiles),
         request<Provider[]>('/providers/presets').then(setProviders),
         request<Provider[] | { presets: Provider[] }>('/tts/presets').then((data) =>
           setTtsProviders(Array.isArray(data) ? data : data.presets),
@@ -258,7 +261,6 @@ export function CompanionSettings({
       setModelKey('');
       setVoiceKey('');
       setToolKey('');
-      setReferenceInfo(null);
     }
   }, [panel, settings, features]);
   function setTts(update: Partial<Features['tts']>) {
@@ -319,7 +321,7 @@ export function CompanionSettings({
           model: featureDraft.tts.model,
           voice: featureDraft.tts.voice,
           use_model_key: featureDraft.tts.use_model_key,
-          api_key: voiceKey.trim() || undefined,
+          api_key: featureDraft.tts.provider === 'aliyun' ? undefined : voiceKey.trim() || undefined,
         }),
       });
       const supported =
@@ -382,7 +384,7 @@ export function CompanionSettings({
     }
   }
   async function saveFeature(section: 'tts' | 'tools' | 'reminders') {
-    if (!featureDraft || requestLock.current || referenceLock.current) return;
+    if (!featureDraft || requestLock.current) return;
     requestLock.current = true;
     setBusy(true);
     setNotice('');
@@ -405,7 +407,7 @@ export function CompanionSettings({
                 body: JSON.stringify({ path: current.reference_path || defaultReferencePath }),
               })
             : null;
-        if (selected) setReferenceInfo(selected);
+
         body = {
           enabled: !!current.enabled,
           auto_play: !!current.auto_play,
@@ -454,28 +456,6 @@ export function CompanionSettings({
     } finally {
       requestLock.current = false;
       setBusy(false);
-    }
-  }
-  async function inspectReference() {
-    if (referenceLock.current) return;
-    referenceLock.current = true;
-    setReferenceBusy(true);
-    setNotice('正在验证运行电脑上的 MP3，不会发送到外部服务…');
-    try {
-      const selected = await request<InspectedVoiceReference>('/voice/reference/inspect', {
-        method: 'POST',
-        body: JSON.stringify({ path: featureDraft?.tts.reference_path || defaultReferencePath }),
-      });
-      if (selected.format !== 'mp3') throw new Error('请选择 MP3 参考音频。');
-      setReferenceInfo(selected);
-      setTts({ reference_path: selected.path, reference_id: selected.id, reference_sha256: selected.sha256 });
-      setNotice('已选择此 MP3，验证仅在本机完成。请保存配置后测试克隆声音。');
-    } catch (e) {
-      setReferenceInfo(null);
-      setNotice((e as Error).message);
-    } finally {
-      referenceLock.current = false;
-      setReferenceBusy(false);
     }
   }
   const tts = featureDraft?.tts,
@@ -992,11 +972,8 @@ export function CompanionSettings({
                   void saveFeature('tts');
                 }}
               >
-                <h2>声音与播放</h2>
-                <fieldset
-                  disabled={busy || referenceBusy}
-                  style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}
-                >
+                <h2>语音输出 · 朗读与声音合成</h2>
+                <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
                   <p className="space-note">小米使用本地参考音频；百炼使用已注册的云端音色 ID。</p>
                   <Toggle
                     label="开启 TTS"
@@ -1026,11 +1003,11 @@ export function CompanionSettings({
                     <GlideSelect
                       label="语音提供商"
                       value={ttsPresetId}
-                      disabled={busy || referenceBusy}
+                      disabled={busy}
                       onValueChange={(id) => {
                         const item = cloneProviders.find((value) => value.id === id);
                         if (!item) return;
-                        const provider = item.provider || item.id;
+                        const provider = item.provider || (item.id === 'aliyun-intl' ? 'aliyun' : item.id);
                         setBusy(true);
                         void request<{ tts: Features['tts'] | null }>(
                           `/tts/profile?provider=${encodeURIComponent(provider)}&base_url=${encodeURIComponent(item.base_url)}`,
@@ -1079,7 +1056,7 @@ export function CompanionSettings({
                       aria-label="语音 API 地址"
                       type="url"
                       required
-                      disabled={busy || referenceBusy}
+                      disabled={busy}
                       value={tts.base_url}
                       onChange={(e) => {
                         const base_url = e.target.value;
@@ -1233,75 +1210,25 @@ export function CompanionSettings({
                   {referenceSupported && (
                     <>
                       <div className="reference-panel local-reference-picker">
-                        <h3>选择本地参考音频</h3>
                         <label className="field">
-                          参考 MP3 路径
-                          <Input
-                            aria-label="参考 MP3 路径"
-                            disabled={busy || referenceBusy}
-                            required
-                            value={tts.reference_path ?? defaultReferencePath}
-                            onChange={(e) => {
-                              setReferenceInfo(null);
-                              setTts({
-                                reference_path: e.target.value,
-                                reference_id: '',
-                                reference_sha256: undefined,
-                              });
-                            }}
-                            placeholder={defaultReferencePath}
-                            maxLength={1200}
-                          />
-                          <span className="field-hint">
-                            相对路径从项目目录定位，也可填写运行服务电脑上的绝对路径。小米仅引用该文件；百炼也可在云端音色区临时选择
-                            MP3 创建。
-                          </span>
-                        </label>
-                        <div className="inline-actions">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            disabled={referenceBusy || busy || !tts.reference_path?.trim()}
-                            onClick={() => void inspectReference()}
+                          参考 MP3（资源文件夹）
+                          <select
+                            aria-label="资源文件夹中的 MP3"
+                            value={audioFiles.includes(tts.reference_path || '') ? tts.reference_path : ''}
+                            onChange={(e) =>
+                              setTts({ reference_path: e.target.value, reference_sha256: undefined })
+                            }
                           >
-                            验证电脑上的 MP3
-                          </Button>
-                        </div>
-                        <div className="reference-selected" role="status">
-                          {referenceBusy ? (
-                            <>
-                              <LoaderCircle size={16} className="spin" />
-                              正在本机验证 MP3…
-                            </>
-                          ) : referenceInfo ? (
-                            <>
-                              <Check size={16} />
-                              <span>
-                                已选中：{referenceInfo.name}
-                                <small>
-                                  {referenceInfo.format.toUpperCase()} ·{' '}
-                                  {(referenceInfo.bytes / 1024 / 1024).toFixed(2)} MB
-                                  {Number.isFinite(referenceInfo.duration)
-                                    ? ` · ${referenceInfo.duration.toFixed(1)} 秒`
-                                    : ''}
-                                  <br />
-                                  {referenceInfo.path}
-                                </small>
-                              </span>
-                            </>
-                          ) : (
-                            <span>
-                              {tts.reference_id
-                                ? '当前已保存的参考 MP3 路径'
-                                : '路径已填写，验证或选择 MP3 后确认'}
-                              <small>{tts.reference_path || defaultReferencePath}</small>
-                            </span>
-                          )}
-                        </div>
-                        <p className="space-note">
-                          音频最多 6
-                          MB。路径验证只在本机执行，不复制文件、不创建参考目录。百炼创建成功后不再依赖此路径。
-                        </p>
+                            <option value="" disabled>
+                              请选择资源文件夹中的音频
+                            </option>
+                            {audioFiles.map((path) => (
+                              <option key={path} value={path}>
+                                {path.replace('source/resources/voice/', '')}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
                       </div>
                       <Toggle
                         label={tts.provider === 'aliyun' ? '允许创建云端克隆音色' : '允许合成时发送参考音频'}
@@ -1330,21 +1257,27 @@ export function CompanionSettings({
                   <VoiceConsole />
                   <p className="space-note">
                     {voiceDirty
-                      ? '参考文件或设置已修改，请先保存克隆配置。测试不会使用之前的普通 TTS 配置。'
+                      ? '当前是未保存的设置。请先保存，再检查连接或试听。'
                       : savedCloneReady
                         ? '测试会使用已保存的厂商与克隆音色配置，可能产生语音服务费用。'
-                        : '请启用 TTS 并保存有效密钥、参考音频或云端音色 ID，之后即可测试。'}
+                        : !tts.enabled
+                          ? '请开启 TTS 并保存。'
+                          : !tts.has_api_key
+                            ? '请填写当前语音服务和地域对应的 API Key 并保存。'
+                            : tts.provider === 'aliyun' && !tts.voice
+                              ? '请在百炼云端音色区创建或选择音色，也可以填入当前账号和模型的音色 ID。'
+                              : '请检查模型和参考音频配置，再保存试听。'}
                   </p>
                   <div className="modal-actions">
                     <Button
                       type="button"
                       variant="outline"
                       onClick={testSavedClone}
-                      disabled={busy || referenceBusy || voiceDirty || !savedCloneReady}
+                      disabled={busy || voiceDirty || !savedCloneReady}
                     >
                       使用已保存配置测试克隆声音
                     </Button>
-                    <Button type="submit" disabled={busy || referenceBusy || !referenceSupported}>
+                    <Button type="submit" disabled={busy || !referenceSupported}>
                       <Check size={15} />
                       保存克隆声音配置
                     </Button>
@@ -1352,6 +1285,7 @@ export function CompanionSettings({
                 </fieldset>
               </form>
             )}
+            {panel === 'navigation' && navigation}
             {panel === 'effects' && (
               <>
                 <h2>沉浸光效</h2>
@@ -1721,6 +1655,7 @@ export function CompanionSettings({
               panel !== 'model' &&
               panel !== 'effects' &&
               panel !== 'memory' &&
+              panel !== 'navigation' &&
               panel !== 'updates' && <p>服务配置暂未读取，请关闭后重试。</p>}
             {busy && (
               <div className="settings-progress" role="status">

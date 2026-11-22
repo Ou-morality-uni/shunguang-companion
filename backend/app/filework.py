@@ -62,10 +62,25 @@ def summary_retryable(record):
     )
 
 
+def vision_retryable(record):
+    context = record.get('context', {})
+    return (
+        record['status'] == 'failed'
+        and record.get('origin') == 'chat'
+        and context.get('stage') == 'recognizing'
+        and not context.get('save_result', True)
+        and any(
+            step['action'] == 'read_document' and step.get('read_stamp') and step['state'] != 'complete'
+            for step in record['steps']
+        )
+    )
+
+
 def public_task(record):
     return {
         **record,
         'can_retry_summary': summary_retryable(record),
+        'can_retry_vision': vision_retryable(record),
         'steps': [
             {
                 key: value
@@ -351,10 +366,15 @@ class FileWork(PathAccess):
             return {'workspace': workspace, 'path': name, 'task': public_task(task)}
 
     def retry_summary(self, task_id, extend_timeout=False):
+        return self.retry_read_task(task_id, vision=False, extend_timeout=extend_timeout)
+
+    def retry_read_task(self, task_id, *, vision, extend_timeout=False):
         self.settle_pause(task_id)
         with self.gate:
             task = self.task(task_id)
-            if not summary_retryable(task):
+            if vision and not (vision_retryable(task) and self.read_only_task(task)):
+                raise WorkError('当前任务无法重新识图。')
+            if not vision and not summary_retryable(task):
                 raise WorkError('当前任务没有可重试的未完成总结。')
             from .document_tasks import task_model
 
@@ -362,7 +382,7 @@ class FileWork(PathAccess):
             if not config.public_config(value)['configured']:
                 raise WorkError('请先恢复原任务使用的模型连接。', 422)
             for step in task['steps']:
-                if step['action'] == 'read_document':
+                if step['action'] == 'read_document' and step.get('read_stamp'):
                     root = self.root(step.get('workspace_id', task['workspace_id']))
                     self.check_state(root, {step['path']: step['read_stamp']})
             if self.closed or sum(not job[0].done() for job in self.jobs.values()) >= 8:

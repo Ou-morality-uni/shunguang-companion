@@ -61,7 +61,9 @@ it('feeds speech deltas before completion and cancels speech on a failed stream'
   const complete = vi.fn();
   const { result } = renderHook(() => useConversation(complete, speech));
   await act(async () => {
-    await result.current.send('你好', ['attachment-1']);
+    await result.current.send('你好', [
+      { id: 'attachment-1', name: 'test.png', path: 'test.png', bytes: 1, workspace_id: 'files' },
+    ]);
   });
   expect(events).toEqual(['start', '第一句。', 'cancel']);
   expect(complete).not.toHaveBeenCalled();
@@ -184,4 +186,26 @@ it('keeps a newer transcript when an older refresh arrives late', async () => {
     await old;
   });
   expect(result.current.messages.map((item) => item.id)).toEqual(['u', 'a', 'file-result-new']);
+});
+
+it('shows a user bubble before the server acknowledges the turn', async () => {
+  let finish!: () => void;
+  vi.mocked(streamChat).mockImplementation(async (_id, _text, _signal, emit) => {
+    await new Promise<void>((resolve) => {
+      finish = resolve;
+    });
+    emit('user', user as unknown as Record<string, unknown>);
+    emit('done', assistant as unknown as Record<string, unknown>);
+  });
+  const { result } = renderHook(() => useConversation(vi.fn()));
+  let sent!: Promise<boolean>;
+  act(() => {
+    sent = result.current.send(user.content);
+  });
+  expect(result.current.messages.map((item) => item.content)).toEqual([user.content]);
+  await act(async () => {
+    finish();
+    await sent;
+  });
+  expect(result.current.messages.filter((item) => item.role === 'user')).toEqual([user]);
 });

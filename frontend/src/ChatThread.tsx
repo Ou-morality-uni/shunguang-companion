@@ -40,7 +40,7 @@ import {
 import { ModelPicker } from './ModelPicker';
 import { indexMessages } from './messageIndex';
 import { VoiceInput } from './VoiceInput';
-import { AttachmentCard, FileTasksProvider, MessageFileTasks } from './FileTasks';
+import { AttachmentCard, AttachmentPreview, FileTasksProvider, MessageFileTasks } from './FileTasks';
 import { Sources } from './Evidence';
 import { useCompanionAudio } from './useAudioQueue';
 import { ResourceImage } from './ResourceImage';
@@ -223,7 +223,7 @@ type Props = {
   sources?: Source[];
   onSend: (
     text: string,
-    attachments?: string[],
+    attachments?: Attachment[],
     modelChoice?: ModelChoice,
     annotations?: AnnotationSubmission,
   ) => Promise<boolean>;
@@ -396,24 +396,15 @@ export function ChatThread({
         return;
       }
       annotations?.setSending(true);
+      setAttachments([]);
       try {
         const accepted = submission
-          ? await onSend(
-              text || '请按这些批注修改。',
-              attachments.map((item) => item.id),
-              modelChoice,
-              submission,
-            )
-          : await onSend(
-              text,
-              attachments.map((item) => item.id),
-              modelChoice,
-            );
-        if (!accepted) runtime.thread.composer.setText(text);
-        else {
-          setAttachments([]);
-          if (submission) annotations?.submitted(submission.ids);
-        }
+          ? await onSend(text || '请按这些批注修改。', attachments, modelChoice, submission)
+          : await onSend(text, attachments, modelChoice);
+        if (!accepted) {
+          runtime.thread.composer.setText(text);
+          setAttachments(attachments);
+        } else if (submission) annotations?.submitted(submission.ids);
       } finally {
         annotations?.setSending(false);
       }
@@ -574,7 +565,7 @@ export function ChatThread({
                     <div className="composer-attachments">
                       {attachments.map((item) => (
                         <span className="attachment-chip" key={item.id}>
-                          {item.name}
+                          <AttachmentPreview attachment={item} thumbnail />
                           <button
                             type="button"
                             aria-label={`移除附件 ${item.name}`}

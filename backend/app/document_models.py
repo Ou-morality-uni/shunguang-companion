@@ -77,6 +77,10 @@ def image_message(data, text):
     )
 
 
+class EmptyVisionResult(ValueError):
+    pass
+
+
 async def recognize(value, image, check, tick):
     answer = await invoke(
         value,
@@ -92,7 +96,7 @@ async def recognize(value, image, check, tick):
         tick,
     )
     if not answer.strip():
-        raise ValueError('empty vision result')
+        raise EmptyVisionResult('视觉模型没有返回识别文字。')
     return answer[:12000]
 
 

@@ -3,6 +3,7 @@ import type { AnnotationSubmission } from './Annotations';
 import {
   request,
   streamChat,
+  type Attachment,
   type Conversation,
   type Message,
   type ModelChoice,
@@ -52,6 +53,7 @@ export function useConversation(
   const stopRequestedRef = useRef(false);
   const activeRef = useRef<string | null>(null);
   const historyRequest = useRef(0);
+  const openedBySend = useRef<string | null>(null);
   const completeRef = useRef(onComplete);
   completeRef.current = onComplete;
   const speechRef = useRef(speech);
@@ -74,6 +76,10 @@ export function useConversation(
 
   useEffect(() => () => abortRef.current?.abort(), []);
   useEffect(() => {
+    if (active && openedBySend.current === active) {
+      openedBySend.current = null;
+      return;
+    }
     if (busyRef.current) return;
     let live = true;
     const ticket = ++historyRequest.current;
@@ -153,7 +159,7 @@ export function useConversation(
 
   async function send(
     text: string,
-    attachments: string[] = [],
+    attachments: Attachment[] = [],
     modelChoice?: ModelChoice,
     annotations?: AnnotationSubmission,
   ) {
@@ -169,6 +175,18 @@ export function useConversation(
     setPartial('');
     setCurrentTools([]);
     setCurrentSources([]);
+    const pendingId = 'pending-user';
+    setMessages((items) => [
+      ...items,
+      {
+        id: pendingId,
+        created_at: new Date().toISOString(),
+        role: 'user',
+        status: 'running',
+        content: text,
+        attachments,
+      },
+    ]);
     const controller = new AbortController();
     abortRef.current = controller;
     let id = activeRef.current,
@@ -186,9 +204,13 @@ export function useConversation(
             if (!message.conversation_id) throw new Error('服务没有返回对话标识。');
             accepted = true;
             id = message.conversation_id;
+            if (activeRef.current !== id) openedBySend.current = id;
             activeRef.current = id;
             setActive(id);
-            setMessages((items) => [...items, message]);
+            setMessages((items) => [
+              ...items.filter((item) => item.id !== pendingId && item.id !== message.id),
+              message,
+            ]);
             if (stopRequestedRef.current) void stopReply();
           }
           if (kind === 'delta') {
@@ -220,13 +242,14 @@ export function useConversation(
             if (data.record) setMessages((items) => [...items, data.record as Message]);
           }
         },
-        attachments,
+        attachments.map((item) => item.id),
         modelChoice,
         annotations,
       );
     } catch (failure) {
       if ((failure as Error).name !== 'AbortError') setError((failure as Error).message);
     } finally {
+      if (!accepted) setMessages((items) => items.filter((item) => item.id !== pendingId));
       if (!completed) speechRef.current?.cancel();
       abortRef.current = null;
       setPartial(null);

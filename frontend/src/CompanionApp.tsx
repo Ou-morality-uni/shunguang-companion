@@ -26,6 +26,7 @@ import {
   type Features,
   type Memory,
   type ModelSettings,
+  type Attachment,
   type ModelChoice,
   type ReminderEvent,
 } from './api';
@@ -346,7 +347,7 @@ export default function App() {
   }
   async function send(
     text: string,
-    attachments: string[] = [],
+    attachments: Attachment[] = [],
     modelChoice?: ModelChoice,
     annotations?: AnnotationSubmission,
   ): Promise<boolean> {
@@ -433,40 +434,11 @@ export default function App() {
               <Plus size={17} />
               <span>开启新的对话</span>
             </Button>
-            <div className="nav-section-label">
-              相伴的日常<span>01 — {String(pages.length).padStart(2, '0')}</span>
-            </div>
-            <nav aria-label="功能导航">
-              {pages.map(({ key, label, icon: Icon }) => (
-                <Fragment key={key}>
-                  <button
-                    className={`nav-item ${page === key ? 'selected' : ''}`}
-                    aria-label={label}
-                    title={label}
-                    onClick={() => navigate(key)}
-                    aria-current={page === key ? 'page' : undefined}
-                  >
-                    {page === key && (
-                      <motion.span
-                        aria-hidden="true"
-                        className="selection-glide"
-                        layoutId="primary-navigation-highlight"
-                        transition={{ duration: animate ? 0.22 : 0 }}
-                      />
-                    )}
-                    <Icon size={18} strokeWidth={1.6} />
-                    <span>{label}</span>
-                    {key === 'memory' ? (
-                      <span className="nav-count">{memoryCount}</span>
-                    ) : key === 'chat' ? (
-                      <span className="nav-count">{conversations.length}</span>
-                    ) : (
-                      <ChevronRight className="nav-arrow" size={13} />
-                    )}
-                  </button>
-                </Fragment>
-              ))}
-            </nav>
+            {page !== 'chat' && (
+              <button className="nav-item" onClick={() => navigate('chat')}>
+                返回陪伴对话
+              </button>
+            )}
             <div className="history-heading">
               最近对话<span>本机保存</span>
             </div>
@@ -485,7 +457,7 @@ export default function App() {
                 className="nav-item"
                 aria-label="陪伴设置"
                 title="陪伴设置"
-                onClick={() => openPanel('effects')}
+                onClick={() => openPanel('navigation')}
               >
                 <Settings2 size={18} />
                 <span>陪伴设置</span>
@@ -610,6 +582,42 @@ export default function App() {
             </div>
           </main>
           <CompanionSettings
+            navigation={
+              <nav aria-label="功能导航">
+                {pages.map(({ key, label, icon: Icon }) => (
+                  <Fragment key={key}>
+                    <button
+                      className={`nav-item ${page === key ? 'selected' : ''}`}
+                      aria-label={label}
+                      title={label}
+                      onClick={() => {
+                        setPanel(null);
+                        navigate(key);
+                      }}
+                      aria-current={page === key ? 'page' : undefined}
+                    >
+                      {page === key && (
+                        <motion.span
+                          aria-hidden="true"
+                          className="selection-glide"
+                          layoutId="primary-navigation-highlight"
+                          transition={{ duration: animate ? 0.22 : 0 }}
+                        />
+                      )}
+                      <Icon size={18} strokeWidth={1.6} />
+                      <span>{label}</span>
+                      {key === 'memory' ? (
+                        <span className="nav-count">{memoryCount}</span>
+                      ) : key === 'chat' ? (
+                        <span className="nav-count">{conversations.length}</span>
+                      ) : (
+                        <ChevronRight className="nav-arrow" size={13} />
+                      )}
+                    </button>
+                  </Fragment>
+                ))}
+              </nav>
+            }
             currentVersion={currentVersion}
             onRefreshVersion={refreshVersion}
             panel={panel}

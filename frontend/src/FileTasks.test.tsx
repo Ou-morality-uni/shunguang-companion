@@ -25,6 +25,7 @@ const task: FileTask = {
   error: '',
   can_restore: false,
   can_retry_summary: false,
+  can_retry_vision: false,
   created_at: '2026-10-23',
   updated_at: '2026-10-23',
   context: { pause: { reason: '已读范围保留，等待继续。' } },
@@ -119,5 +120,23 @@ it('keeps a short retry in chat and hides internal task titles, source extracts 
       method: 'POST',
       body: JSON.stringify({ extend_timeout: true }),
     }),
+  );
+});
+
+it('shows the vision error and retries the same task on click', async () => {
+  vi.mocked(request).mockResolvedValue({});
+  render(
+    <TaskDetails
+      task={{ ...task, status: 'failed', can_retry_vision: true, error: '视觉模型响应超时。' }}
+      enter={false}
+      onChanged={vi.fn()}
+      onSettings={vi.fn()}
+      attachments={[]}
+    />,
+  );
+  expect(screen.getByText(/视觉模型响应超时/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: '重新识图' }));
+  await waitFor(() =>
+    expect(request).toHaveBeenCalledWith('/work/tasks/t1/retry-vision', { method: 'POST', body: undefined }),
   );
 });

@@ -14,6 +14,9 @@ def fresh_update_cache(monkeypatch):
     monkeypatch.setattr(updates, 'checker', updates.UpdateChecker())
 
 
+NEXT_VERSION = VERSION.rsplit('.', 1)[0] + '.' + str(int(VERSION.rsplit('.', 1)[1]) + 1)
+
+
 def test_manual_check_reports_a_newer_public_version(monkeypatch):
     async_client = httpx.AsyncClient
 
@@ -25,11 +28,11 @@ def test_manual_check_reports_a_newer_public_version(monkeypatch):
         return httpx.Response(
             200,
             json={
-                'version': '0.7.10',
+                'version': NEXT_VERSION,
                 'published_at': '2026-10-26',
                 'summary': '新的正式版本。',
                 'release_notes_url': (
-                    'https://github.com/Ou-morality-uni/shunguang-companion/blob/main/versions/0.7.10/README.md'
+                    f'{updates.REPOSITORY}/blob/main/versions/{NEXT_VERSION}/README.md'
                 ),
             },
         )
@@ -41,7 +44,7 @@ def test_manual_check_reports_a_newer_public_version(monkeypatch):
     assert response.status_code == 200
     result = response.json()
     assert result['current_version'] == VERSION
-    assert result['latest_version'] == '0.7.10'
+    assert result['latest_version'] == NEXT_VERSION
     assert result['status'] == 'available'
     assert result['summary'] == '新的正式版本。'
     assert result['checked_at']
@@ -65,7 +68,7 @@ def test_failed_checks_report_an_error_instead_of_claiming_latest(monkeypatch, f
             return httpx.Response(
                 200,
                 json={
-                    'version': '0.7.10',
+                    'version': NEXT_VERSION,
                     'published_at': '2026-10-26',
                     'summary': 'Update',
                     'release_notes_url': 'https://example.com/untrusted',
@@ -130,7 +133,7 @@ def release(version=VERSION, **changes):
     }
 
 
-@pytest.mark.parametrize(('version', 'status'), [(VERSION, 'current'), ('0.6.2', 'ahead'), ('0.7.10', 'available')])
+@pytest.mark.parametrize(('version', 'status'), [(VERSION, 'current'), ('0.6.2', 'ahead'), (NEXT_VERSION, 'available')])
 def test_version_comparison_is_numeric(monkeypatch, version, status):
     install_github(monkeypatch, lambda _: httpx.Response(200, json=release(version)))
     result = TestClient(app).post('/api/updates/check').json()
@@ -170,7 +173,7 @@ def test_expired_success_does_not_hide_failure_and_retry_can_succeed(monkeypatch
     clock = [100]
     monkeypatch.setattr(updates, 'monotonic', lambda: clock[0])
     responses = iter(
-        [httpx.Response(200, json=release()), httpx.Response(503), httpx.Response(200, json=release('0.7.10'))]
+        [httpx.Response(200, json=release()), httpx.Response(503), httpx.Response(200, json=release(NEXT_VERSION))]
     )
     install_github(monkeypatch, lambda _: next(responses))
     client = TestClient(app)

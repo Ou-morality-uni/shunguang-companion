@@ -31,7 +31,16 @@ import { useCompanionAudio } from './useAudioQueue';
 
 export type Page = 'chat' | 'memory' | 'world' | 'reminders' | 'work' | import('./edition').EditionPage;
 export type Panel =
-  'model' | 'voice' | 'effects' | 'tools' | 'services' | 'memory' | 'reminders' | 'updates' | null;
+  | 'navigation'
+  | 'model'
+  | 'voice'
+  | 'effects'
+  | 'tools'
+  | 'services'
+  | 'memory'
+  | 'reminders'
+  | 'updates'
+  | null;
 function PageHeading({
   eyebrow,
   title,

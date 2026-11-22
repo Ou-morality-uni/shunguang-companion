@@ -558,14 +558,19 @@ def test_attachment_preview_and_download_are_local_only_and_do_not_invoke_models
     work, _, _, _, _, calls = setup
     monkeypatch.setattr(runtime, 'store', work.store)
     output = io.BytesIO()
-    Image.new('RGB', (40, 40), 'blue').save(output, format='PNG')
+    Image.new('RGB', (2400, 120), 'blue').save(output, format='PNG')
     with TestClient(main.app) as client:
         uploaded = client.post('/api/work/upload?name=example.png', content=output.getvalue()).json()
         task_id = uploaded['task']['id']
         assert client.get(f'/api/work/files/{task_id}').content == output.getvalue()
-        assert client.get(f'/api/work/files/{task_id}/preview').status_code == 404
+        preview = client.get(f'/api/work/files/{task_id}/preview')
+        assert preview.status_code == 200 and preview.headers['content-type'] == 'image/jpeg'
+        assert Image.open(io.BytesIO(preview.content)).size == (1600, 80)
+        original_size = client.get(f'/api/work/files/{task_id}/preview?full_size=true')
+        assert Image.open(io.BytesIO(original_size.content)).size == (2400, 120)
         assert calls == []
     with TestClient(main.app, client=('192.168.1.5', 123)) as client:
+        assert client.get(f'/api/work/files/{task_id}/preview').status_code == 403
         assert client.get(f'/api/work/files/{task_id}').status_code == 403
         assert client.post('/api/chat', json={'content': 'read', 'attachments': [task_id]}).status_code == 403
 
@@ -584,6 +589,29 @@ def test_history_lists_existing_artifact_and_serves_its_bytes(setup, monkeypatch
         response = client.get('/api/work/artifacts/' + historical['id'])
         assert response.status_code == 200
         assert response.content == b'previously saved'
+
+
+@pytest.mark.parametrize('vision', ['supported', 'unknown'])
+def test_sent_chat_picture_uses_current_model_without_approval(setup, vision):
+    from PIL import Image
+
+    work, _, _, _, cid, calls = setup
+    config.save_config(config.ModelConfig(llm_model='test', llm_api_key='dummy-key', llm_vision=vision))
+    stream = io.BytesIO()
+    Image.new('RGB', (40, 40), 'blue').save(stream, format='PNG')
+    uploaded = attachment(work, work.upload('picture.png', stream.getvalue())['task']['id'])
+    task = work.submit(
+        FileTaskRequest(
+            workspace_id=uploaded['workspace_id'],
+            instruction='图片是什么？',
+            save_result=False,
+            steps=[{'action': 'read_document', 'path': uploaded['path']}],
+        ),
+        'chat',
+        cid,
+    )
+    assert wait(work, task)['status'] == 'complete'
+    assert any('image_url' in call for call in calls)
 
 
 def test_scanned_pdf_upload_does_not_fall_back_to_external_vision(setup, monkeypatch):
@@ -755,3 +783,49 @@ def test_legacy_failed_reading_only_delivers_after_explicit_successful_retry(set
     assert recovered['status'] == 'complete'
     assert [message['content'] for message in work.store.messages(cid)] == ['重试后的真实总结。']
     assert not recovered['context'].get('artifact')
+
+
+def test_retry_vision_in_original_chat(setup, monkeypatch):
+    from PIL import Image
+
+    work, _, _, _, cid, _ = setup
+    picture = io.BytesIO()
+    Image.new('RGB', (8, 8), 'blue').save(picture, format='PNG')
+    uploaded = work.upload('image.png', picture.getvalue())
+    count = 0
+    started, release = Event(), Event()
+
+    async def model(value, messages, *args):
+        nonlocal count
+        if any(isinstance(m.content, list) for m in messages):
+            count += 1
+            if count == 1:
+                return ''
+            started.set()
+            assert release.wait(5)
+            return '蓝色图片'
+        return '这是一张蓝色图片。'
+
+    monkeypatch.setattr(document_models, 'invoke', model)
+    request = FileTaskRequest(
+        workspace_id=uploaded['workspace']['id'],
+        save_result=False,
+        instruction='图里是什么',
+        steps=[{'action': 'read_document', 'path': uploaded['path']}],
+    )
+    failed = wait(work, work.submit(request, 'chat', cid))
+    assert '没有返回识别文字' in failed['error']
+    assert failed['can_retry_vision']
+    monkeypatch.setattr(runtime, 'store', work.store)
+    with TestClient(main.app) as client:
+        url = '/api/work/tasks/' + failed['id'] + '/retry-vision'
+        assert client.post(url).status_code == 200
+        try:
+            assert started.wait(5)
+            assert client.post(url).status_code == 409
+        finally:
+            release.set()
+        assert wait(runtime.work, failed)['status'] == 'complete'
+        assert client.post(url).status_code == 409
+        assert count == 2
+        assert any('蓝色' in m['content'] for m in work.store.messages(cid))

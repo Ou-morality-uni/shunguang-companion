@@ -1307,6 +1307,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/voice/resource-audio": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resource Audio */
+        get: operations["resource_audio_api_voice_resource_audio_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/work/artifacts/{task_id}": {
         parameters: {
             query?: never;
@@ -1350,6 +1367,23 @@ export interface paths {
         };
         /** Download Attachment */
         get: operations["download_attachment_api_work_files__attachment_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/files/{attachment_id}/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Preview Attachment */
+        get: operations["preview_attachment_api_work_files__attachment_id__preview_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1437,6 +1471,23 @@ export interface paths {
         put?: never;
         /** Retry Summary */
         post: operations["retry_summary_api_work_tasks__task_id__retry_summary_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/work/tasks/{task_id}/retry-vision": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Retry Vision */
+        post: operations["retry_vision_api_work_tasks__task_id__retry_vision_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1750,6 +1801,11 @@ export interface components {
              * @default false
              */
             can_retry_summary: boolean;
+            /**
+             * Can Retry Vision
+             * @default false
+             */
+            can_retry_vision: boolean;
             /** Context */
             context?: {
                 [key: string]: unknown;
@@ -5066,6 +5122,26 @@ export interface operations {
             };
         };
     };
+    resource_audio_api_voice_resource_audio_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     download_artifact_api_work_artifacts__task_id__get: {
         parameters: {
             query?: never;
@@ -5131,6 +5207,39 @@ export interface operations {
     download_attachment_api_work_files__attachment_id__get: {
         parameters: {
             query?: never;
+            header?: never;
+            path: {
+                attachment_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    preview_attachment_api_work_files__attachment_id__preview_get: {
+        parameters: {
+            query?: {
+                full_size?: boolean;
+            };
             header?: never;
             path: {
                 attachment_id: string;
@@ -5304,6 +5413,37 @@ export interface operations {
                 "application/json": components["schemas"]["RetrySummaryRequest"];
             };
         };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FileTaskOut"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    retry_vision_api_work_tasks__task_id__retry_vision_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             /** @description Successful Response */
             200: {

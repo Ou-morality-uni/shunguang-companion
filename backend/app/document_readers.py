@@ -14,14 +14,15 @@ class DocumentError(Exception):
     pass
 
 
-def image_bytes(data):
+def image_bytes(data, *, full_size=False):
     from PIL import Image, ImageOps
 
     with Image.open(io.BytesIO(data)) as image:
         if image.width * image.height > 16000000:
             raise DocumentError('图片像素过大，最多支持 1600 万像素。')
         image = ImageOps.exif_transpose(image).convert('RGB')
-        image.thumbnail((1600, 1600))
+        if not full_size:
+            image.thumbnail((1600, 1600))
         output = io.BytesIO()
         image.save(output, format='JPEG', quality=85)
         return output.getvalue()

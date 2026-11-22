@@ -38,9 +38,9 @@ class VisionApprovalRequest(ApprovalRequest):
     signature: str = Field(default='', max_length=100)
 
 
-def invoke(function, *args):
+def invoke(function, *args, **kwargs):
     try:
-        return function(*args)
+        return function(*args, **kwargs)
     except WorkError as error:
         raise HTTPException(error.status, error.message)
     except OSError:
@@ -71,7 +71,7 @@ def tasks(
         if artifacts_only:
             task['steps'] = []
         if artifacts_only or not work.read_only_task(task):
-            task.update(can_restore=False, can_retry_summary=False)
+            task.update(can_restore=False, can_retry_summary=False, can_retry_vision=False)
     return records
 
 
@@ -149,6 +149,12 @@ def retry_summary(task_id: str, payload: RetrySummaryRequest, work=Depends(servi
     return invoke(work.retry_summary, task_id, payload.extend_timeout)
 
 
+@router.post('/tasks/{task_id}/retry-vision', response_model=FileTaskOut)
+def retry_vision(task_id: str, work=Depends(service)):
+    check_read_task(work, task_id)
+    return invoke(work.retry_read_task, task_id, vision=True)
+
+
 def download_response(item, data):
     return Response(
         data,
@@ -166,6 +172,25 @@ def download_attachment(attachment_id: str, work=Depends(service)):
     from ..work_artifacts import attachment_bytes
 
     return download_response(*invoke(attachment_bytes, work, attachment_id))
+
+
+@router.get('/files/{attachment_id}/preview')
+def preview_attachment(attachment_id: str, work=Depends(service), full_size: bool = False):
+    from .. import document_readers
+    from ..work_artifacts import attachment_bytes
+
+    item, data = invoke(attachment_bytes, work, attachment_id)
+    try:
+        if item['name'].lower().endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif', '.webp', '.tif', '.tiff')):
+            return Response(
+                document_readers.image_bytes(data, full_size=full_size),
+                media_type='image/jpeg',
+                headers={'Cache-Control': 'no-store'},
+            )
+        result, _ = document_readers.extract(data, item['name'], text_only=True)
+    except (document_readers.DocumentError, OSError, ValueError) as error:
+        raise HTTPException(422, str(error))
+    return {'text': '\n'.join(block['text'] for block in result['blocks']), 'warnings': result['warnings']}
 
 
 @router.get('/artifacts/{task_id}')

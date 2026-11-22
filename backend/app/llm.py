@@ -136,6 +136,8 @@ def friendly_error(error: Exception) -> str:
         return '模型不接受当前参数，请核对模型名称与接口兼容性。'
     if status == 529:
         return '上游模型暂时过载，请稍后重试。'
+    if isinstance(status, int) and 500 <= status < 600:
+        return f'模型服务或网关暂时无法完成请求（HTTP {status}），请稍后重试。'
     if 'timeout' in type(error).__name__.lower():
         return '模型响应超时，请稍后重试或调整超时时间。'
     return '暂时无法连接模型，请检查网络、接口地址与模型配置。'

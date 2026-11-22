@@ -141,6 +141,17 @@ def test_chat_presets_offer_beijing_and_singapore(client):
     assert presets['qwen-intl']['protocol'] == 'openai'
 
 
+def test_aliyun_documented_models_do_not_require_readable_saved_credentials(client, monkeypatch):
+    def unreadable():
+        raise ValueError('unreadable settings')
+
+    monkeypatch.setattr(feature_config, 'load', unreadable)
+    response = client.post(
+        '/api/tts/discover', json={'provider': 'aliyun', 'base_url': 'https://dashscope-intl.aliyuncs.com'}
+    )
+    assert response.status_code == 200 and response.json()['models']
+
+
 def test_singapore_voice_preset_and_workspace_offer_the_same_models(client):
     presets = {item['id']: item for item in client.get('/api/tts/presets').json()}
     assert presets['aliyun']['base_url'] == 'https://dashscope.aliyuncs.com'

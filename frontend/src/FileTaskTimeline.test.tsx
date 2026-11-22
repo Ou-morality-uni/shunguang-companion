@@ -37,7 +37,7 @@ it('refreshes a durable chat reply instead of repeating the result in a task car
   expect(screen.queryByText('读取资料')).toBeNull();
 });
 
-it('keeps the original attachment downloadable without legacy preview controls', async () => {
+it('offers a read-only document preview without a download link', async () => {
   vi.mocked(request).mockResolvedValue([
     {
       id: 'legacy',
@@ -61,10 +61,8 @@ it('keeps the original attachment downloadable without legacy preview controls',
       />
     </FileTasksProvider>,
   );
-  expect(await screen.findByRole('link', { name: '下载原件' })).toHaveAttribute(
-    'href',
-    '/api/work/files/upload',
-  );
+  expect(screen.getByRole('button', { name: '预览 原资料.pdf' })).toBeInTheDocument();
+  expect(screen.queryByRole('link', { name: '下载原件' })).toBeNull();
   expect(screen.queryByText('预览资料')).toBeNull();
   expect(screen.queryByText('状态与操作')).toBeNull();
 });

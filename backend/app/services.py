@@ -87,6 +87,9 @@ class DiscoveryRequest(BaseModel):
 @router.post('/api/tts/discover')
 async def tts_discover(payload: DiscoveryRequest):
     try:
+        if payload.provider in ('aliyun', 'aliyun-intl'):
+            value = feature_config.TTSConfig(provider='aliyun', base_url=payload.base_url, model=payload.model or '')
+            return await voice.discover(value)
         current = feature_config.load().tts
         secret = payload.api_key.get_secret_value() if payload.api_key else ''
         same_origin = current.provider == payload.provider and current.base_url == payload.base_url.rstrip('/')
@@ -325,6 +328,18 @@ def tts_audio(name: str):
         )
     except voice.VoiceError as error:
         raise HTTPException(error.status, error.message)
+
+
+@router.get('/api/voice/resource-audio')
+def resource_audio():
+    from . import config
+
+    root = (config.ROOT / 'source/resources/voice').resolve()
+    return sorted(
+        path.relative_to(config.ROOT).as_posix()
+        for path in root.rglob('*.mp3')
+        if path.is_file() and path.resolve().is_relative_to(root)
+    )
 
 
 @router.get('/api/voice/references')

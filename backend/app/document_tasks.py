@@ -144,8 +144,8 @@ def read(work, task, step, check):
             step.pop('vision_approval')
             return pending(work, task, step, images, '授权后模型配置发生变化，需要重新核对服务并授权。')
     elif images and (
-        work.read_only_task(task)
-        or value.llm_vision != 'supported'
+        value.llm_vision == 'unsupported'
+        or (not work.read_only_task(task) and value.llm_vision != 'supported')
         or step.get('vision_request')
         or not config.public_config(value)['configured']
     ):
@@ -176,7 +176,16 @@ def read(work, task, step, check):
                 return pending(work, task, step, remaining, '接口拒绝了图像请求，请选择支持本次输入的替代模型。')
             if isinstance(error, (TaskCancelled, WorkError, WorkPause)):
                 raise
-            raise WorkError(friendly_error(error)) from error
+            from .logging_setup import report_error
+
+            report_error('document_vision', error)
+            if isinstance(error, document_models.EmptyVisionResult):
+                detail = str(error)
+            elif type(error).__name__ in ('APIConnectionError', 'ConnectError', 'ReadError', 'RemoteProtocolError'):
+                detail = '与视觉模型服务的连接失败或中断，请检查网络后重试。'
+            else:
+                detail = friendly_error(error)
+            raise WorkError('识图失败：' + detail) from error
         block = {'location': image['location'], 'kind': 'vision', 'text': text}
         recognized.append(block)
         result['blocks'].append(block)

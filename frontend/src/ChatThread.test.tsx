@@ -44,7 +44,8 @@ vi.mock('./api', async (importOriginal) => ({
   ...(await importOriginal<typeof import('./api')>()),
   request: vi.fn(),
 }));
-vi.mock('./FileTasks', () => ({
+vi.mock('./FileTasks', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./FileTasks')>()),
   AttachmentCard: () => null,
   MessageFileTasks: () => null,
   FileTasksProvider: ({ children }: { children: import('react').ReactNode }) => children,
@@ -365,7 +366,9 @@ it('stages an uploaded file without starting a task, then sends its reference wi
   expect(vi.mocked(request).mock.calls.filter(([path]) => path.startsWith('/work/upload'))).toHaveLength(1);
   fireEvent.change(screen.getByLabelText('给瞬光伴行发送消息'), { target: { value: '总结整份资料' } });
   fireEvent.click(screen.getByRole('button', { name: '发送消息' }));
-  await waitFor(() => expect(onSend).toHaveBeenCalledWith('总结整份资料', ['u1'], undefined));
+  await waitFor(() =>
+    expect(onSend).toHaveBeenCalledWith('总结整份资料', [expect.objectContaining({ id: 'u1' })], undefined),
+  );
 });
 
 it('does not fill a new conversation composer with another conversation annotation prompt', async () => {

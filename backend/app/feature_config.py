@@ -63,6 +63,8 @@ class TTSConfig(BaseModel):
     @field_validator('provider')
     @classmethod
     def provider_valid(cls, value):
+        if value == 'aliyun-intl':
+            return 'aliyun'
         if value not in ('mimo', 'aliyun', 'volcengine', 'openai', 'custom'):
             raise ValueError('不支持的语音服务')
         return value

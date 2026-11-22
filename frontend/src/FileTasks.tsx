@@ -1,4 +1,5 @@
 import { createContext, useContext, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { ImageViewer } from './ImageViewer';
 import { Button } from '@/components/ui/button';
 import { FileText } from 'lucide-react';
 import { request, type Attachment, type FileTask } from './api';
@@ -21,16 +22,80 @@ export const taskStatuses: Record<FileTask['status'], string> = {
 
 export { DocumentMarkdown } from './DocumentMarkdown';
 
+export function AttachmentPreview({
+  attachment,
+  thumbnail = false,
+  imageOnly = false,
+}: {
+  attachment: Attachment;
+  thumbnail?: boolean;
+  imageOnly?: boolean;
+}) {
+  const [open, setOpen] = useState(false);
+  const [text, setText] = useState('');
+  const dialog = useRef<HTMLDialogElement>(null);
+  const url = '/api/work/files/' + encodeURIComponent(attachment.id);
+  const image = /\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(attachment.name);
+  useEffect(() => {
+    if (!open) return;
+    dialog.current?.showModal();
+    if (image) return;
+    const controller = new AbortController();
+    setText('正在读取预览…');
+    request<{ text: string; warnings: string[] }>(url + '/preview', { signal: controller.signal })
+      .then((result) =>
+        setText([result.text, ...result.warnings].filter(Boolean).join('\n') || '此附件没有可预览的文字。'),
+      )
+      .catch((error) => {
+        if (!controller.signal.aborted) setText(error.message);
+      });
+    return () => controller.abort();
+  }, [open, image, url]);
+  return (
+    <>
+      <button
+        type="button"
+        className={imageOnly ? 'sent-image' : 'attachment-preview-trigger'}
+        aria-label={'预览 ' + attachment.name}
+        onClick={() => setOpen(true)}
+      >
+        {(thumbnail || imageOnly) && image && <img src={url + '/preview'} alt="" />}{' '}
+        {!imageOnly && (thumbnail ? attachment.name : '预览')}
+      </button>
+      {open && (
+        <dialog
+          className={'attachment-drawer' + (image ? ' picture-drawer' : '')}
+          ref={dialog}
+          aria-label={'附件预览 ' + attachment.name}
+          onClose={() => setOpen(false)}
+        >
+          <header>
+            <strong>{attachment.name}</strong>
+            <button type="button" onClick={() => dialog.current?.close()}>
+              关闭
+            </button>
+          </header>
+          {image ? (
+            <ImageViewer src={url + '/preview?full_size=true'} name={attachment.name} />
+          ) : (
+            <pre>{text}</pre>
+          )}
+        </dialog>
+      )}
+    </>
+  );
+}
+
 export function AttachmentCard({ attachment }: { attachment: Attachment }) {
+  if (/\.(png|jpe?g|webp|gif|bmp|tiff?)$/i.test(attachment.name))
+    return <AttachmentPreview attachment={attachment} imageOnly />;
   return (
     <article className="file-card" aria-label={`附件：${attachment.name}`}>
       <div className="file-card-heading">
         <strong>{attachment.name}</strong>
         <span>{Math.ceil(attachment.bytes / 1024)} KiB · 本机副本</span>
       </div>
-      <a className="text-link" href={`/api/work/files/${encodeURIComponent(attachment.id)}`} download>
-        下载原件
-      </a>
+      <AttachmentPreview attachment={attachment} />
     </article>
   );
 }
@@ -134,15 +199,24 @@ export function TaskDetails({
       {['queued', 'running'].includes(task.status) && <p role="status">我正在处理，稍等一下。</p>}
       {task.status === 'failed' && (
         <p role="status">
-          {task.error.includes('扫描版 PDF')
-            ? task.error
-            : task.can_retry_summary
-              ? '这次没读完，可以再试一次。'
-              : '这次没能处理好，我先停下了。'}
+          {task.can_retry_vision
+            ? task.error.startsWith('识图失败')
+              ? task.error
+              : '识图失败：' + task.error
+            : task.error.includes('扫描版 PDF')
+              ? task.error
+              : task.can_retry_summary
+                ? '这次没读完，可以再试一次。'
+                : '这次没能处理好，我先停下了。'}
         </p>
       )}
       {task.status === 'interrupted' && <p role="status">刚才的文件处理被打断了。</p>}
       {task.status === 'cancelled' && <p role="status">已经停下了。</p>}
+      {task.can_retry_vision && (
+        <Button variant="outline" disabled={busy} onClick={() => void action('retry-vision')}>
+          重新识图
+        </Button>
+      )}
       {task.can_retry_summary && (
         <Button
           variant="outline"
