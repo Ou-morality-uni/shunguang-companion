@@ -31,9 +31,7 @@ def test_manual_check_reports_a_newer_public_version(monkeypatch):
                 'version': NEXT_VERSION,
                 'published_at': '2026-10-26',
                 'summary': '新的正式版本。',
-                'release_notes_url': (
-                    f'{updates.REPOSITORY}/blob/main/versions/{NEXT_VERSION}/README.md'
-                ),
+                'release_notes_url': f'{updates.REPOSITORY}/blob/main/versions/{NEXT_VERSION}/README.md',
             },
         )
 
